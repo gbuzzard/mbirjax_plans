@@ -36,6 +36,18 @@ When implementing:
 * Provide regular feedback (1-2 lines) about the steps you're taking in a multi-step process.
 * Ask if there is more to be done on a task before claiming that the task is done.
 
+When communicating:
+
+* In both the interactive chats and in durable records, the goal is to explain
+ideas and results clearly and precisely, in a way that is easy to parse. Sections 
+and paragraphs should have a conceptual narrative arc - bigger ideas first, 
+supported and expanded as needed. Sentence structure should favor simplicity in 
+presentation; typically one or at most two ideas per sentence. 
+Avoid dense packing of information in strings of words that maximize
+information content per token but that require significant
+effort to parse.  
+
+
 Scripts and reproducibility:
 
 * I almost never run scripts with command-line arguments, and prefer not to add
