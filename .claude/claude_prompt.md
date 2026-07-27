@@ -22,7 +22,7 @@ Before creating new files or modifying existing ones:
 3. Ask questions if requirements or intent are unclear.
 4. Wait for approval before making edits.
 
-**Exception:** Small, self-contained experiment files in designated directories (e.g., `experiments/`) may be created when you have been explicitly asked to proceed. Mention the creation and its purpose.
+**Exception:** Small, self-contained experiment files in designated directories (e.g., `plans/experiments/`) may be created when you have been explicitly asked to proceed. Mention the creation and its purpose.
 
 When implementing:
 
