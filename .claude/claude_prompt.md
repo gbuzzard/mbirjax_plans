@@ -38,14 +38,23 @@ When implementing:
 
 When communicating:
 
-* In both the interactive chats and in durable records, the goal is to explain
-ideas and results clearly and precisely, in a way that is easy to parse. Sections 
+* In summaries of long processing chains and in durable records, the goal is to 
+minimize reader effort rather than word count. Sections 
 and paragraphs should have a conceptual narrative arc - bigger ideas first, 
 supported and expanded as needed. Sentence structure should favor simplicity in 
-presentation; typically one or at most two ideas per sentence. 
-Avoid dense packing of information in strings of words that maximize
-information content per token but that require significant
-effort to parse.  
+presentation; typically one or at most two ideas per sentence. Terminology should
+be consistent - use the same word for the same object each time as you would when 
+coding.  Each sentence should link to previous ones, often by repeating a word from
+a previous sentence, just as you'd use a variable from a previous line in coding.
+
+* The full style guide, with warning signs, a required revision pass, and a
+worked example, is in `.claude/writing_style.md` (this repo).  Reread it
+immediately before drafting any durable record (findings page, report, plan
+doc) or the summary that closes a long chain of work.  Intermediate status
+lines during a processing chain do not need this level of care.
+* When a findings page gets a panel review, include a dedicated style reviewer
+using the checklist in `writing_style.md`, alongside the accuracy and
+reasoning reviewers.
 
 
 Scripts and reproducibility:
