@@ -29,23 +29,29 @@ CALIBRATED_SECTION = """
 {{FIG:bh_calibrated}}
 <p class="cap">
 <b>How to read it:</b> the calibrated truncated-padded case (severity 0.2, dense lattice) at
-iteration 16.  <b>Left column:</b> its error against the reference-energy ground truth &mdash;
-grid-aligned interball bands in the axial ball-layer slice (top) and z-localized face bands in
-(x,&nbsp;z) (bottom).  <b>Right column:</b> the reconstruction itself at the ball layer (top),
-and the real padded BGA's (x,&nbsp;z) mid-plane (bottom) for comparison &mdash; the family the
-testbed is built to reproduce.</p>
+iteration 16.  <b>Left column:</b> its error against the reference-energy ground truth.  That
+column shows grid-aligned interball bands in the axial ball-layer slice (top) and z-localized
+face bands in (x,&nbsp;z) (bottom).  <b>Right column:</b> the reconstruction itself at the ball
+layer (top), and the real padded BGA's (x,&nbsp;z) mid-plane (bottom) for comparison.  That
+panel shows the family the testbed is built to reproduce.</p>
 </div>
 
 <p>
-Measured calibration, stated honestly: the dense-grid case at s&nbsp;=&nbsp;0.2 produces a
-residual top-metal dip of &minus;0.030 against the real scan's &minus;0.014 &mdash; within a
-factor ~2, with the residual channel's saturation and the different metal-thickness
-distributions (a 256-scale synthetic lattice vs the real package) setting the limit of how
-sharp this comparison can be.  The dial's mapping is lattice-dependent: denser grids raise
-per-ray metal thickness and deepen the dip at fixed s.  For the bench's purpose &mdash; a
-controlled testbed whose artifact family, sign, and rough magnitude match the real scan
-&mdash; this is adequate; matching the dip exactly would tune s&nbsp;&asymp;&nbsp;0.1 or a
-softer metal w<sub>pe</sub>, one knob either way.</p>
+The dense-grid case at s&nbsp;=&nbsp;0.2 produces a residual top-metal dip of &minus;0.030.  The
+real scan's dip is &minus;0.014.  The two therefore agree within a factor ~2.  Two limits set
+how sharp this comparison can be.  The first limit is the residual channel's saturation.  The
+second limit is the difference in metal-thickness distributions, between a 256-scale synthetic
+lattice and the real package.</p>
+
+<p>
+The dial's mapping is lattice-dependent.  Denser grids raise per-ray metal thickness and deepen
+the dip at fixed s.</p>
+
+<p>
+The testbed is a controlled case.  Its purpose is to match the real scan in three respects:
+artifact family, sign, and rough magnitude.  This match is adequate for that purpose.  Matching
+the dip exactly would tune s&nbsp;&asymp;&nbsp;0.1 or a softer metal w<sub>pe</sub>, one knob
+either way.</p>
 """
 
 

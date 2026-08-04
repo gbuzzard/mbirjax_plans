@@ -46,47 +46,54 @@ mechanism and the padding results this page follows from) &middot; scripts:
 <div class="tldr">
 <b class="h">TL;DR</b>
 <p style="margin-top:0">
-Lateral padding removed the truncation streaks from the real scan and unmasked a second artifact
-family: near-horizontal, ray-aligned bands around the ball grid.  The working hypothesis &mdash;
-beam hardening &mdash; is now instrumented, tested, and reproduced on the synthetic testbed.</p>
+Lateral padding removed the truncation streaks from the real scan.  It also unmasked a second
+artifact family: near-horizontal, ray-aligned bands around the ball grid.  The working
+hypothesis for that family is beam hardening.  That hypothesis is now instrumented, tested, and
+reproduced on the synthetic testbed.</p>
 <ul style="margin-top:0.3em">
-<li><b>The instrument is the residual transfer curve:</b> bin the converged run's residual
-sinogram by the MAR metal coordinate (segment the reconstruction, project the metal).  On the
-real padded scan the residual dips on metal-heavy rays with the hardening sign; the unpadded
-scan shows no metal organization (truncation swamps it); the plastic-coordinate control is
-flat.</li>
-<li><b>A two-material polychromatic testbed reproduces the family:</b> with hardening as the
-<i>only</i> pathology, the reconstruction develops the deficit ("cupping"), interball dark
-bands, and z-localized face bands &mdash; and a rotated-view-set control (error correlation
-0.982) proves the structure is object-anchored, not view aliasing.</li>
-<li><b>The deposit framework generalizes with sign:</b> truncation deposited +32% of true mass;
-hardening at full severity removes &minus;17%.  Unmodeled mass of either sign is deposited at
-the expression scale the prior allows.</li>
-<li><b>The two families are instrumentally orthogonal:</b> the vertical-family severity
-S<sub>low</sub> stays at its floor across every hardened case &mdash; each family needs, and
-now has, its own ruler.</li>
+<li><b>The instrument is the residual transfer curve.</b>  Bin the converged run's residual
+sinogram by the MAR-segmented metal coordinate.  That coordinate comes from segmenting the
+reconstruction and projecting the metal.  On the real padded scan the residual dips on
+metal-heavy rays.  That downward direction is the hardening sign.  The unpadded scan shows no
+metal organization.  Truncation swamps it.  The plastic-coordinate control is flat.</li>
+<li><b>A two-material polychromatic testbed reproduces the hardening family.</b>  With hardening
+as the <i>only</i> pathology, the reconstruction develops three features: cupping, interball
+dark bands, and z-localized face bands.  A rotated-view-set control gives an error correlation
+of 0.982.  That result proves the structure is object-anchored, not view aliasing.</li>
+<li><b>The deposit framework generalizes with sign.</b>  Truncation deposits +32% of true
+mass.  Hardening at full severity removes mass, &minus;17% on the same ledger.  Unmodeled mass
+of either sign is deposited at the expression scale the prior allows.</li>
+<li><b>The two families are instrumentally orthogonal.</b>  The vertical-family severity score
+S<sub>low</sub> stays at its floor across every hardened case.  These results indicate that each
+family needs its own instrument.  Each family now has one.</li>
 </ul>
-<p style="margin-bottom:0"><b>Product:</b> a severity dial calibrated against the real scan
-(the real padded residual dip sits near s&nbsp;&asymp;&nbsp;0.2 in this parametrization), a
-ground-truth-equipped bench for the metal-artifact-reduction work on the release goals list,
-and a user-facing demo (<code>demo_10_mar.py</code>).</p>
+<p><b>Product.</b>  This arc delivers three things: a severity dial s calibrated against the
+real scan, a ground-truth-equipped testbed for the metal-artifact-reduction work on the release
+goals list, and a user-facing demo (<code>demo_10_mar.py</code>).</p>
+<p style="margin-bottom:0">In this parametrization the real padded residual dip sits near
+s&nbsp;&asymp;&nbsp;0.2.</p>
 </div>
 
 <!-- ============================================================ -->
 <h2 id="question">1. The question the padding results left open</h2>
 
 <p>
-When the real scan is reconstructed with lateral padding, the truncation family &mdash; the
-fine vertical, z-coherent striping this study began with &mdash; largely disappears, and what
+When the real scan is reconstructed with lateral padding, the truncation family largely
+disappears.  That family is the fine vertical, z-coherent striping this study began with.  What
 remains visible is different in kind: bands roughly aligned with the source-to-detector rays,
-stamped at the heights of the ball rows, plus fine texture at the package faces.  In the
-(x,&nbsp;z) view cone rays are near-horizontal lines, so per-ray data errors backproject as
-near-horizontal bands: the geometry of the residual family itself says <i>the error is being
-generated per ray, in the data domain</i>.  The natural cause for per-ray error on metal-heavy
-paths is beam hardening &mdash; this scan is uncorrected (<code>bga_no_hart</code>) &mdash; but
-"looks ray-aligned" is not an attribution.  Two things were needed: an instrument that measures
-ray-association without assuming the answer, and a testbed where hardening can be switched on
-alone.</p>
+stamped at the heights of the ball rows, plus fine texture at the package faces.</p>
+
+<p>
+In the (x,&nbsp;z) view, cone rays are near-horizontal lines.  Per-ray data errors therefore
+backproject as near-horizontal bands.  The geometry of the residual family itself says <i>the
+error is being generated per ray, in the data domain</i>.  The natural cause for per-ray
+error on metal-heavy paths is beam hardening.  This scan is uncorrected
+(<code>bga_no_hart</code>).</p>
+
+<p>
+But "looks ray-aligned" is not an attribution.  Two things were needed: an instrument that
+measures ray-association without assuming the answer, and a testbed where hardening can be
+switched on alone.</p>
 
 <!-- ============================================================ -->
 <h2 id="instrument">2. The instrument: residual transfer curves in the metal coordinate</h2>
@@ -95,63 +102,70 @@ alone.</p>
 If the error is generated per ray, measure it where that statement is native: the sinogram
 domain.  At (near-)convergence the residual e&nbsp;=&nbsp;y&nbsp;&minus;&nbsp;A&#x302;x is
 exactly what the linear model refused to explain.  For each ray we also have a physical cause
-coordinate: the metal thickness it traverses &mdash; obtained exactly as the library's MAR
-machinery does (<code>mbirjax.preprocess</code>: Otsu segmentation of the reconstruction,
-forward projection of the metal class), so the curve lives in the same coordinate the MAR
-beam-hardening model fits.  The instrument is then just: <b>bin the residual by the metal
-coordinate and plot the mean</b>.  Genuine beam hardening must produce a concave dip &mdash;
-metal-heavy rays measuring <i>less</i> attenuation than the linear model expects &mdash; while
-the plastic coordinate serves as a control.  Nothing about ball positions, rows, or
-orientations enters the ruler.</p>
+coordinate: the metal thickness it traverses.  Call that thickness the metal coordinate m.  The
+value of m is obtained exactly as the library's MAR machinery obtains it, in
+<code>mbirjax.preprocess</code>.  The steps are Otsu segmentation of the reconstruction, then
+forward projection of the metal class.  The transfer curve therefore lives in the same
+coordinate the MAR beam-hardening model fits.</p>
+
+<p>
+The instrument is then just to <b>bin the residual by the metal coordinate and plot the
+mean</b>.  Genuine beam hardening must produce a concave dip.  On metal-heavy rays the measured
+attenuation falls below what the linear model expects.  The plastic coordinate serves as a
+control.  Nothing about ball positions, rows, or orientations enters the instrument.</p>
 
 <div class="fig">
 <div class="figlabel">The real scan's transfer curves</div>
 {{FIG:bh_transfer_real}}
 <p class="cap">
 <b>How to read it:</b> each point is the mean residual over rays binned by the metal coordinate
-m (error bars: per-bin standard deviation &mdash; the full residual spread, mostly noise and
-unrelated structure; the <i>mean</i> is the systematic part).  <b>Left, padded:</b> the mean
-dips on the metal-heaviest rays (&minus;0.014 in the top bin against +0.005 mid-range) &mdash;
-the hardening sign &mdash; and the plastic-coordinate control (not shown) is flat.
-<b>Right, unpadded:</b> no metal organization at all; the truncation deficit dominates the
-residual everywhere (rms 0.113 vs 0.060 padded).  The hardening fingerprint only becomes
-measurable once padding removes the larger unmodeled-mass source.</p>
+m.  The error bars are the per-bin standard deviation.  That spread is mostly noise and
+unrelated structure.  The <i>mean</i> is the systematic part.  <b>Left, padded:</b>
+the mean dips on the metal-heaviest rays, &minus;0.014 in the top bin against +0.005 mid-range.
+That is the hardening sign.  The plastic-coordinate control (not shown) is flat.
+<b>Right, unpadded:</b> no metal organization at all.  The residual rms is 0.113, against 0.060
+padded.  The truncation deficit therefore dominates everywhere.  The residual's full
+organization by the metal coordinate is the hardening fingerprint.  These results indicate that
+the fingerprint only becomes measurable once padding removes the larger unmodeled-mass
+source.</p>
 </div>
 
 <p class="note">
 <b>What the magnitude means &mdash; and does not mean.</b>  The residual is only the
-<i>undeposited</i> part of the hardening deficit: a converged run with a weak prior absorbs
-most of the per-ray deficit into the image &mdash; that absorption <i>is</i> the artifact.  So
-the &minus;0.014 dip is a lower bound on the injected nonlinearity, not its size, and severity
-calibration must use the residual and the image together (&sect;5).  The synthetic sweep makes
-this concrete: the residual dip is <i>non-monotone</i> in true severity, because stronger
-hardening deposits a larger fraction.</p>
+<i>undeposited</i> part of the hardening path deficit.  A converged run with a weak prior absorbs
+most of the path deficit into the image.  That absorption <i>is</i> the artifact.  So the
+&minus;0.014 dip is a lower bound on the injected nonlinearity, not its size.  Severity
+calibration must therefore use the residual and the image together (&sect;5).  The synthetic
+sweep makes this concrete.  There the residual dip is <i>non-monotone</i> in the true severity
+s.  Stronger hardening deposits a larger fraction of the path deficit into the image.</p>
 
 <!-- ============================================================ -->
 <h2 id="model">3. The testbed: a parametric polychromatic forward model</h2>
 
 <p>
-The simulator (driver <code>spectrum.py</code> + the materials mode of the ball-grid phantom)
-aims for the correct <i>structure</i> of the nonlinearity with a single severity dial, not
-spectroscopic fidelity:</p>
+The testbed aims for the correct <i>structure</i> of the nonlinearity with a single severity
+dial.  It does not aim for spectroscopic fidelity.  The testbed is the driver
+<code>spectrum.py</code> together with the materials mode of the ball-grid phantom.  It has
+three parts:</p>
 
 <ul>
 <li><b>Materials.</b>  The phantom decomposes exactly into a plastic slab plus per-metal ball
-maps &mdash; multiple metal types with different hardening factors, assigned across the lattice
-in a checkerboard, with different reference-energy values (6.0 and 4.5 here) so the metals are
-also separable by intensity segmentation.</li>
-<li><b>Physics.</b>  A filtered-bremsstrahlung spectrum (Kramers' law &times; aluminum
-filtration, 24 energy bins) and per-material energy dependence in the standard two-basis form
-&mdash; photoelectric ((E/E<sub>ref</sub>)<sup>&minus;3</sup>) plus Klein&ndash;Nishina Compton
-&mdash; with one hardening factor w<sub>pe</sub> per material (slab 0.15; metals 0.8 and
-0.55).</li>
+maps.  The ball maps hold multiple metal types with different hardening factors.  The types
+alternate across the lattice in a checkerboard.  The metal types also carry different
+reference-energy values.  Here they are 6.0 and 4.5.  The metals are therefore also separable by
+intensity segmentation.</li>
+<li><b>Physics.</b>  The source is a filtered-bremsstrahlung spectrum.  It applies Kramers' law
+&times; aluminum filtration over 24 energy bins.  Each material's energy dependence takes the
+standard two-basis form: photoelectric ((E/E<sub>ref</sub>)<sup>&minus;3</sup>) plus
+Klein&ndash;Nishina Compton.  Each material also has one hardening factor w<sub>pe</sub>.  The
+values are 0.15 for the slab, and 0.8 and 0.55 for the metals.</li>
 <li><b>The severity dial.</b>  s&nbsp;&isin;&nbsp;[0,&nbsp;1] interpolates each material's ratio
-curve toward flat, with one refinement found in unit testing: each curve is normalized so its
+curve toward flat.  Unit testing prompted one refinement: each ratio curve is normalized so its
 spectrum-weighted mean is exactly 1.  The linear model is then the <i>tangent at zero path
-length</i> at every severity &mdash; the dial bends pure curvature without recalibrating the
-small-path slope, the deficit is nonnegative, and it is monotone in s.  At s&nbsp;=&nbsp;0 the
-model is bit-for-bit the existing monochromatic pipeline (asserted in every run before any
-reconstruction).</li>
+length</i> at every severity s.  Three properties follow from that: the dial bends pure
+curvature without recalibrating the small-path slope, the path deficit is nonnegative, and the
+path deficit is monotone in s.  At s&nbsp;=&nbsp;0 the model is bit-for-bit the existing
+monochromatic pipeline.  Every run asserts that before any reconstruction.</li>
 </ul>
 
 <!-- ============================================================ -->
@@ -161,49 +175,52 @@ reconstruction).</li>
 <div class="figlabel">The attribution panels</div>
 {{FIG:bh_error_panels}}
 <p class="cap">
-<b>How to read it:</b> error against the reference-energy ground truth at iteration 16, axial
-ball-layer slice (top) and (x,&nbsp;z) mid-plane (bottom), window &plusmn;0.006
-(&asymp;&nbsp;0.6&times; the slab value).  <b>Left:</b> no hardening &mdash; isotropic speckle.
-<b>Middle:</b> hardening as the only pathology &mdash; the slab region develops the
-slab-wide negative deficit (cupping) with darkening concentrated between and around the balls,
-and z-localized bands at the slab faces in (x,&nbsp;z).  <b>Right:</b> the truncated + padded
-configuration with its denser ball grid &mdash; grid-aligned interball dark bands in the axial
-plane and face bands with fine vertical needle texture in (x,&nbsp;z): the character of the
-real padded scan's residual family.</p>
+<b>How to read it:</b> error against the reference-energy ground truth at iteration 16.  The top
+row is the axial ball-layer slice and the bottom row is the (x,&nbsp;z) mid-plane.  The window
+is &plusmn;0.006, or &asymp;&nbsp;0.6&times; the slab value.  <b>Left:</b> no hardening, and the
+error is isotropic speckle.  <b>Middle:</b> hardening as the only pathology.  The slab region
+develops the slab-wide negative deficit (cupping).  The darkening concentrates between and
+around the balls.  In (x,&nbsp;z) the error develops z-localized bands at the slab faces.
+<b>Right:</b> the truncated-padded configuration with its denser ball grid.  Grid-aligned
+interball dark bands appear in the axial plane, and face bands with fine vertical needle texture
+appear in (x,&nbsp;z).  That is the character of the real padded scan's residual family.</p>
 </div>
 
 <p>Three checks pin the attribution:</p>
 <ol>
-<li><b>Object-anchored, not aliasing.</b>  Re-running the full-severity case with the view
-angles rotated by half an angular step changes the error field almost not at all (correlation
-0.982 at the ball layer).  Metal-pair hardening structure is fixed by the object; view-sampling
-artifacts would have rotated with the trajectory.</li>
+<li><b>Object-anchored, not aliasing.</b>  The full-severity case was re-run with the view
+angles rotated by half an angular step.  The error field barely changed.  The correlation is
+0.982 at the ball layer.  Metal-pair hardening structure is fixed by the object.
+View-sampling artifacts would have rotated with the trajectory.</li>
 <li><b>The signed ledger.</b>  Deposited mass runs 0.000 &rarr; &minus;0.079 &rarr;
-&minus;0.170 across severities 0 &rarr; 0.5 &rarr; 1 (contained case): hardening <i>removes</i>
-mass, the mirror image of truncation's +32% deposit.  One framework covers both: unmodeled mass
-of either sign is deposited at the expression scale the prior allows.</li>
-<li><b>Instrumental orthogonality.</b>  The vertical-family severity S<sub>low</sub> stays at
-the contained-null floor (6&times;10<sup>&minus;6</sup> &rarr;
-1.3&times;10<sup>&minus;5</sup>) in every hardened case &mdash; measured confirmation that the
-two families need separate rulers, and that the Phase&nbsp;A instrument was never scoring
-this family.</li>
+&minus;0.170 across severities 0 &rarr; 0.5 &rarr; 1.  These numbers come from the contained
+case.  In that case the object is fully contained in the field of view.  These results
+indicate that hardening <i>removes</i> mass.  That is the mirror image of truncation's +32%
+deposit.  One framework covers both families.  Unmodeled mass of either sign is deposited at the
+expression scale the prior allows.</li>
+<li><b>Instrumental orthogonality.</b>  The vertical-family severity score S<sub>low</sub> stays
+at the contained-null floor in every hardened case.  The values run
+6&times;10<sup>&minus;6</sup> &rarr; 1.3&times;10<sup>&minus;5</sup>.  That is measured
+confirmation of two things: the two families need separate instruments, and the Phase&nbsp;A
+instrument was never scoring this family.</li>
 </ol>
 
 <p class="note">
-<b>The MAR coordinates check out against truth.</b>  On the synthetic, transfer curves binned by
-the <i>true</i> metal path sinograms and by the MAR-segmented coordinates agree within ~3% for
-the dominant metal (with class labels ordered by intensity, and some mixing on the weaker
-metal) &mdash; the instrument used on real data measures what it claims to.</p>
+<b>The MAR coordinates check out against truth.</b>  On the synthetic testbed, transfer curves
+were binned two ways: by the <i>true</i> metal coordinate and by the MAR-segmented metal
+coordinate.  The two agree within ~3% for the dominant metal.  The class labels are ordered by
+intensity.  On the weaker metal that ordering mixes somewhat.  These results indicate that the
+instrument used on real data measures what it claims to.</p>
 
 <div class="fig">
 <div class="figlabel">The severity dial, measured</div>
 {{FIG:bh_severity}}
 <p class="cap">
-<b>Left:</b> the residual top-metal-bin dip vs the dial: it deepens to s&nbsp;=&nbsp;0.5 and
-then <i>shrinks</i> at s&nbsp;=&nbsp;1 &mdash; stronger hardening deposits a larger fraction
-into the image, so the residual channel saturates; the real padded scan's dip (dashed) is
-matched near s&nbsp;&asymp;&nbsp;0.2.  <b>Right:</b> the signed deposit ledger vs the dial,
-monotone as the injected deficit grows.</p>
+<b>Left:</b> the residual top-metal-bin dip vs the dial.  The dip deepens to s&nbsp;=&nbsp;0.5
+and then <i>shrinks</i> at s&nbsp;=&nbsp;1.  Stronger hardening deposits a larger fraction of the
+path deficit into the image, so the residual channel saturates.  The real padded scan's dip
+(dashed) is matched near s&nbsp;&asymp;&nbsp;0.2.  <b>Right:</b> the signed deposit ledger vs the
+dial, monotone as the injected path deficit grows.</p>
 </div>
 
 <!-- ============================================================ -->
@@ -211,9 +228,10 @@ monotone as the injected deficit grows.</p>
 
 <p>
 The severity sweep brackets the real padded scan's residual dip between s&nbsp;=&nbsp;0 and
-s&nbsp;=&nbsp;0.5, landing near <b>s&nbsp;&asymp;&nbsp;0.2</b>.  The calibrated run uses that
-severity with a denser ball lattice (smaller pitch and radius &mdash; many more ball pairs,
-closer to the real package), in both the contained and the truncated-padded configurations.</p>
+s&nbsp;=&nbsp;0.5.  The estimate lands near <b>s&nbsp;&asymp;&nbsp;0.2</b>.  The calibrated run
+uses that severity.  It also uses a denser ball lattice, of smaller pitch and radius.  The
+denser lattice gives many more ball pairs.  That lattice is closer to the real package.  The run
+covers both the contained and the truncated-padded configurations.</p>
 
 {{CALIBRATED_SECTION}}
 
@@ -222,18 +240,20 @@ closer to the real package), in both the contained and the truncated-padded conf
 
 <ul>
 <li><b>The real scan's error budget is now decomposed into two attributed families.</b>
-Truncation &rarr; the vertical, z-coherent deposit (positive mass; removed by padding);
-hardening &rarr; the ray-aligned interball family (negative mass; untouched by padding).
-Each has a validated instrument: the two-seed / P(f<sub>z</sub>) pair for the first, the
-residual transfer curve for the second.</li>
-<li><b>The MAR work on the release goals list now has a bench:</b> ground truth, a severity
-dial calibrated to the real scan, multiple metals with distinct hardening factors, and the
-transfer curve as the acceptance instrument &mdash; a correction should flatten it.  The
-natural first experiment is <code>recon_plastic_metal</code> on the calibrated case, scored
-before/after.</li>
-<li><b>A user-facing demo ships alongside:</b> <code>demo/demo_10_mar.py</code> &mdash;
-polychromatic ball-grid simulation with user-set data / hardening / reconstruction / MAR
-parameters at the top of the file, standard vs MAR reconstruction, results in the slice
+Truncation gives the truncation family, the vertical, z-coherent deposit.  That family has
+positive mass, and padding removes it.  Hardening gives the hardening family, the ray-aligned
+interball bands.  That family has negative mass, and padding leaves it untouched.  Each family
+has a validated instrument: the two-seed / P(f<sub>z</sub>) pair for the first, and the residual
+transfer curve for the second.</li>
+<li><b>The MAR work on the release goals list now has a testbed.</b>  The testbed supplies four
+things: ground truth, a severity dial calibrated to the real scan, multiple metals with distinct
+hardening factors, and the transfer curve as the acceptance instrument.  A correction should
+flatten that curve.  The natural first experiment is <code>recon_plastic_metal</code> on the
+calibrated case, scored before and after.</li>
+<li><b>A user-facing demo ships alongside the library's MAR tools.</b>  The demo is
+<code>demo/demo_10_mar.py</code>.  It runs a polychromatic ball-grid simulation.  The data,
+hardening, reconstruction, and MAR parameters are set at the top of the file.  It compares a
+standard reconstruction with a MAR reconstruction, and it shows the results in the slice
 viewer.</li>
 </ul>
 
