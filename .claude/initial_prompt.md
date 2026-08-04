@@ -1,10 +1,13 @@
 We're continuing work on `mbirjax` (branch `sharpness_schedule`), with a focus on
-designing and implementing a simple per-iteration schedule for sharpness and snr_db.
+a possible port from jax to pytorch.  At the moment, this is exploratory-only: no
+code changes, just a discussion.  
 
 **IMPORTANT — workflow reminder:** discussion first for code AND doc changes; propose and
 wait for approval (read `.claude/claude_prompt.md` closely for more).  Stage only, never
 commit.  Terminology: "variants" (not arms/cells/grid for variant sets); "ground truth
 phantom" (not truth grid).
+
+Other background (mostly not relevant for the exploratory discussion): 
 
 Read for orientation (rely on code and results over memory and .md files):
 1. `plans/current_plans.md` — THE evolving forward plan.  §1 lists the implementation
