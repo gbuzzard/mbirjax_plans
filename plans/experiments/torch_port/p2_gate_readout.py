@@ -142,16 +142,18 @@ def worker(cfg):
                   trials=trials)
     op_name = cfg["op"]
     if op_name == "vcd":
-        # One warmup would double the runtime for the priciest op; the harness
-        # also runs vcd at trials=1.  The compile warmup happens inside the
-        # first (timed) run for torch -- so ALSO record a second run when cheap.
+        # The first run pays each framework's per-process compile/trace cost
+        # (inductor for torch -- amortized across processes by the persistent
+        # cache once warm -- and any uncached jax compiles); the SECOND run is
+        # the op cost.  Both are recorded for BOTH frameworks at every cell
+        # (the warm-vcd protocol; the earlier readout's missing warm entries
+        # at >=512 made those rows cold+compile).
         t0 = time.perf_counter()
         out = vcd()
         result["op_times"]["vcd"] = [time.perf_counter() - t0]
-        if framework == "torch" and cell[0] <= 200:
-            t0 = time.perf_counter()
-            out = vcd()
-            result["op_times"]["vcd_warm"] = [time.perf_counter() - t0]
+        t0 = time.perf_counter()
+        out = vcd()
+        result["op_times"]["vcd_warm"] = [time.perf_counter() - t0]
     else:
         fn = ops[op_name]
         out = fn()

@@ -106,49 +106,53 @@ passes unchanged.  The rule worth recording: compile-era memory reasoning
 must separate FUSIBLE chains (products, weights) from UNAVOIDABLE
 materializations (gather outputs) -- only the former vanish.
 
-## CUDA cells (gautschi, one H100)
+## CUDA cells (gautschi, one H100) — the warm-protocol table
 
-Job 14833737 (the resubmission with the view-batch cap; the first attempt,
-14833387, predated the fix) measured both frameworks on the GPU cells.  The
-jax side is the TUNED pallas path.  Ratios are torch/jax; memory is the
-device allocator's peak (torch max_memory_allocated vs jax
-peak_bytes_in_use).  The torch VCD at the 512-class and 1024 cells had no
-warm rerun in this readout, so those entries INCLUDE the one-time inductor
-compile (a readout gap to close; the 200-cell warm entry shows the shape of
-the correction).
+Two readouts ran.  The first (job 14833737) recorded torch VCD at large cells
+COLD (with compile) and, it turned out, recorded JAX's vcd cold too: the
+fresh worker processes paid jax's own trace-and-compile (the persistent jax
+cache was cold on that node), which understated jax by up to 27x at the
+interactive cell.  The warm protocol (job 14837754: both frameworks run vcd
+twice, the second run is the op cost) fixes the ruler on both sides, and the
+run also carries mbirtorch's scaled gather budget.  Ratios are torch/jax,
+warm-vcd; memory is the device allocator's peak.
 
 | cell | op | jax (s) | torch (s) | time ratio | mem ratio |
 |---|---|---|---|---|---|
-| 200x208x160 | direct_filter | 0.003 | 0.003 | 0.83 | 0.54 |
-| 200x208x160 | forward | 0.007 | 0.006 | 0.90 | 0.35 |
-| 200x208x160 | back | 0.005 | 0.008 | 1.79 | 12.2 |
-| 200x208x160 | vcd (warm) | 16.46 | 0.271 | **0.02** | 11.4 |
-| 512x448x384 | direct_filter | 0.012 | 0.014 | 1.16 | 0.62 |
-| 512x448x384 | forward | 0.103 | 0.184 | 1.79 | 0.38 |
-| 512x448x384 | back | 0.040 | 0.310 | **7.7** | **3.1** |
-| 512x448x384 | vcd (cold+compile) | 14.64 | 22.35 | 1.53 | 2.14 |
-| 513x449x385 | direct_filter | 0.019 | 0.015 | 0.82 | 0.62 |
-| 513x449x385 | forward | 0.108 | 0.356 | **3.3** | 0.38 |
-| 513x449x385 | back | 0.042 | 0.333 | **8.0** | **3.1** |
-| 513x449x385 | vcd (cold+compile) | 22.54 | 29.37 | 1.30 | 2.04 |
-| 1024x1008x992 | direct_filter | 0.120 | 0.112 | 0.93 | 0.80 |
-| 1024x1008x992 | forward | 2.74 | 5.23 | 1.91 | 0.50 |
-| 1024x1008x992 | back | 1.16 | 5.10 | **4.4** | 0.65 |
-| 1024x1008x992 | vcd (cold+compile) | 39.01 | 114.4 | 2.93 | 1.00 |
+| 200x208x160 | direct_filter | 0.003 | 0.003 | 0.82 | 0.46 |
+| 200x208x160 | forward | 0.007 | 0.007 | 1.03 | 0.29 |
+| 200x208x160 | back | 0.005 | 0.009 | 1.90 | 3.4 |
+| 200x208x160 | vcd (warm) | 0.605 | 0.278 | **0.46** | 2.8 |
+| 512x448x384 | direct_filter | 0.012 | 0.014 | 1.15 | 0.62 |
+| 512x448x384 | forward | 0.102 | 0.182 | 1.78 | 0.38 |
+| 512x448x384 | back | 0.040 | 0.307 | **7.6** | **3.1** |
+| 512x448x384 | vcd (warm) | 1.68 | 3.12 | **1.86** | 2.12 |
+| 513x449x385 | direct_filter | 0.019 | 0.017 | 0.88 | 0.62 |
+| 513x449x385 | forward | 0.107 | 0.352 | **3.3** | 0.38 |
+| 513x449x385 | back | 0.042 | 0.329 | **7.8** | **3.1** |
+| 513x449x385 | vcd (warm) | 1.83 | 5.44 | **2.97** | 1.97 |
+| 1024x1008x992 | direct_filter | 0.120 | 0.111 | 0.92 | 0.80 |
+| 1024x1008x992 | forward | 2.75 | 5.22 | 1.90 | 0.50 |
+| 1024x1008x992 | back | 1.16 | 5.09 | **4.4** | 0.65 |
+| 1024x1008x992 | vcd (warm) | 26.1 | 94.3 | **3.61** | 0.80 |
 
-Reading.  The interactive regime inverts hard in torch's favor: warm VCD at
-the 200 cell is 0.27 s against jax's 16.5 s, the Phase 0 host-dispatch
-prediction at its most extreme.  The filter passes everywhere, the compiled
-forward sits at 0.9-1.9x on the even cells, and the 1024 memory column favors
-torch on every op (the compiled forward runs at HALF jax's peak).  Three
-breaches remain, all with named causes: the BACK projector at large cells
-(4.4-8x) is the pallas-kernel gap the plan assigns to the Phase 5 Triton
-port; the 513 forward (3.3x, against 1.79x at 512) is an odd-size inductor
-specialization effect to investigate; and the back/vcd MEMORY ratios at the
-200/512 cells trace to the 2 GiB gather budget being generous where jax
-streams smaller -- a knob to scale with cell size, not a structural problem
-(the 1024 cell, where memory matters most, already favors torch).  The
-cold-vcd entries would also shrink under the warm protocol the harness uses.
+Reading.  The honest vcd verdict on CUDA: torch WINS the interactive cell
+(0.46x) and PASSES the 512 cell (1.86x); it is over the gate at 513 (2.97x)
+and 1024 (3.61x).  Both breaches have named causes.  The 513 excess over its
+512 sibling (in forward and vcd alike) is the odd-size inductor
+specialization effect, still to be investigated.  The 1024 excess is the back
+projector's 4.4x, which dominates vcd at scale -- the pallas-kernel gap the
+plan assigns to the Phase 5 Triton port.  The measurement lesson is recorded
+deliberately: a "fresh subprocess per config" protocol is honest for MEMORY
+but must warm BOTH frameworks' compile caches before timing, or it charges
+each framework's compiler to the op (the mbirjax lessons' separate-the-ruler
+rule, met again).
+
+Memory with the scaled gather budget: the 200-cell back/vcd ratios fell from
+12.2x/11.4x to 3.4x/2.8x, and the 1024 column stays in torch's favor on every
+op.  The remaining excess at the 200/512 cells traces to the 256 MiB transient
+floor plus per-batch layout copies -- Phase 5 layout territory, with the
+budget knobs available sooner if those cells matter before then.
 
 ## prox_map
 
@@ -178,10 +182,46 @@ a clean rebuild after removing it; a live browser render check is still owed
 -- the Browser pane hung -- so open ``dashboard/index.html`` after a build to
 confirm visually.
 
+## Persistent compile cache (implemented)
+
+mbirtorch now pins the inductor cache to ``~/.mbirtorch/torch_cache`` and
+enables the FX-graph cache at import (setdefault, so the environment can
+override; effective when mbirtorch is imported before torch's first compile
+-- the mbirjax jax-cache pattern).  Measured with fresh subprocesses sharing
+one cache directory: the first recon in a fresh process fell from 14.1 s
+(cold cache) to 2.0 s (warm cache) at the 64-cell -- a 7x reduction, with the
+residual being dynamo tracing plus the recon itself.  The cold-vcd entries in
+the CUDA table above would shrink accordingly on any node after its first
+run.
+
+## QGGMRFDenoiser (ported)
+
+The denoiser is ported (single-device path): the identity forward model, the
+sequential-subset sweep over one fixed partition, the noise-std estimator,
+and the denoiser's own indicator/recon-std overrides.  Parity against the
+mbirjax denoiser on a seeded 5-iteration golden: the sigma estimate is
+EXACTLY equal (both sides run the same numpy statistics), the alpha trace
+matches at 1.8e-06, the nmae trace at 3.0e-06, and the output volume at
+3.9e-07 rel-max -- tighter than the recon parity, since the identity model
+has no projector atomics.  The suite is 36 passed / 1 skipped.
+
+## The torch series is live (writer + first gpu-torch run)
+
+The harness writer exists
+(``mbirjax_metrics/tooling/scaling_tests/torch_backend_writer.py``): harness
+sizes and trial counts, per-cell subprocess memory, harness-form fingerprints
+(so vs-prior gating can apply to the torch series), git provenance, and a
+companion tests file from the mbirtorch suite.  Its first real run -- one
+H100, parallel + denoiser cells including the 1024-class -- is landed at
+``results/gpu-torch/master/`` and renders on the dashboard's torch row (the
+vcd cells cross-check the warm gate readout exactly).  A cpu-torch trial from
+the Mac verified the pipeline end to end and was then removed: the durable
+cpu-torch series should start on the nightly's own CPU hardware.  Wiring the
+writer into the nightly (schedule, env, TRACKED_BRANCHES) is deliberately
+left as its own decision.
+
 ## Remaining Phase 2 scope
 
-In likely order: the harness writer for torch runs (the measurement side that
-fills ``results/*-torch/``); the persistent torch compile cache (the cold-vcd
-entries above are the motivation); a warm-vcd rerun protocol for the large
-CUDA cells; the gather-budget scaling noted above; the denoiser port; and
-YAML save/load plus user-facing docs.
+Nightly integration of the torch writer (a scheduling/infra decision); YAML
+save/load plus user-facing docs.  The slice-viewer port is deliberately HELD
+(Greg, 2026-08-04): the viewer is due a refactor first.
