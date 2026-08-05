@@ -1,11 +1,14 @@
 # PyTorch port — assessment and phase plan
 
-**Status:** DRAFT, revised per Greg's review (2026-08-04): pinned recon
+**Status:** ACTIVE plan of record.  Reviewed by Greg 2026-08-04 (pinned recon
 shapes, the dashboard display item, the Phase 0 repo scaffold; §9 decisions
-confirmed.  Exploratory only; no port code exists yet.
-**Home for the port:** the `mbirtorch` repo (created 2026-08-04, currently empty),
-checked out parallel to `mbirjax`.
-**Supporting scripts for this area:** `plans/experiments/torch_port/` (none yet).
+confirmed).  Progress through Phase 2 recorded below (2026-08-05); the
+per-phase findings pages beside this file carry the measurements.
+**Home for the port:** the `mbirtorch` repo, checked out parallel to `mbirjax`
+(the package, tests, goldens generator, and demo live there).
+**Supporting scripts for this area:** `plans/experiments/torch_port/` (the
+spike and gate-readout scripts plus their sbatch files); the torch harness
+writer lives in `mbirjax_metrics/tooling/scaling_tests/`.
 
 ## Summary
 
@@ -19,6 +22,47 @@ the semantic differences to pre-register (§7).  The port is more tractable than
 the package size suggests, for three structural reasons given in §2.  The main
 open performance risk is CPU; for Mac users the MPS backend is the likely
 mitigation (§3).
+
+## Progress record (2026-08-05)
+
+**Phase 0 -- COMPLETE** (`phase0_findings.md`).  The repo scaffold, the frozen
+baselines (jax/jaxlib 0.10.1; torch 2.13), the parallel pinned recon shapes,
+and all three de-risking spikes on CPU, MPS, and one H100.  The exit question
+was answered yes: values agreed at ~1e-6 with zero rounding-tie mismatches,
+torch.compile closed the eager CPU gaps, and CUDA graphs proved unnecessary.
+
+**Phase 1 -- COMPLETE** (`phase1_findings.md`).  The parallel-beam vertical
+slice: projectors, qGGMRF, the VCD engine, FBP, auto-regularization, the
+phantom, a demo, and the differentiable projector pair with the LEAP-style
+nn.Module.  Every gate passed with margin -- golden floors ~1e-6 single-op,
+convergence parity iteration for iteration at ~1e-5 -- on CPU, MPS, and the
+H100.  Docstrings and inline comments were ported from mbirjax and adapted.
+
+**Phase 2 -- LARGELY COMPLETE** (`phase2_findings.md`, `panel_review.md`).
+Done: torch.compile integration (with the inference_mode incompatibility
+recorded and the engine on no_grad); the persistent compile cache (a fresh
+process's first recon 14.1 s -> 2.0 s once the cache is warm); prox_map; the
+QGGMRFDenoiser (parity 3.9e-07); the n=1 gate readouts -- CPU passes BOTH
+gates on every cell with VCD 2-5x faster than jax, and CUDA under the warm
+protocol passes vcd at the 200/512 cells (0.46x / 1.86x) with the 513/1024
+breaches traced to the odd-size inductor effect and the back-kernel gap; the
+view-batch gather budget (found, fixed, then scaled with cell size); a
+30-agent panel review (24 confirmed findings, every one fixed or explicitly
+dispositioned, with regression tests); the dashboard wiring per the decided
+design (torch History row, backend-qualified Platform entries, verified live);
+and the harness writer with the first real gpu-torch H100 run landed at
+``results/gpu-torch/`` in mbirjax_metrics.
+
+**Phase 2 -- remaining.**  Wiring the torch writer into the nightly (a
+scheduling/infrastructure decision); YAML save/load; user-facing docs; the
+513-cell odd-size inductor investigation; and the residual small-cell back
+memory margin (the 256 MiB transient floor).  The slice-viewer port is HELD
+pending Greg's planned viewer refactor.
+
+**Ahead (unchanged from the plan).**  Phase 3 cone beam; Phase 4
+multi-device; Phase 5 Triton kernels -- now with a measured target list (the
+back projector's 4.4-7.8x at large cells, the sinogram layout churn, and the
+back fan's einsum contraction form).
 
 ## 1. Motivation and decision rule
 
