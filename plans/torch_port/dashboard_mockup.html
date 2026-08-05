@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>torch backend on the metrics dashboard — display mockup</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 2em auto;
+         max-width: 900px; color: #222; line-height: 1.45; }
+  h1 { font-size: 1.4em; } h2 { font-size: 1.15em; margin-top: 2em; }
+  .chart { border: 1px solid #ccc; border-radius: 6px; padding: 10px 14px;
+           margin: 0.8em 0; background: #fafafa; }
+  .legend span { display: inline-block; margin-right: 1.2em; font-size: 0.85em; }
+  .sw { display: inline-block; width: 22px; height: 3px; vertical-align: middle;
+        margin-right: 4px; }
+  .toggle { margin: 0.4em 0; font-size: 0.9em; }
+  .toggle button { margin-right: 6px; padding: 2px 10px; border: 1px solid #888;
+                   border-radius: 4px; background: #fff; cursor: pointer; }
+  .toggle button.on { background: #2b6cb0; color: #fff; border-color: #2b6cb0; }
+  .note { font-size: 0.88em; color: #444; }
+  svg text { font-size: 10px; fill: #555; }
+</style>
+</head>
+<body>
+<h1>Displaying the torch backend on the metrics dashboard — three candidate forms</h1>
+<p class="note">Mockup for the port_plan section 4 design decision (display must
+not make the dashboard too busy).  Data shown is representative, not measured.
+Each panel imitates one dashboard chart (wall time vs date for one cell/op).
+Pick a form (or a combination); the harness backend column then feeds it.</p>
+
+<h2>Option A — backend selector (one backend visible at a time)</h2>
+<div class="chart">
+  <div class="toggle">backend:
+    <button class="on" onclick="selA(this,'jax')">jax</button>
+    <button onclick="selA(this,'torch')">torch</button>
+  </div>
+  <svg id="svgA" width="840" height="150" viewBox="0 0 840 150"></svg>
+  <p class="note">Chart count unchanged; switching is a page-level control.
+  Comparison requires flipping back and forth.</p>
+</div>
+
+<h2>Option B — overlay (torch as a dashed series on the existing charts)</h2>
+<div class="chart">
+  <div class="legend">
+    <span><span class="sw" style="background:#2b6cb0"></span>jax (solid)</span>
+    <span><span class="sw" style="background:#c05621; border-top:2px dashed #c05621; height:0"></span>torch (dashed)</span>
+  </div>
+  <svg id="svgB" width="840" height="150" viewBox="0 0 840 150"></svg>
+  <p class="note">Direct visual comparison on every chart; doubles the series
+  count everywhere (busier, especially on multi-device charts).</p>
+</div>
+
+<h2>Option C — dedicated comparison view (ratio chart per cell/op)</h2>
+<div class="chart">
+  <div class="legend">
+    <span><span class="sw" style="background:#6b46c1"></span>torch / jax wall-time ratio</span>
+    <span><span class="sw" style="background:#e53e3e"></span>the 2x gate</span>
+  </div>
+  <svg id="svgC" width="840" height="150" viewBox="0 0 840 150"></svg>
+  <p class="note">The existing pages stay exactly as they are (jax only); a new
+  page shows torch/jax ratios against the gates.  Cleanest separation; the
+  absolute torch numbers live one click away.</p>
+</div>
+
+<script>
+const days = 30, W = 840, H = 150, pad = 28;
+function x(i) { return pad + i * (W - 2 * pad) / (days - 1); }
+function y(v, vmax) { return H - pad - v * (H - 2 * pad) / vmax; }
+function series(base, noise, drift) {
+  const pts = [];
+  let v = base;
+  for (let i = 0; i < days; i++) {
+    v = base + drift * i / days + noise * Math.sin(i * 1.7) * 0.5;
+    pts.push(v);
+  }
+  return pts;
+}
+function path(vals, vmax) {
+  return vals.map((v, i) => (i ? 'L' : 'M') + x(i) + ',' + y(v, vmax)).join(' ');
+}
+function axes(svg, vmax, label) {
+  svg.innerHTML += `<line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="#999"/>`
+    + `<line x1="${pad}" y1="${pad}" x2="${pad}" y2="${H-pad}" stroke="#999"/>`
+    + `<text x="${pad}" y="${pad-8}">${label}</text>`;
+}
+const jaxS = series(1.0, 0.06, 0.0), torchS = series(1.6, 0.08, -0.45);
+const svgA = document.getElementById('svgA');
+function drawA(which) {
+  svgA.innerHTML = '';
+  axes(svgA, 2.2, 'wall (s) — parallel/forward/512-cell — backend: ' + which);
+  const s = which === 'jax' ? jaxS : torchS;
+  const c = which === 'jax' ? '#2b6cb0' : '#c05621';
+  svgA.innerHTML += `<path d="${path(s, 2.2)}" fill="none" stroke="${c}" stroke-width="1.6"/>`;
+}
+function selA(btn, which) {
+  btn.parentNode.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  drawA(which);
+}
+drawA('jax');
+const svgB = document.getElementById('svgB');
+axes(svgB, 2.2, 'wall (s) — parallel/forward/512-cell');
+svgB.innerHTML += `<path d="${path(jaxS, 2.2)}" fill="none" stroke="#2b6cb0" stroke-width="1.6"/>`
+  + `<path d="${path(torchS, 2.2)}" fill="none" stroke="#c05621" stroke-width="1.6" stroke-dasharray="6 4"/>`;
+const svgC = document.getElementById('svgC');
+const ratio = torchS.map((v, i) => v / jaxS[i]);
+axes(svgC, 2.5, 'torch / jax wall-time ratio — parallel/forward/512-cell');
+svgC.innerHTML += `<line x1="${pad}" y1="${y(2.0, 2.5)}" x2="${W-pad}" y2="${y(2.0, 2.5)}" stroke="#e53e3e" stroke-dasharray="4 4"/>`
+  + `<path d="${path(ratio, 2.5)}" fill="none" stroke="#6b46c1" stroke-width="1.6"/>`;
+</script>
+</body>
+</html>

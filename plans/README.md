@@ -39,11 +39,14 @@ current state; these carry the why and the numbers.
   program (ACTIVE as of 2026-07): sinogram weight edge tapering vs recon-support padding
   (`scale_recon_shape`); synthetic characterization in
   `experiments/flash_remediation/`.
-- `torch_port/port_plan.md` — the PyTorch port assessment and phase plan (DRAFT
-  2026-08-04): motivation and the replacement decision rule (within 2x time / ~1.5x
-  memory of jax on the metrics cells), regime-by-regime risk read, parity gates, the
-  six-phase incremental plan, and the Phase 0 de-risking spikes (spike scripts to land
-  in `experiments/torch_port/`).
+- `torch_port/` — the PyTorch port program (ACTIVE 2026-08-04).
+  `port_plan.md` is the assessment and phase plan: motivation and the replacement
+  decision rule (within 2x time / ~1.5x memory of jax on the metrics cells), parity
+  gates, and the six-phase incremental plan.  `phase0_findings.md` records the
+  de-risking spikes (local + H100; spike scripts in `experiments/torch_port/`);
+  `phase1_findings.md` records the parallel-beam vertical slice's gate results
+  (goldens, convergence parity, backend smoke).  The port code lives in the
+  separate `mbirtorch` repo.
 - `preprocessing/` — the scanner-reader API refactor (readers return a ready model via
   `get_sino_and_model` / `build_model`; landed on `prerelease` 2026-07, PR #219):
   `preprocessing_pipeline_refactor_plan.md` is its plan and as-built design record;
