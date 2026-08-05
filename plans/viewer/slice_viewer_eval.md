@@ -1,6 +1,9 @@
 # Slice viewer — evaluation and refactor recommendations
 
-**Status:** RECOMMENDATIONS ONLY (2026-08-05); no code changes made.
+**Status:** IMPLEMENTED IN MBIRTORCH (2026-08-05); the restructured viewer is
+built, field-tested, and integrated there.  `mbirtorch_viewer_findings.md`
+records the as-built state, the deviations, and the matplotlib 3.11 problems
+found in the field.  mbirjax's viewer remains unchanged.
 **Decision (Greg, 2026-08-05):** mbirjax's viewer stays as-is for now; the
 restructured viewer is built greenfield into mbirtorch instead (see
 `mbirtorch_viewer_build.md`), with an mbirjax retrofit after field use.
