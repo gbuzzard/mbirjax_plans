@@ -59,10 +59,99 @@ scheduling/infrastructure decision); YAML save/load; user-facing docs; the
 memory margin (the 256 MiB transient floor).  The slice-viewer port is HELD
 pending Greg's planned viewer refactor.
 
-**Ahead (unchanged from the plan).**  Phase 3 cone beam; Phase 4
-multi-device; Phase 5 Triton kernels -- now with a measured target list (the
-back projector's 4.4-7.8x at large cells, the sinogram layout churn, and the
-back fan's einsum contraction form).
+**Phase 3 -- LARGELY COMPLETE (2026-08-05;** `phase3_findings.md`**).**  The
+cone-beam port: both fans (flat and curved detectors), the axial-padding auto
+geometry, FDK with the cosine pre-weight, the helical z-weight, and the
+DC-damping preconditioner -- whose absence made the first parity run diverge
+with every single-op golden at 1e-6, the recorded lesson that an engine-seam
+override is part of a geometry's behavior.  All cone goldens at ~1e-6;
+convergence parity ~1e-5; suite 47 passed / 1 skipped.  The cone demo
+variant landed 2026-08-05 (a MODEL_TYPE switch in demo_1, mirroring the
+mbirjax demo; goldens' magnification-2 convention).  Remaining: the cone
+gate-cell readout vs the tuned jax baseline and helical/curved golden
+coverage.
+
+**Ahead (unchanged from the plan).**  Phase 4 multi-device; Phase 5 Triton
+kernels -- now with a measured target list (the back projector's 4.4-7.8x at
+large cells, the sinogram layout churn, and the back fan's einsum contraction
+form), plus the two-axis driver tiling (Greg's question 2026-08-05): mbirjax
+tiles pixels AND views in its sparse drivers (sum/concatenate_function_in_
+batches) while the torch drivers tile views only -- sufficient through the
+1024 gate cells but the reason vb=1 stops protecting past ~1400^3, and a
+candidate factor in the vb=1 dispatch-bound large-cell back gap; the tile
+mapping and the 2-D budget requirement are recorded in the projectors.py
+TODO block.
+
+**Build-for-the-future rule (Greg, 2026-08-05).**  Where mbirjax carries a
+cheap guard or seam that only matters under sharding, the port includes it
+now rather than rediscovering it in Phase 4; the danger class is padded
+device-form inputs silently biasing statistics.  Included 2026-08-05, each
+with a padded-invariance regression test: the detector-row crop in
+`auto_set_regularization_params` (the view guard was already ported), the
+`num_real_elements`/`real_sino_size` normalization seam in
+`get_forward_model_loss` and `_vcd_iteration_stats`, and the padded-slice
+zero guard in `helical_fdk_z_weight`.  Also included 2026-08-05 (Greg's
+suggestion): the four placement chokepoints `_shard_sinogram` /
+`_shard_recon` / `_gather_sinogram` / `_gather_recon` as their single-device
+forms (float32-on-device placement plus the sharded-axis validation; the
+gathers are the numpy exits carrying the padded-crop obligation), wired at
+every mbirjax call site -- forward/back_project, the sparse delegates, the
+Hessian (which previously never moved user weights to the device), the
+direct filters and FBP/FDK exits, the vcd_recon entries, the recon/prox
+exits, the denoiser, and a new `gen_weights(..., ct_model=)` parameter.
+Phase 4 then changes those four functions instead of rediscovering every
+entry point.  Known seams deliberately DEFERRED to
+Phase 4 because they arrive with the sharding machinery itself (listed here
+so the Phase 4 sweep cannot overlook them): the qGGMRF interface masks
+(reflected boundary at the last real slice), the weights zero-fill
+obligation in the `prepare_sino_for_devices` port (gen_weights is
+elementwise, so padded entries would otherwise get weight exp(0)=1),
+relaxing the recon-entry shape validations that today loudly reject any
+padded input, and re-deriving the view-batch transient budget from
+PER-DEVICE shard shapes (a measured TODO block sits on the budget constants
+in projectors.py: nominal-slab accounting vs the ~2-5x actual multiplier,
+the deliberate vb~10 plateau, and the vb=1 insufficiency past ~1400^3 that
+needs pixel chunking or the Phase 5 fused kernels).  The vcd_recon
+checkpoint-resume path (init_error_sinogram / fm_hessian /
+return_checkpoint) was ported 2026-08-05 after Greg caught its absence from
+this list.  REVISED same day (Greg): the initial clone-on-resume was
+dropped -- at 32 GB scale defensive copies of the state arrays defeat the
+checkpoint path's purpose -- in favor of ADVERTISED in-place mutation, the
+no-copy analog of jax's donation (the caller's arrays become the loop's
+working buffers; copy before resuming to keep or branch; the one hazard
+donation made loud and mutation leaves silent -- pairing a pre-resume recon
+copy with a post-resume error sinogram -- is documented in the docstring).
+The chained 3+3+3 regression
+test sits at the engine's own ~1e-6 CPU rerun-jitter floor (parallel
+index_add_ ordering), which is also why all parity gates are
+tolerance-based rather than bitwise.  The device-form all-ones sinogram
+(`_sino_ones_device_form`, real entries 1 / padded entries 0) moved OFF the
+deferred list 2026-08-05 after Greg flagged the trap: leaving weights=None
+to become a bare ones at the padded size is exactly the silent Hessian bias
+the rule exists to prevent; the seam now feeds both the constant-weights
+vcd path and compute_hessian_diagonal's None branch, with a contract test.
+A full line-by-line sweep of vcd_recon against mbirjax followed (Greg's
+request, 2026-08-05) and closed the remaining gaps: the sinogram is placed
+only when the error sinogram must be computed and its reference is dropped
+after the fold (the resume path had held a wasted full device copy through
+the loop); prox_input flattens before placement (the flat form is the
+sharded device form, the same ordering as flat_recon); the error sinogram
+gets the loop-boundary re-placement; real_sino_size (math.prod, the 2^31
+lesson) now feeds _vcd_iteration_stats at its one call site, where the seam
+had been dead wiring; and compute_prior_loss was ported along with
+qggmrf_loss (numpy, host-side debug path; cross-checked against mbirjax at
+2.3e-7 rel), keeping the mbirjax quirk that pm_loss records only at
+verbose >= 1.  Checked and intentionally different: torch refcounting
+replaces mbirjax's own_sinogram delete bookkeeping.  The verbose >= 2
+memory-stat dumps got their torch counterpart same day (Greg's request):
+`get_memory_stats` ported into mbirtorch/memory_stats.py against the torch
+allocator rulers (CUDA allocated/peak/reserved/limit; MPS current/driver/
+recommended-max, which tracks no peak; psutil host RSS/USS kept verbatim),
+wired into both vcd_recon verbose >= 2 blocks and the demo tail exactly as
+in mbirjax; the jax-only memory_report live-array inventory has no torch
+analog and was not ported.  Still deferred with
+the validation item: accepting device-form (padded) shapes for
+init_recon/prox_input.
 
 ## 1. Motivation and decision rule
 

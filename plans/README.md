@@ -45,8 +45,24 @@ current state; these carry the why and the numbers.
   gates, and the six-phase incremental plan.  `phase0_findings.md` records the
   de-risking spikes (local + H100; spike scripts in `experiments/torch_port/`);
   `phase1_findings.md` records the parallel-beam vertical slice's gate results
-  (goldens, convergence parity, backend smoke).  The port code lives in the
-  separate `mbirtorch` repo.
+  (goldens, convergence parity, backend smoke); `phase2_findings.md` the compile
+  integration and gate-cell readouts; `phase3_findings.md` the cone-beam port;
+  `panel_review.md` the 30-agent review and fix status.  The port code lives in
+  the separate `mbirtorch` repo.
+- `viewer/slice_viewer_eval.md` — slice-viewer evaluation and refactor
+  recommendations (2026-08-05): stay with matplotlib but
+  restructured (model/view split, headless-silent import, easygui removed,
+  blitting for the remote-X slider lag); pyqtgraph as an optional later
+  frontend; an eight-step refactor sequence with the cluster- and
+  mbirtorch-port-load-bearing steps marked.  `viewer/mbirtorch_viewer_build.md`
+  is the follow-on build spec (decision 2026-08-05): mbirjax's viewer stays
+  as-is; the restructured viewer is built greenfield into mbirtorch, in four
+  checkpointed stages, with an mbirjax retrofit after field use.
+  `viewer/mbirtorch_viewer_findings.md` is the as-built record (2026-08-05,
+  built and field-tested): feature parity with the mbirjax viewer, the
+  latent-bug non-reproduction checklist, the deviations that field testing
+  drove (native-first dialogs, the restored right-click menu), and three
+  matplotlib 3.11 macosx problems the retrofit will meet.
 - `preprocessing/` — the scanner-reader API refactor (readers return a ready model via
   `get_sino_and_model` / `build_model`; landed on `prerelease` 2026-07, PR #219):
   `preprocessing_pipeline_refactor_plan.md` is its plan and as-built design record;
