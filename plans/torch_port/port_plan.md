@@ -59,22 +59,27 @@ scheduling/infrastructure decision); YAML save/load; user-facing docs; the
 memory margin (the 256 MiB transient floor).  The slice-viewer port is HELD
 pending Greg's planned viewer refactor.
 
-**Phase 3 -- LARGELY COMPLETE (2026-08-05;** `phase3_findings.md`**).**  The
+**Phase 3 -- COMPLETE (2026-08-05;** `phase3_findings.md`**).**  The
 cone-beam port: both fans (flat and curved detectors), the axial-padding auto
 geometry, FDK with the cosine pre-weight, the helical z-weight, and the
 DC-damping preconditioner -- whose absence made the first parity run diverge
 with every single-op golden at 1e-6, the recorded lesson that an engine-seam
-override is part of a geometry's behavior.  All cone goldens at ~1e-6;
-convergence parity ~1e-5; suite 47 passed / 1 skipped.  The cone demo
-variant landed 2026-08-05 (a MODEL_TYPE switch in demo_1, mirroring the
-mbirjax demo; goldens' magnification-2 convention).  Remaining: the cone
-gate-cell readout vs the tuned jax baseline and helical/curved golden
-coverage.
+override is part of a geometry's behavior.  All cone goldens at ~1e-6 and
+convergence parity ~1e-5, now INCLUDING helical (z-shifted, with a
+3-iteration parity trace at 7.4e-6) and curved-detector groups, both at the
+same floors on their first run.  The cone demo variant landed (a MODEL_TYPE
+switch in demo_1; 256^3 cone on MPS converges in 11 iterations, 101 s).
+The cone gate-cell readout ran on one H100 vs tuned jax (job 14867702):
+warm vcd 0.53x at 200 (a torch win), 2.96-3.90x at 512-1024; the driver is
+the cone back projector at 3.4-6.2x, with vcd device memory 4.3-5.9x at
+small/mid cells and 0.92x at the 1024 capacity cell.  Correctness is
+settled; the CUDA gaps are Phase 5 scope.
 
 **Ahead (unchanged from the plan).**  Phase 4 multi-device; Phase 5 Triton
-kernels -- now with a measured target list (the back projector's 4.4-7.8x at
-large cells, the sinogram layout churn, and the back fan's einsum contraction
-form), plus the two-axis driver tiling (Greg's question 2026-08-05): mbirjax
+kernels -- now with a measured target list (the CONE back projector's
+3.4-6.2x across all CUDA cells plus its 4.3-5.9x small/mid-cell vcd memory,
+the parallel back projector's 4.4-7.8x at large cells, the sinogram layout
+churn, and the back fan's einsum contraction form), plus the two-axis driver tiling (Greg's question 2026-08-05): mbirjax
 tiles pixels AND views in its sparse drivers (sum/concatenate_function_in_
 batches) while the torch drivers tile views only -- sufficient through the
 1024 gate cells but the reason vb=1 stops protecting past ~1400^3, and a
