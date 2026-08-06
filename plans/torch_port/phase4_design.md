@@ -113,6 +113,32 @@ Two of its methods carry into the Phase 4 harness: the 1-DEVICE DIAGNOSTIC
 overhead with no data movement in the frame) and a per-path value-diff
 column beside every timing.
 
+## The compile race, and what others do about it (2026-08-05)
+
+Implementing the sharded engine hit a torch.compile thread-safety failure on
+CUDA (triton launcher asserts under concurrent cold compiles), fixed here
+with a process-wide compile lock keyed on unseen input shapes.  The research
+question was whether others found non-serialization answers.  Findings: this
+is a KNOWN, acknowledged, unresolved class -- a PyTorch maintainer states
+PT2 has "no thread-safety guarantees" in a multithreaded-compile issue, the
+PT2 lead's usage guide says multithreading "is currently buggy", a recent
+issue catalogues five distinct global-state races inside inductor (with
+fixes proposed as thread-locals plus LOCKS -- upstream's own medicine is the
+same as ours), and the matching triton issue is open with no fix.  The
+alternatives in production use are: (a) WARMUP/PRECOMPILE before threading
+-- compile every shape on the main thread, threads only execute; the
+standard serving pattern, and the strongest form is AOT precompilation;
+(b) dynamic=True / mark_dynamic -- one dynamic kernel instead of per-shape
+specializations shrinks both the race window and recompile stalls, at a
+kernel-speed cost that would need re-gating; (c) PROCESS-PER-GPU -- the
+industry sidestep (vLLM-class systems), which is exactly this design's
+Option B fallback.  Assessment: our shape-keyed lock is the lazy form of
+(a); an explicit warmup pass (the engine's shape set is enumerable: one
+subset size per granularity plus the full-index size, per device) would
+remove even the first-touch serialization from the iteration loop and is
+the recorded polish; (b) is a Phase 5 measurement candidate; (c) remains
+the pre-paid fallback.
+
 ## Increments after the decision
 
 1. Placement objects and the chokepoint bodies (place, pad, validate, crop).

@@ -1,0 +1,186 @@
+{
+ "run_label": "h010",
+ "host": "h010.gautschi.rcac.purdue.edu",
+ "rows": [
+  {
+   "framework": "jax",
+   "n_dev": 1,
+   "cell": [
+    512,
+    448,
+    384
+   ],
+   "version": "jax 0.10.1",
+   "vcd_cold": 14.799324662890285,
+   "vcd_warm": 1.6706136588472873,
+   "recon_checksum": 5680172.0,
+   "peak_rss_bytes": 12825492,
+   "gpu_peak_bytes": 3926580480
+  },
+  {
+   "framework": "jax",
+   "n_dev": 2,
+   "cell": [
+    512,
+    448,
+    384
+   ],
+   "version": "jax 0.10.1",
+   "vcd_cold": 19.137742249993607,
+   "vcd_warm": 2.1005441350862384,
+   "recon_checksum": 5680172.0,
+   "peak_rss_bytes": 13852888,
+   "gpu_peak_bytes": 2209170176
+  },
+  {
+   "framework": "jax",
+   "n_dev": 4,
+   "cell": [
+    512,
+    448,
+    384
+   ],
+   "version": "jax 0.10.1",
+   "vcd_cold": 24.532078496878967,
+   "vcd_warm": 3.2037378740496933,
+   "recon_checksum": 5680172.0,
+   "peak_rss_bytes": 14524548,
+   "gpu_peak_bytes": 1783512320
+  },
+  {
+   "framework": "torch",
+   "n_dev": 1,
+   "cell": [
+    512,
+    448,
+    384
+   ],
+   "version": "torch 2.13.0+cu130",
+   "vcd_cold": 8.37517652194947,
+   "vcd_warm": 3.10119592002593,
+   "recon_checksum": 5680123.5,
+   "peak_rss_bytes": 2553600,
+   "gpu_peak_bytes": 8245792256
+  },
+  {
+   "framework": "torch",
+   "n_dev": 2,
+   "cell": [
+    512,
+    448,
+    384
+   ],
+   "version": "torch 2.13.0+cu130",
+   "vcd_cold": 10.89786900090985,
+   "vcd_warm": 2.6123069890309125,
+   "recon_checksum": 5680123.5,
+   "peak_rss_bytes": 3133892,
+   "gpu_peak_bytes": 5267719680
+  },
+  {
+   "framework": "torch",
+   "n_dev": 4,
+   "cell": [
+    512,
+    448,
+    384
+   ],
+   "version": "torch 2.13.0+cu130",
+   "vcd_cold": 18.32649646885693,
+   "vcd_warm": 8.77499666181393,
+   "recon_checksum": 5680123.5,
+   "peak_rss_bytes": 3604332,
+   "gpu_peak_bytes": 2675149824
+  },
+  {
+   "framework": "jax",
+   "n_dev": 1,
+   "cell": [
+    1024,
+    1008,
+    992
+   ],
+   "version": "jax 0.10.1",
+   "vcd_cold": 38.42135734506883,
+   "vcd_warm": 25.81909750821069,
+   "recon_checksum": 84752024.0,
+   "peak_rss_bytes": 29689352,
+   "gpu_peak_bytes": 48297648896
+  },
+  {
+   "framework": "jax",
+   "n_dev": 2,
+   "cell": [
+    1024,
+    1008,
+    992
+   ],
+   "version": "jax 0.10.1",
+   "vcd_cold": 31.663734236964956,
+   "vcd_warm": 14.509256032994017,
+   "recon_checksum": 84752048.0,
+   "peak_rss_bytes": 38689784,
+   "gpu_peak_bytes": 21206319872
+  },
+  {
+   "framework": "jax",
+   "n_dev": 4,
+   "cell": [
+    1024,
+    1008,
+    992
+   ],
+   "version": "jax 0.10.1",
+   "vcd_cold": 33.87081569712609,
+   "vcd_warm": 11.47156866802834,
+   "recon_checksum": 84752024.0,
+   "peak_rss_bytes": 43728708,
+   "gpu_peak_bytes": 15732559360
+  },
+  {
+   "framework": "torch",
+   "n_dev": 1,
+   "cell": [
+    1024,
+    1008,
+    992
+   ],
+   "version": "torch 2.13.0+cu130",
+   "vcd_cold": 97.93785711191595,
+   "vcd_warm": 93.93538410891779,
+   "recon_checksum": 84724896.0,
+   "peak_rss_bytes": 20757820,
+   "gpu_peak_bytes": 28649841152
+  },
+  {
+   "framework": "torch",
+   "n_dev": 2,
+   "cell": [
+    1024,
+    1008,
+    992
+   ],
+   "version": "torch 2.13.0+cu130",
+   "vcd_cold": 78.09055360592902,
+   "vcd_warm": 69.72513654804789,
+   "recon_checksum": 84724816.0,
+   "peak_rss_bytes": 24942720,
+   "gpu_peak_bytes": 18461421056
+  },
+  {
+   "framework": "torch",
+   "n_dev": 4,
+   "cell": [
+    1024,
+    1008,
+    992
+   ],
+   "version": "torch 2.13.0+cu130",
+   "vcd_cold": 82.42543913796544,
+   "vcd_warm": 71.65611506998539,
+   "recon_checksum": 84724816.0,
+   "peak_rss_bytes": 25349924,
+   "gpu_peak_bytes": 13234487296
+  }
+ ]
+}

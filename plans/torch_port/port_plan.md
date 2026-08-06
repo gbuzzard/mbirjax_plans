@@ -87,6 +87,110 @@ candidate factor in the vb=1 dispatch-bound large-cell back gap; the tile
 mapping and the 2-D budget requirement are recorded in the projectors.py
 TODO block.
 
+**Phase 4a -- engine unification, one sharded path (DEFINED 2026-08-05;
+Greg's architecture review).**  The Phase 4 implementation forked sharded
+and unsharded versions of engine functions and interleaved layout branches
+through primary paths -- a structure the panel's confirmed bugs empirically
+indicted (every one clustered where a path forgot the other
+representation), and a departure from mbirjax's principle that everything
+is sharded with n=1 as the trivial case.  Phase 4a restores the principle
+in three stages, in this order.  
+
+ - Stage 1: function-level unification --
+every `_sharded` twin folds into its conceptual function with the branch
+inside, vcd_recon reads as one narrative again, worker closures become
+named helpers; exit = suite plus the n=1/2/4 parity gates unchanged.
+STAGE 1 COMPLETE 2026-08-05.  The suite passed unchanged after each chunk.
+
+ - Stage 2: representation unification -- Shards becomes the universal
+engine-internal state (n=1 is a one-shard container) over a small explicit
+per-shard vocabulary, NOT operator sugar, combined with the compiled
+per-shard chain (each shard's local subset work as ONE compiled call) --
+which is simultaneously the top measured orchestration lever, plus pool
+reuse and the on-device scalar combine; exit = the n=1 gates re-verified
+against current numbers, the n=1/2/4 matrix re-run, the 1-device
+orchestration diagnostic re-measured.  Two n=1-protection rules are part of
+the stage-2 design (Greg's degradation question, 2026-08-05):
+run_per_device SHORT-CIRCUITS n=1 to a direct call (no pool, no thread --
+the mechanism behind mbirjax's free trivial case), and the on-device scalar
+combine ships WITH unification, not after it, so n=1 never inherits the
+sharded path's per-subset host syncs.  The remaining container churn is
+sub-0.1 percent, and the compiled per-shard chain REDUCES the n=1 launch
+count (one dispatch per subset instead of 6-8 glue calls), so stage 2 is
+expected n=1-neutral-to-positive; the numeric bound is warm vcd at the gate
+cells within ~3 percent of current, CPU and CUDA, any excursion attributed
+before merge.
+STAGE 2 COMPLETE 2026-08-06; the exit evidence is in phase4_findings.md's
+Phase 4a section.  In brief: n=1 unchanged on CUDA (1.00-1.01x) and locally;
+values unchanged to the printed digit; the n=2 512 cell 13 percent faster;
+GPU peaks down at every torch cell; the jax control rows reproduce.  The
+engine
+state is now uniformly Shards between the vcd_recon entry wrap and the exit
+unwrap.  One updater body serves every device count: per-device compiled
+instances of the existing glue units, the update-direction seam called per
+shard, halos staged per partition pass, and the line-search partials
+combined on the lead device as 0-d tensors.  run_per_device short-circuits
+one device to a direct call, and the banded drivers short-circuit a trivial
+placement to the plain projectors.  vcd_recon owns one reused per-device
+thread pool for the whole loop.  One planned element changed: the
+single-compiled-call mega-region is NOT in this stage.  Fusing through the
+update-direction seam would compile a geometry override into the chain and
+change the n=1 graph structure, a parity risk.  The stage instead reuses
+the exact compiled units the n=1 path already had, so n=1 is call-for-call
+identical.  The mega-region remains the recorded orchestration lever, now
+cleanly implementable in the uniform body, gated on the re-measured
+1-device diagnostic.  Local evidence: 251 tests pass with 1 skip, and the
+goldens, cone goldens, and the seeded n=2 parity test all pass.  The n=1
+A/B against the pre-stage-2 baseline shows MPS within run noise, CPU
+32-cell +0.7 percent, and CPU 96-cell about 5 percent faster, with
+checksums identical.  
+
+ - Stage 3: the deferred seams land
+ONCE in the unified path -- padded (non-dividing) axes in the drivers,
+prepare_sino_for_devices with its weights zero-fill, the cone DC-damping
+profile split per shard (un-guarding the cone sharded engine), the
+per-device view-batch budget, sub-band streaming, and the panel's
+low-severity items (prox_data cleared on reconfigure, device-resident pad
+construction, the Shards identity check, transfer-primitive coverage for
+small moves, pool churn).  Sequencing rationale: implementing the seams
+before unification would write each one twice and refactor it after.
+Phase 5 (kernels) then starts from a single clean engine path.
+STAGE 3 COMPLETE 2026-08-06; the seam inventory, mechanisms, and evidence
+are in phase4_findings.md's stage-3 section.  Every seam was implemented
+to the mbirjax semantics after reading its source: row-pad tie, real-view
+spans, post-reduce slice masking, interface masks, 1.0-padded damping
+profile, streaming bounds.  Two deliberate extensions go beyond mbirjax
+(Greg's review): an all-padded shard on ONE axis is legal, so extreme
+aspect ratios use more devices than the short axis allows.  A thin
+volume (few slices, many views) gives its extra devices view work; a
+sparse-view problem (few views, large volume) gives its extra devices
+slice shards and prior work.  A device idle on BOTH axes is refused.
+The suite grew to 260 tests; the padded, cone, thin-volume, and
+sparse-view n>1 engines all carry seeded parity gates, the latter
+calibrated to the same cell's dividing-case floor (the calibration
+finding is in phase4_findings.md).
+
+**AMD/ROCm portability (recorded 2026-08-05; Greg: users at ORNL have
+large-scale AMD cluster access).**  PyTorch runs on AMD Instinct GPUs
+through ROCm, and the HIP backend masquerades as ``torch.cuda``, so the
+port's engine, projectors, memory rulers, and device resolution carry over
+without code changes.  The sharding layer is already hardware-agnostic by
+design: transfers ride ``tensor.to()`` over whatever fabric exists, and the
+``is_dev2dev_safe`` probe validates them empirically rather than trusting a
+vendor list.  torch.compile generates Triton kernels and Triton maintains
+an AMD backend, so the Phase 5 plan of TRITON kernels (not CUDA-native
+ones) is exactly the choice that keeps the tuned kernels AMD-portable --
+and the compile-race lock already matters there (the triton thread-safety
+issue was reported on ROCm).  What an AMD target would actually need:
+hardware access for validation and CI (neither Purdue cluster has AMD
+GPUs; ORNL machines are the natural venue), an AMD performance sweep (the
+view-batch budget, autotune behavior, and kernel tuning do not transfer
+across vendors, the SXM4-vs-PCIe lesson generalized), a ``rocm-torch``
+platform column in the regression harness, and golden revalidation at the
+established f32 floors.  This is also a genuine advantage of the port over
+mbirjax: jax's ROCm support is thin and second-class, while torch-on-ROCm
+is a first-class production target.
+
 **Build-for-the-future rule (Greg, 2026-08-05).**  Where mbirjax carries a
 cheap guard or seam that only matters under sharding, the port includes it
 now rather than rediscovering it in Phase 4; the danger class is padded
