@@ -1,10 +1,13 @@
 # Phase 5 kernel design — Triton projector bodies for mbirtorch
 
-**Status:** APPROVED AND IN EXECUTION (2026-08-07).  K1 (cone back
-kernel) and K3 (cone forward kernel) are implemented and green on H100;
-K2's sweep and composed gate PASSED and the back kernel is DEFAULT-ON
-with constants (16, 64, 4, 1) pinned; K4 (forward sweep + five-arm gate)
-is in flight.  The increment ledger and measurements live in
+**Status: EXECUTED TO COMPLETION (2026-08-07).**  All four kernels
+(cone back/forward, parallel back/forward) shipped, swept, gate-passed,
+and DEFAULT-ON via probe plus first-use self-check; the replacement
+rule passes at every gate cell of both geometries and the value gate
+closed on the shared-sinogram ruler.  K5 sorted streams was NOT taken
+during the phase (no measured need at cone; the parallel-1024 need is
+chartered with the batching follow-up in `current_plans.md` §5).  The
+increment ledger, gate tables, and the protocol lessons live in
 phase5_findings.md.  **Prior art:** the mbirjax pallas campaign
 (`plans/projector_kernels/`: gpu_headroom_summary/findings, the E3/E4
 records, the A100 tuning findings) — the designs transfer, the numbers

@@ -75,16 +75,21 @@ the cone back projector at 3.4-6.2x, with vcd device memory 4.3-5.9x at
 small/mid cells and 0.92x at the 1024 capacity cell.  Correctness is
 settled; the CUDA gaps are Phase 5 scope.
 
-**Phase 5 status (2026-08-07).**  IN EXECUTION under the panel-reviewed
-projector-layer restructure and the kernel design
-(phase5_kernel_design.md); the running record is phase5_findings.md.
-Cone BACK kernel: shipped, gate-passed, DEFAULT-ON (composed 1.90-1.91x
-over the compiled torch body; 512 cell now 1.61x of jax = replacement
-rule passed; 1024 at 2.04x with the forward as the remaining term;
-memory 0.57-1.49x of jax).  Cone FORWARD kernel: shipped and H100-green,
-swept (isolated 2.43x/1.88x over the compiled body), composed five-arm
-gate in flight; its pass flips its default and should bring 1024 inside
-the line.  Parallel pair and optional sorted streams follow.
+**Phase 5 status: COMPLETE (2026-08-07).**  All four Triton kernels
+(cone back/forward, parallel back/forward) shipped under the
+panel-reviewed projector-layer restructure and the kernel design
+(phase5_kernel_design.md), each through the full protocol: CPU-emulator
+validation, first-compile-green H100 battery, constant sweep, composed
+five-arm gate, and a default flip to probe-plus-self-check selection.
+Warm seeded vcd against jax on one H100: cone 1.00x/1.18x of jax's
+time at the 512/1024 cells, parallel 1.21x/1.90x, memory 0.56-0.63x
+everywhere — the replacement rule passes at every gate cell.  The
+value gate closed on the shared-sinogram ruler (converges under the
+5e-3 envelope by iteration 6; the attribution chain and the two
+protocol rules it produced are in phase5_findings.md).  Follow-ups —
+kernel-aware view batching, then sorted streams on measured need at
+parallel-1024 — are chartered in current_plans.md §5 and delegated to
+a separate session with Fable approval gates.
 
 **Ahead (original plan text).**  Phase 4 multi-device; Phase 5 Triton
 kernels -- now with a measured target list (the CONE back projector's

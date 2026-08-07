@@ -12,6 +12,8 @@ This file should be cleaned periodically to avoid build-up of historical detail.
 and SVMBIR (https://github.com/cabouman/svmbir) to operate MBIRJAX** (§2).
 * **MAR: cache H** (§3).
 * **Cleanup** (§4).
+* **mbirtorch kernel follow-ups: kernel-aware view batching, then sorted streams
+  on measured need** (§5).
 
 ---
 
@@ -136,6 +138,43 @@ fit's memory was solved in Phase 2):
   (`plans/bugs_and_artifacts/jax rounding bug/phase_d_design.md` §7).
 - **Archive plans:** Many plan docs and scripts could be moved out of the repo and into 
  archived storage - e.g., another repo or data depot.  
+
+## 5. mbirtorch kernel follow-ups (view batching, then sorted streams)
+
+**State:** Not started (added 2026-08-07, from the Phase 5 Triton campaign's
+close-out; delegated to a separate session with Fable approval gates).
+
+**Overview:** The Phase 5 kernels pass the replacement rule at every gate cell
+of both geometries.  The weakest cell is parallel-1024 at 1.90x of jax, and its
+decomposition names two follow-ups.  First, the projector driver charges a
+Triton kernel the TORCH BODY's gather transient when choosing view batches, so
+1024-class cells run at view batch 1 (the body's per-view transient is ~3.1 GB
+against a 2 GiB budget) — a thousand per-view launches with a per-call hfan
+build, for kernels that hold no such transient and want view chunks near 128.
+The batching hook was designed in `plans/torch_port/phase5_kernel_design.md`
+("the batching rule is implementation-supplied") but not implemented.  Second,
+the torch parallel forward is 2.3–3.0x behind jax's sorted-stream pallas
+forward at that cell; the plain-atomic form was adopted measure-first, and the
+sorted-stream variant (K5: two-phase walk from the hfan contract, plans cached
+per subset-by-view-chunk through the existing `plan` slot) was deliberately not
+taken for cone because no measured need appeared.  Parallel-1024 is the one
+cell with a measured need — contingent on what batching alone recovers.  A
+cheap middle option is recorded in the forward kernel's docstring: a view-loop
+variant exploiting parallel's view-independent values tile.
+
+**Goals:**
+1. Kernel-aware view batching: a per-body cost model consulted by the driver
+   (mixed selection included: kernel back with body forward must batch each
+   correctly).  Design first; Fable reviews before implementation.  Changing
+   batch sizes changes float summation order and measured peaks (the
+   calibration warning on `_transient_cols`), so the composed gates and value
+   envelopes re-run at both cells and geometries.
+2. Re-measure the parallel-1024 composed gate; the sorted-stream decision is
+   made on that number (Fable decides go/no-go).
+3. If taken: the sorted-stream parallel forward with plan caching, through the
+   full kernel protocol — emulator validation, CUDA battery, constant sweep,
+   composed gate — with the same default-on flip discipline as the four
+   shipped kernels.
 
 ## 7. Possible future direction: multi-resolution reconstruction (post-next-main)
 

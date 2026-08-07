@@ -1,10 +1,20 @@
 # Phase 5 findings — Triton projector kernels
 
-**Status:** K1–K3 complete and green on H100; K2's composed gate PASSED
-and the cone BACK kernel is DEFAULT-ON; the K4 forward sweep is
-complete and its five-arm composed gate is in flight (job 14914632).
-The design is `phase5_kernel_design.md`; the delegation model is Opus
-implementing against it with Fable reviewing and holding the GPU gates.
+**Status: PHASE 5 COMPLETE (2026-08-07).**  All four kernels are
+DEFAULT-ON, the replacement rule passes at every gate cell of both
+geometries (cone 1.00x/1.18x of jax, parallel 1.21x/1.90x, memory
+0.56–0.63x), the flipped selection contracts are battery-green on
+H100 (68 passed), and the value gate closes on the shared-sinogram
+ruler, converging under the 5e-3 envelope by iteration 6.  The one
+red cell along the way — value vs jax at parallel-1024 — was
+attributed end to end to the test protocol (phantom-generator
+boundary ties, framework- and platform-dependent), not to the kernels
+or the reconstruction chain; the attribution and the protocol rules
+it produced are recorded below.  Follow-ups (kernel-aware view
+batching; sorted streams on measured need) are chartered in
+`current_plans.md` §5.  The design is `phase5_kernel_design.md`; the
+delegation model was Opus implementing against it with Fable
+reviewing and holding the GPU gates.
 
 ## The increments so far
 
@@ -73,7 +83,136 @@ The K5 sorted-stream variant is NOT taken for cone: the measured need
 it was contingent on did not materialize (jax parity at 512, 1.18x at
 1024).  The remaining Phase 5 increment is the parallel pair.
 
+The parallel pair arrived as the degenerate case the design predicted:
+the cone kernels with the vertical fan deleted, not a second design.
+Deleting the fan also deleted the entire rounding carve-out — these
+kernels contain no atan2-vs-sqrt divisor and no round-vs-floor tie, and
+several emulator readings were BIT-EXACT against the torch bodies
+(worst 2.1e-7 across 48 checks, with the K1 cone kernel run alongside
+as the ruler).  One contract specialization is new: under parallel
+beam the projected footprint depends on the view angle alone, so
+W_p_c and weight_scale ride as per-view scalars — two floats per view
+instead of two (views, pixels) planes, a few hundred MB of traffic per
+call at the 1024 cell — and the reshape that converts them is also the
+guard (a contract that ever became per-pixel raises rather than
+broadcasting).  The full CUDA battery (both kernel test files, 68
+tests) passed on the first genuine Triton compile, extending the
+emulator's first-compile record to four kernels.
+
+The parallel sweep ran 60 configurations with zero value flags.  The
+back kernel is 13–14x over the compiled torch body at the 512 cell and
+7.8x at 1024, with bit-exact repeat launches (no atomics on the back
+path).  The register-pressure prediction held: the parallel back
+program holds about three live tiles where the cone back holds six, so
+the taller BLOCK_R=256 rectangle runs at 50 registers with zero spills
+and wins the 1024 cell.  The back winners split by cell — BLOCK_R=64
+wins 512 by 9 percent and BLOCK_R=256 wins 1024 by 24 percent — and
+one config was pinned anyway: (8, 256, 4, 1) sits within 0.6 percent
+of best at 1024, where the back kernel dominates the composed time,
+and its 9 percent concession at 512 is invisible there (the whole back
+call is under 0.8 ms).  The forward pin (8, 128, 8, 1) is the
+cone-seeded config, best at 1024 outright.
+
+The forward kernel taught the E4 lesson in reverse.  Isolated, it is
+1.21x over the compiled body at 512 and LOSES at 1024 (0.78x).
+Composed, the both-kernels arm beats the back-only arm by 19–24
+percent at both cells.  The isolated bench measures the body's best
+regime — the full pixel set per view batch — while vcd calls the
+forward on pixel subsets, where the body pays transients and per-shape
+recompiles the kernel does not.  Composition is measured, not
+extrapolated, in both directions.
+
+The composed five-arm gate then passed both cells with the pinned
+constants (warm seeded vcd, arm checks verified):
+
+| cell | both kernels | back only | pure torch | jax | torch/jax | mem/jax |
+|---|---|---|---|---|---|---|
+| 512 | 2.05 s | 2.45 s | 4.86 s | 1.70 s | 1.21x | 0.63x |
+| 1024 | 51.1 s | 61.4 s | 143.6 s | 26.9 s | 1.90x | 0.63x |
+
+The pure-torch bodies stood at 2.98x and 5.56x of jax, so the pair
+buys 2.4x and 2.8x composed.  Values against the torch bodies passed
+at 3.2e-3 and 2.3e-3 (floors 1.7e-6 and 1.7e-5).  On the pass both
+defaults flipped to probe-plus-self-check selection, the opt-in
+environment variables were retired, and the flipped selection
+contracts ran green on H100 (68 passed).  The Phase 2 headline — the
+parallel back projector 7.6x/4.4x behind jax — is CLOSED.
+
+## The 1024 value flag, attributed to the ruler
+
+The parallel gate's one red cell was value-vs-jax at 1024: 0.375
+against the 5e-3 envelope, identical in the pure-body arm.  The number
+survived the kernels' own checks (kernel-vs-body 2.3e-3), so the cause
+lay upstream, and the attribution ran as a chain of single-variable
+probes.  The gate metric is a pointwise max-rel; recomputing on the
+saved samples showed the volume agreeing at 1.1e-3 norm-rel, with the
+max carried by about two dozen isolated voxels.  The filter step
+matched across frameworks at 2e-6 on identical input.  The partition
+sequences and the partitions themselves are index-identical, refuting
+the first hypothesis (a default-sequence mismatch).  A per-iteration
+trace showed the divergence inherited from the init at iteration 1,
+and pinning a zero init collapsed it twentyfold.  A channel-tap
+rounding tie was refuted by cylinder coherence: a tie must corrupt an
+entire (row, col) cylinder under parallel beam, and the divergence
+sits at isolated slices.
+
+Isolated-slice divergence with a per-slice-separable operator means
+the DATA differs, and it does: the two frameworks' phantom generators
+disagree at ellipsoid-boundary voxels at the 1024 recon shape, and are
+bit-identical at the 512 shape, matching where the gate was clean.
+This is the documented boundary-tie divergence in the generator's own
+module header — f32-vs-f64 grid arithmetic at exact ellipsoid
+boundaries.  The gate had each framework project its own phantom, so
+the tie voxels entered the sinograms and the value comparison
+inherited them.
+
+The linkage closed in situ, and closing it surfaced a second layer of
+the same lesson.  The direct-recon census diverges at exactly six
+slices, all in mirror pairs about the volume center, and the
+protocol's own phantoms differ at every one of them with exactly
+mirror-symmetric per-slice sums (1.6/1.6, 0.8/0.8, 0.2/0.2 — phantom
+amplitudes, eight orders above float noise).  A local reduction had
+first contradicted this, showing no phantom difference at five of the
+six slices.  The contradiction resolved into a finding: the local jax
+phantom came from macOS CPU jax, the protocol's from gautschi CUDA
+jax, and the jax generator's tie resolution is PLATFORM-dependent (48
+differing slices on the H100, 40 on the Mac, different sets; the f64
+torch phantom is exactly z-symmetric and platform-stable).  The
+mirror-pair structure needs no chain z-flip: the torch phantom is
+exactly z-symmetric and the recon operators preserve the symmetry, so
+any one-sided difference prints at both members of a pair.
+
+The shared-sinogram re-run is the ruler repair, measured: handing one
+forward-projected sinogram artifact to both frameworks collapses the
+1024 value from 0.375 to 6.1e-3 (norm-rel 8.0e-4), with the kernels
+invisible (kernel arm 6.094e-3 vs body arm 6.087e-3).  The residual
+at 3 iterations is the ordinary cross-framework trajectory spread of
+unconverged iterates, and extending the comparison settles it: the
+kernel-arm max-rel vs jax falls 6.1e-3 at iteration 3, 2.2e-3 at 6,
+and 8.8e-4 at 10 (norm-rel 8.0e-4, 1.4e-4, 4.1e-5), a sevenfold
+monotone convergence toward the common minimizer.  The value gate
+therefore closes under the standing 5e-3 envelope with no metric
+change — the iteration-3 reading was the ruler again, this time its
+convergence depth.  The re-run also removed a second protocol
+asymmetry found while building it: the original gate cast weights to
+float32 on the torch side only.
+
+The protocol rules going forward, both measured lessons: a
+cross-framework value gate hands ONE sinogram artifact to both
+frameworks — the per-framework phantom differs across frameworks at
+boundary ties, and the jax phantom additionally differs across
+platforms — and in-framework generation stays fine for timing arms.
+
 ## Lessons recorded along the way
+
+The battery submission for the parallel pair added a third specimen to
+the silent-wrongness collection.  A partial rsync delivered the kernel
+module but not its test file; pytest refused the missing path and
+collected ZERO tests; and the sbatch's ``pytest | tail`` pipe reported
+tail's exit status, so the job finished COMPLETED 0:0 having tested
+nothing.  The md5 spot-check had verified only one file — per-file
+verification of every changed file is now the sync rule, and the sbatch
+carries ``set -o pipefail``.
 
 The measurement discipline caught two silent-wrongness classes before
 they cost anything.  Slurm's ``--export=ALL,VAR='a,b,c'`` splits
@@ -85,6 +224,18 @@ run with the back kernel ON; the reworked gate pins every arm's
 expected bodies and verifies them at run time (the arm check), which
 is the same failure class the nightly platform-mismatch guard exists
 for.
+
+The attribution's element-wise probe added a lesson about thresholds.
+The probe printed a SECOND CAUSE headline for two sinogram rows, and
+the flag was an artifact of its own 100x-median cut — those two rows
+carry the smallest phantom difference, real signal at 28x the noise
+floor but under the chosen threshold.  The instrument could
+manufacture the headline finding.  What settled it was a prediction
+with no free parameter: each sinogram row's max difference reproduces
+its phantom slice's summed difference to within 0.45 percent at all
+six rows, exactly as a parallel-beam ray must accumulate it.  The
+probe now records the measured ratios beside its lowered cut, so the
+choice is auditable rather than tuned.
 
 Two ruler notes carry forward.  The forward kernel's atomics make its
 launches non-bit-reproducible, so each sweep row measures its own
