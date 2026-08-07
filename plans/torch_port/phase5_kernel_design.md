@@ -6,7 +6,7 @@ and DEFAULT-ON via probe plus first-use self-check; the replacement
 rule passes at every gate cell of both geometries and the value gate
 closed on the shared-sinogram ruler.  K5 sorted streams was NOT taken
 during the phase (no measured need at cone; the parallel-1024 need is
-chartered with the batching follow-up in `current_plans.md` §5).  The
+chartered with the batching follow-up in `current_plans.md` item 1).  The
 increment ledger, gate tables, and the protocol lessons live in
 phase5_findings.md.  **Prior art:** the mbirjax pallas campaign
 (`plans/projector_kernels/`: gpu_headroom_summary/findings, the E3/E4

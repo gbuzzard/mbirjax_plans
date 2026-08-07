@@ -12,7 +12,7 @@ boundary ties, framework- and platform-dependent), not to the kernels
 or the reconstruction chain; the attribution and the protocol rules
 it produced are recorded below.  Follow-ups (kernel-aware view
 batching; sorted streams on measured need) are chartered in
-`current_plans.md` §5.  The design is `phase5_kernel_design.md`; the
+`current_plans.md` item 1.  The design is `phase5_kernel_design.md`; the
 delegation model was Opus implementing against it with Fable
 reviewing and holding the GPU gates.
 

@@ -1,8 +1,13 @@
 # Kernel-aware view batching — design
 
-**Status:** FOR FABLE REVIEW (2026-08-07).  This is checkpoint 1 of the
-mbirtorch kernel follow-ups (current_plans.md §5, goal 1).  No
-implementation code is written until this design is approved.
+**Status:** APPROVED, IN EXECUTION (2026-08-07).  Checkpoint 1 of the
+mbirtorch kernel follow-ups (current_plans.md item 1 — formerly §5; renumbered 2026-08-07) passed Fable
+review with three notes, all folded in below: the 512 "today" batch
+corrected to the measured 10 (the earlier ~5 assumed cubic cells; the
+gate cells are (views, rows, channels) tuples), the `view_batch_size`
+docstrings updated to int-or-None where users read them, and the chunk
+pins chosen from the joint time-and-memory readout with the 1024
+forward's co-residency named.
 **Prior art:** the "batching rule is implementation-supplied" paragraph
 of `phase5_kernel_design.md`, the driver's view-range loop and budget
 in `mbirtorch/projectors.py`, and the parallel-1024 decomposition in
@@ -37,7 +42,7 @@ measures the back kernel at about 12 s of the parallel-1024 composed
 39 s against jax's 26.9 s, so the forward is the larger gap.  Per-view
 launch and build overhead from this defect inflates both directions.
 What its repair actually recovers is the checkpoint-2 measurement, and
-the sorted-stream decision (§5 goal 2) is made on the remainder.
+the sorted-stream decision (current_plans item 1, goal 2) is made on the remainder.
 
 ## What the design must satisfy
 
@@ -197,7 +202,10 @@ cap further.  A memory-constrained user's small explicit value
 therefore still bounds the kernel batches.  Torch-body behavior is
 unchanged in every case, which is what constraint (b) requires.  This
 is the design's only default change, called out here so its approval
-is explicit.
+is explicit.  The constructor docstrings change with it: the
+`view_batch_size` entries become int-or-None and state the resolution
+rule, so the default change is documented where users read it
+(review note 2).
 
 ## What does not change
 
@@ -216,29 +224,41 @@ The following stay untouched, per constraint (b):
 
 ## Predicted operating points (counted; measurement decides)
 
-The counted model gives the following view batches at the gate cells.
-The full-pixel-set count P is anchored to the close-out's ~3.1 GB
-per-view torch charge; exact values track the machine's ROR count and
-the sweep records them.
+The gate cells are (views, rows, channels) = (512, 448, 384) and
+(1024, 1008, 992), the Phase 2/3/4 cells the sweep and gate harnesses
+carry.  The counted model gives the following view batches, with P the
+full ROR pixel set of each cell (about 1.16e5 and 7.73e5 pixels):
 
 | call, cell | today | designed |
 |---|---|---|
-| parallel back/fwd, full P, 1024 | 1 | ~125 (budget cap ≈ the chunk) |
-| cone back/fwd, full P, 1024 | 1 | ~50 (budget-capped) |
-| parallel and cone, full P, 512 | ~5 | 128 (chunk-capped) |
-| subset calls, 1024 | ~40 | 128 (chunk-capped) |
+| parallel back/fwd, full P, 1024 | 1 | 128 (chunk-capped; budget cap ~131) |
+| cone back/fwd, full P, 1024 | 1 | ~52 (budget-capped) |
+| parallel and cone, full P, 512 | 10 | 128 (chunk-capped) |
+| subset calls, 1024 | ~44 | 128 (chunk-capped) |
 | subset calls, 512 | 64 | 128 (chunk-capped) |
 
+An earlier draft read ~5 in the 512 "today" row, from assuming cubic
+cells.  The real 512 cell's torch charge is P x 448 x 4 ≈ 208 MB per
+view against the 2 GiB budget, which gives 10 — exactly the batch the
+p5k6 sweep measured for both directions.  The same correction anchors
+the 1024 row: the real cell's charge is ~3.1 GB per view, matching the
+close-out.  The legacy sweep row records the actuals this table is
+checked against either way.
+
 These numbers predict the 1024-cell full-range projections collapsing
-from 1024 launches to roughly 9 (parallel) and 21 (cone), and the
-subset calls doubling to tripling their batch.  The predicted risk
-runs the other way on memory.  A kernel batch may now hold transients
-up to the 2 GiB budget where today's defective batches held tens of
-MB, so the composed peak can rise.  The current kernel arms sit at
-0.56–0.63x of jax's memory against a ~1.5x replacement-rule ceiling,
-which is the headroom the chunk pin spends.  The gate's memory columns
-are re-measured, never inferred, and the pin must respect both the
-time and the memory columns.
+from 1024 launches to 8 (parallel) and 20 (cone), and the subset calls
+doubling to tripling their batch.  The predicted risk runs the other
+way on memory.  A kernel batch may now hold transients up to the
+2 GiB budget where today's defective batches held tens of MB, so the
+composed peak can rise.  The rise is real, not hypothetical: at the
+full-range 1024 forward the contract alone is ~1.6 GB at chunk 128
+(16 bytes x 7.7e5 pixels x 128 views), and it is co-resident with the
+4 GB assembled full-range output, so that call's peak grows by roughly
+2 GB over today's.  The current kernel arms sit at 0.56–0.63x of jax's
+memory against a ~1.5x replacement-rule ceiling, which is the headroom
+the chunk pin spends.  The gate's memory columns are re-measured,
+never inferred, and the pin is chosen from the sweep's joint time and
+peak readout, never from time alone.
 
 ## Compile and launch-key consequences
 
@@ -296,7 +316,7 @@ in full.  The required validation:
 The baselines the gate table reads against: parallel 1.21x / 1.90x,
 cone 1.00x / 1.18x of jax time, memory 0.56–0.63x.  The
 parallel-1024 result is the number the sorted-stream go/no-go
-(§5 goal 2) is decided on, and that decision is Fable's.
+(current_plans item 1, goal 2) is decided on, and that decision is Fable's.
 
 ## Checkpoint-2 increments
 
