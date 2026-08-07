@@ -4,8 +4,9 @@
 with Charlie; reviewed by Greg).  This is one piece of `current_plans.md`
 item 8 (the remaining utility API surface).  The work is the
 `mbirjax.preprocess` package plus the coupled main-package pieces — the MAR
-weights, the blocked median, the download utilities, and the HDF5 save/load
-family — ported into the `mbirtorch` repository.
+weights, the blocked median, the download utilities, the HDF5 save/load
+family, and the standalone `hsnt` and `vcls` modules — ported into the
+`mbirtorch` repository.
 
 **Context in one paragraph.**  mbirtorch is a PyTorch port of mbirjax.  The
 core is done and performance-gated: parallel and cone geometries, the VCD
@@ -17,9 +18,9 @@ signatures.  mbirjax remains the read-only reference throughout.
 
 ## Scope
 
-The port target is `mbirjax/preprocess/` (~6k lines) plus two main-package
-functions.  The inventory, with the jax coupling that determines porting
-effort:
+The port target is `mbirjax/preprocess/` (~6k lines) plus the coupled
+main-package pieces listed below the table.  The inventory, with the jax
+coupling that determines porting effort:
 
 | module | lines | jax use | content |
 |---|---|---|---|
@@ -41,6 +42,13 @@ methods `save_recon_hdf5`/`load_recon_hdf5` and their metadata providers
 `get_recon_dict`/`get_all_params` in `mbirjax/tomography_model.py`.  The
 HDF5 family belongs here because its export path calls into preprocess (the
 flash-removal margins use `apply_cylindrical_mask`).
+
+Two standalone main-package modules are also in scope (added 2026-08-07 after
+the application-compatibility review): `hsnt.py` (hyperspectral neutron
+tomography: `dehydrate`/`rehydrate`, the hsnt HDF5 import/export, and
+`create_hsnt_metadata`) and `vcls.py` (view selection: `get_opt_views`,
+`show_image_with_projection_rays`).  Both port to same-named new modules in
+mbirtorch with no file conflicts.
 
 **The end-to-end target.**  The reference application script is
 `mbirjax_applications/nsi/Lilly_recon.py`: NSI dataset in via
@@ -135,8 +143,9 @@ Each increment ends with the suite green and a short PR-sized review unit.
    dependency) and `segmentation.py`.  Gate: goldens; the Otsu thresholds
    should match exactly on shared inputs (integer bin arithmetic).
 3. **MAR and the coupled main-package functions.**  `mar.py` against
-   mbirtorch models, `gen_weights_mar` into `mbirtorch/vcd_utils.py`, and
-   `median_filter3d` into `mbirtorch/denoising.py`.  Gate: function goldens
+   mbirtorch models, `gen_weights_mar` into `mbirtorch/vcd_utils.py`,
+   `median_filter3d` into `mbirtorch/denoising.py`, and `align_sino_views`
+   (model-coupled, so it lands here rather than in increment 1).  Gate: function goldens
    for the pieces; an end-to-end `recon_plastic_metal` comparison on a small
    shared case at the documented tolerance; the OSQP guard behavior covered
    by tests ported from mbirjax's.
@@ -152,7 +161,7 @@ Each increment ends with the suite green and a short PR-sized review unit.
    real sample data per other vendor where a file exists, with loaders
    lacking accessible data ported but marked untested-with-real-data in
    their docstrings (Charlie decides which vendors merit chasing files).
-5. **The HDF5 save/load family.**  `export_recon_hdf5`/`import_recon_hdf5`
+5a. **The HDF5 save/load family.**  `export_recon_hdf5`/`import_recon_hdf5`
    and `save_data_hdf5`/`load_data_hdf5` into `mbirtorch/utilities.py`, and
    `save_recon_hdf5`/`load_recon_hdf5` with `get_recon_dict`/`get_all_params`
    as additive methods on `TomographyModel`.  This increment is independent
@@ -161,6 +170,13 @@ Each increment ends with the suite green and a short PR-sized review unit.
    round-trip tests (save then load reproduces array and metadata) plus a
    golden read of an mbirjax-written file, which pins the on-disk format as
    shared between the two packages.
+6. **The hsnt and vcls modules.**  `mbirjax/hsnt.py` to `mbirtorch/hsnt.py`
+   and `mbirjax/vcls.py` to `mbirtorch/vcls.py`; independent of every other
+   increment.  hsnt adds a `scikit-learn` dependency (NMF and randomized
+   SVD); both modules use seeded randomness, so their goldens fix the seeds
+   and the parity gates compare seeded runs on shared inputs.  Gates:
+   dehydrate-then-rehydrate round-trip plus goldens for the hsnt HDF5
+   format; a small seeded `get_opt_views` case against an mbirjax golden.
 
 ## Coordination
 
@@ -168,7 +184,8 @@ Each increment ends with the suite green and a short PR-sized review unit.
   `tests/test_preprocess_*.py` (new), the goldens-generator additions, and
   small additions to `mbirtorch/vcd_utils.py` and `mbirtorch/denoising.py`
   (increment 3), `mbirtorch/utilities.py` (increments 4 and 5), and
-  `mbirtorch/tomography_model.py` (increment 5 ONLY, under a strict rule:
+  `mbirtorch/hsnt.py` and `mbirtorch/vcls.py` (new, increment 6), and
+  `mbirtorch/tomography_model.py` (increment 5a ONLY, under a strict rule:
   purely additive methods in one bounded block, in their own commit, with no
   edit to any existing line — that file is under active change by the
   batching and device-policy work).  Please do not otherwise touch the
@@ -180,7 +197,7 @@ Each increment ends with the suite green and a short PR-sized review unit.
   subpackage namespace (`from . import preprocess` in the main `__init__`),
   so the main package's `__all__` does not change.
 - **Dependencies.**  The port adds `osqp`, `pywt` (PyWavelets), `tifffile`,
-  `cv2` (opencv-python), and `h5py`.  Mirror mbirjax's dependency choices in
+  `cv2` (opencv-python), `scipy`, `scikit-learn` (hsnt), and `h5py`.  Mirror mbirjax's dependency choices in
   `pyproject.toml` (an optional `[preprocess]` extra is acceptable if Charlie
   prefers a lean core install); `pyproject.toml` is a shared file, so keep
   its edit minimal and isolated in its own commit.
@@ -192,3 +209,20 @@ Each increment ends with the suite green and a short PR-sized review unit.
   reviewed by Greg.  Questions and anything surprising found in the mbirjax
   source (the port has repeatedly surfaced real upstream findings) go to
   Greg rather than being silently worked around.
+
+## Application checklist
+
+The compatibility review of `mbirjax_applications` against mbirtorch
+(Charlie's session, 2026-08-07) gives the concrete per-area needs; use it as
+the acceptance checklist alongside the increments.  From this plan's scope:
+the nsi/zeiss/nersc areas need the loaders (`get_sino_and_model`; nersc rides
+the `pymbir` loader), `compute_sino_transmission`, `crop_view_data`, the
+stripe functions (`remove_all_stripe`, `remove_stripe_fw`,
+`remove_sino_offset`), `apply_cylindrical_mask`, `BH_correction`,
+`recon_plastic_metal`, `multi_threshold_otsu`, `align_sino_views`,
+`gen_weights_mar`, `download_and_extract`, and `export_recon_hdf5` with
+`get_all_params`; the hsnt/ steps need increment 6's `hsnt` module and the
+vcls/ area its `vcls` module.  Outside this plan's scope, tracked by the
+mbirtorch team: the translation-CT family, and `split_sino_recon` (a
+capacity feature — it nearly doubles the feasible cone recon size at a fixed
+GPU count — being ported with the full mbirjax logic on the engine side).

@@ -137,7 +137,10 @@ path).
 
 **Goals:**
 1. Port both geometries with goldens and convergence parity at the
-   established floors.
+   established floors, including the translation companions the application
+   scripts call: `gen_translation_vectors`, `display_translation_vectors`,
+   `calc_tct_recon_params`, `gen_translation_phantom`, and the
+   `delta_recon_row` parameter (a parameter-handler extension).
 2. Gate rows on both platforms; kernel treatment decided by measurement (the
    torch bodies may suffice — the Phase 5 protocol applies if not).
 
@@ -173,11 +176,18 @@ utilities, and the preprocessing/MAR entry points (`gen_weights_mar`,
 lands.
 
 **Goals:**
-1. The preprocessing package plus MAR, `gen_weights_mar`, `median_filter3d`,
-   the download utilities, and the HDF5 save/load family (with
-   `get_recon_dict`/`get_all_params`), gated end to end on the Lilly NSI
-   script — Charlie's session, per `preprocessing.md`.
+1. Charlie's session, per `preprocessing.md`: the preprocessing package plus
+   MAR, `gen_weights_mar`, `median_filter3d`, the download utilities, the
+   HDF5 save/load family (with `get_recon_dict`/`get_all_params`), and the
+   `hsnt` and `vcls` modules, gated end to end on the Lilly NSI script.
 2. The factories, the phantom/demo-data generators, and `device_summary`.
+3. `split_sino_recon`, ported with the full mbirjax logic (overlapping
+   detector-row halves reconstructed separately and stitched, with
+   `stitch_arrays`).  This is a capacity feature, not a compatibility shim:
+   it nearly doubles the feasible cone recon size at a fixed GPU count, and
+   it composes with the item-2 preflight (which budgets it per half).
+   Reversed from the docs replaced bucket 2026-08-07 — the nsi
+   split-sinogram demo calls it.
 
 ## 9. MAR: cache H
 

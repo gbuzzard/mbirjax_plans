@@ -406,9 +406,15 @@ blocker.**  `gen_translation_phantom` (translation geometry) and
 
 **Replaced — remove the PENDING markers and the commented blocks.**  The
 `use_gpu` parameter is replaced by `configure_devices`; `device_summary` is
-replaced by `get_memory_stats`; `split_sino_recon` is subsumed by the
-multi-device engine and will not return.  Where a replaced name appears in
-prose, name the replacement.
+replaced by `get_memory_stats`.  Where a replaced name appears in prose, name
+the replacement.
+
+**AMENDED 2026-08-07:** `split_sino_recon` moves from this bucket back to
+PLANNED.  The application-compatibility review found the nsi split-sinogram
+demo calls it directly, and it is a capacity feature in its own right (it
+nearly doubles the feasible cone recon size at a fixed GPU count), so it
+will be ported with the full mbirjax logic rather than dropped.  Flip its
+`REPLACED(...)` marker to `PENDING(split_sino_recon)`.
 
 ### 6. Confirmed as intended (no change)
 
