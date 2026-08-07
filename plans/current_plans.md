@@ -173,10 +173,11 @@ utilities, and the preprocessing/MAR entry points (`gen_weights_mar`,
 lands.
 
 **Goals:**
-1. The preprocessing package plus MAR, `gen_weights_mar`, and
-   `median_filter3d` — Charlie's session, per `preprocessing.md`.
-2. The HDF5 save/load family and `get_recon_dict`/`get_all_params`.
-3. The factories and demo utilities.
+1. The preprocessing package plus MAR, `gen_weights_mar`, `median_filter3d`,
+   the download utilities, and the HDF5 save/load family (with
+   `get_recon_dict`/`get_all_params`), gated end to end on the Lilly NSI
+   script — Charlie's session, per `preprocessing.md`.
+2. The factories, the phantom/demo-data generators, and `device_summary`.
 
 ## 9. MAR: cache H
 
