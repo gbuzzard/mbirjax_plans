@@ -2,8 +2,10 @@
 
 **Status:** ACTIVE plan of record.  Reviewed by Greg 2026-08-04 (pinned recon
 shapes, the dashboard display item, the Phase 0 repo scaffold; §9 decisions
-confirmed).  Progress through Phase 2 recorded below (2026-08-05); the
-per-phase findings pages beside this file carry the measurements.
+confirmed).  Progress through Phase 5 recorded below (consolidated 2026-08-07:
+Phases 3+ are compact summaries; the per-phase findings pages beside this file
+carry the measurements and the detail).  The forward priorities live in
+`current_plans.md` items 1–8.
 **Home for the port:** the `mbirtorch` repo, checked out parallel to `mbirjax`
 (the package, tests, goldens generator, and demo live there).
 **Supporting scripts for this area:** `plans/experiments/torch_port/` (the
@@ -54,228 +56,96 @@ and the harness writer with the first real gpu-torch H100 run landed at
 ``results/gpu-torch/`` in mbirjax_metrics.
 
 **Phase 2 -- remaining.**  Wiring the torch writer into the nightly (a
-scheduling/infrastructure decision); YAML save/load; user-facing docs; the
-513-cell odd-size inductor investigation; and the residual small-cell back
-memory margin (the 256 MiB transient floor).  The slice-viewer port is HELD
-pending Greg's planned viewer refactor.
+scheduling/infrastructure decision; now current_plans item 4); YAML save/load;
+user-facing docs (item 5); the 513-cell odd-size inductor investigation; and
+the residual small-cell back memory margin (the 256 MiB transient floor).
+
+**Slice viewer -- PORTED (2026-08-07, its own session).**  The greenfield
+package-independent viewer (`viewer.py`: pure-numpy VolumeStack model plus the
+matplotlib SliceViewer, one event dispatcher, blitting, native-first dialogs)
+with the mbirtorch wrapper (`view_utils.py`: tensor shim, dict-to-strings,
+save_fn injection), lazily exported so a headless import loads no matplotlib.
+Field-tested through four review rounds; 165 viewer test items; the demo's
+SHOW_SLICES path uses it with the recon dict attached.
 
 **Phase 3 -- COMPLETE (2026-08-05;** `phase3_findings.md`**).**  The
-cone-beam port: both fans (flat and curved detectors), the axial-padding auto
-geometry, FDK with the cosine pre-weight, the helical z-weight, and the
-DC-damping preconditioner -- whose absence made the first parity run diverge
-with every single-op golden at 1e-6, the recorded lesson that an engine-seam
-override is part of a geometry's behavior.  All cone goldens at ~1e-6 and
-convergence parity ~1e-5, now INCLUDING helical (z-shifted, with a
-3-iteration parity trace at 7.4e-6) and curved-detector groups, both at the
-same floors on their first run.  The cone demo variant landed (a MODEL_TYPE
-switch in demo_1; 256^3 cone on MPS converges in 11 iterations, 101 s).
-The cone gate-cell readout ran on one H100 vs tuned jax (job 14867702):
-warm vcd 0.53x at 200 (a torch win), 2.96-3.90x at 512-1024; the driver is
-the cone back projector at 3.4-6.2x, with vcd device memory 4.3-5.9x at
-small/mid cells and 0.92x at the 1024 capacity cell.  Correctness is
-settled; the CUDA gaps are Phase 5 scope.
+cone-beam port: both fans, the axial-padding auto geometry, FDK, the helical
+z-weight, and the DC-damping preconditioner (whose absence made the first
+parity run diverge -- the lesson that an engine-seam override is part of a
+geometry's behavior).  All goldens ~1e-6 and convergence parity ~1e-5,
+including helical and curved-detector groups on their first run.  The H100
+gate readout put cone vcd at 2.96-3.90x of jax at 512-1024, driven by the
+back projector at 3.4-6.2x -- correctness settled, the CUDA gaps assigned to
+Phase 5 (which closed them).
 
-**Phase 5 status: COMPLETE (2026-08-07).**  All four Triton kernels
-(cone back/forward, parallel back/forward) shipped under the
-panel-reviewed projector-layer restructure and the kernel design
-(phase5_kernel_design.md), each through the full protocol: CPU-emulator
+**Phase 4 and 4a -- COMPLETE (2026-08-06;** `phase4_findings.md`**,**
+`projector_layer_design.md`**).**  Phase 4 built the multi-device engine
+(Placement, the banded broadcast/reduce collectives, the n=2/4 gates, and a
+30-agent panel).  Phase 4a then restored the mbirjax principle the Phase 4
+fork had lost -- everything is sharded, n=1 is the trivial case -- in three
+staged rewrites: function-level unification, the uniform Shards
+representation with the compiled per-shard chain (n=1 protected by a
+run_per_device short-circuit and the on-device scalar combine; measured
+n=1-neutral, the n=2 512 cell 13 percent faster, GPU peaks down at every
+cell), and the deferred seams landing once in the unified path (padding,
+weights zero-fill, interface masks, the cone damping split).  Two deliberate
+extensions go beyond mbirjax: a thin volume gives extra devices view work
+and a sparse-view problem gives them slice shards, with only a
+both-axes-idle device refused.  The projector layer was then restructured
+per a four-reviewer panel (geometry-agnostic driver, shared horizontal-fan
+kernels, module-level pure bodies), which is the platform the Phase 5
+kernels plugged into.
+
+**Phase 5 -- COMPLETE (2026-08-07;** `phase5_findings.md`**,**
+`phase5_kernel_design.md`**).**  All four Triton kernels (cone back/forward,
+parallel back/forward) shipped through the full protocol -- CPU-emulator
 validation, first-compile-green H100 battery, constant sweep, composed
-five-arm gate, and a default flip to probe-plus-self-check selection.
-Warm seeded vcd against jax on one H100: cone 1.00x/1.18x of jax's
-time at the 512/1024 cells, parallel 1.21x/1.90x, memory 0.56-0.63x
-everywhere — the replacement rule passes at every gate cell.  The
-value gate closed on the shared-sinogram ruler (converges under the
-5e-3 envelope by iteration 6; the attribution chain and the two
-protocol rules it produced are in phase5_findings.md).  Follow-ups —
-kernel-aware view batching, then sorted streams on measured need at
-parallel-1024 — are chartered in current_plans.md §5 and delegated to
-a separate session with Fable approval gates.
+five-arm gate, default flip to probe-plus-self-check selection.  Warm seeded
+vcd against jax on one H100: cone 1.00x/1.18x of jax's time at the 512/1024
+cells, parallel 1.21x/1.90x, memory 0.56-0.63x everywhere -- the replacement
+rule passes at every gate cell.  The value gate closed on the shared-sinogram
+ruler (converges under the 5e-3 envelope by iteration 6; the attribution
+chain and the protocol rules it produced are in the findings).  Follow-ups
+-- kernel-aware view batching, then sorted streams on measured need -- are
+current_plans item 1.
 
-**Ahead (original plan text).**  Phase 4 multi-device; Phase 5 Triton
-kernels -- now with a measured target list (the CONE back projector's
-3.4-6.2x across all CUDA cells plus its 4.3-5.9x small/mid-cell vcd memory,
-the parallel back projector's 4.4-7.8x at large cells, the sinogram layout
-churn, and the back fan's einsum contraction form), plus the two-axis driver tiling (Greg's question 2026-08-05): mbirjax
-tiles pixels AND views in its sparse drivers (sum/concatenate_function_in_
-batches) while the torch drivers tile views only -- sufficient through the
-1024 gate cells but the reason vb=1 stops protecting past ~1400^3, and a
-candidate factor in the vb=1 dispatch-bound large-cell back gap; the tile
-mapping and the 2-D budget requirement are recorded in the projectors.py
-TODO block.
+**Ahead.**  The forward work is prioritized in `current_plans.md` items 1-8:
+the batching follow-ups, the all-device default behind the memory preflight,
+the multi-GPU performance readout, the nightly, the remaining docs, the
+translation and multiaxis geometries, the release workflow, and the
+remaining utility API surface.  One recorded technical note stays here: the
+two-axis driver tiling question (mbirjax tiles pixels AND views in its
+sparse drivers, the torch drivers tile views only -- sufficient through the
+1024 gate cells, but pixel chunking becomes first-class at ~1400^3-plus and
+for the 6K x 10K detector trajectory; the tile mapping and 2-D budget
+requirement are recorded in the projectors.py TODO block).
 
-**Phase 4a -- engine unification, one sharded path (DEFINED 2026-08-05;
-Greg's architecture review).**  The Phase 4 implementation forked sharded
-and unsharded versions of engine functions and interleaved layout branches
-through primary paths -- a structure the panel's confirmed bugs empirically
-indicted (every one clustered where a path forgot the other
-representation), and a departure from mbirjax's principle that everything
-is sharded with n=1 as the trivial case.  Phase 4a restores the principle
-in three stages, in this order.  
+**AMD/ROCm portability (recorded 2026-08-05; ORNL users have large-scale
+AMD access).**  The HIP backend masquerades as ``torch.cuda``, so the
+engine, projectors, rulers, and device resolution carry over without code
+changes, and the choice of TRITON kernels (which maintain an AMD backend)
+keeps the tuned kernels AMD-portable; the hand-written kernels ride the
+same probe-plus-self-check selection there.  An AMD target would need
+hardware access for validation (ORNL, not Purdue), a vendor performance
+sweep (constants validated, never assumed), a ``rocm-torch`` harness
+column, and golden revalidation.  A genuine advantage over mbirjax: jax's
+ROCm support is thin, while torch-on-ROCm is a first-class target.
 
- - Stage 1: function-level unification --
-every `_sharded` twin folds into its conceptual function with the branch
-inside, vcd_recon reads as one narrative again, worker closures become
-named helpers; exit = suite plus the n=1/2/4 parity gates unchanged.
-STAGE 1 COMPLETE 2026-08-05.  The suite passed unchanged after each chunk.
-
- - Stage 2: representation unification -- Shards becomes the universal
-engine-internal state (n=1 is a one-shard container) over a small explicit
-per-shard vocabulary, NOT operator sugar, combined with the compiled
-per-shard chain (each shard's local subset work as ONE compiled call) --
-which is simultaneously the top measured orchestration lever, plus pool
-reuse and the on-device scalar combine; exit = the n=1 gates re-verified
-against current numbers, the n=1/2/4 matrix re-run, the 1-device
-orchestration diagnostic re-measured.  Two n=1-protection rules are part of
-the stage-2 design (Greg's degradation question, 2026-08-05):
-run_per_device SHORT-CIRCUITS n=1 to a direct call (no pool, no thread --
-the mechanism behind mbirjax's free trivial case), and the on-device scalar
-combine ships WITH unification, not after it, so n=1 never inherits the
-sharded path's per-subset host syncs.  The remaining container churn is
-sub-0.1 percent, and the compiled per-shard chain REDUCES the n=1 launch
-count (one dispatch per subset instead of 6-8 glue calls), so stage 2 is
-expected n=1-neutral-to-positive; the numeric bound is warm vcd at the gate
-cells within ~3 percent of current, CPU and CUDA, any excursion attributed
-before merge.
-STAGE 2 COMPLETE 2026-08-06; the exit evidence is in phase4_findings.md's
-Phase 4a section.  In brief: n=1 unchanged on CUDA (1.00-1.01x) and locally;
-values unchanged to the printed digit; the n=2 512 cell 13 percent faster;
-GPU peaks down at every torch cell; the jax control rows reproduce.  The
-engine
-state is now uniformly Shards between the vcd_recon entry wrap and the exit
-unwrap.  One updater body serves every device count: per-device compiled
-instances of the existing glue units, the update-direction seam called per
-shard, halos staged per partition pass, and the line-search partials
-combined on the lead device as 0-d tensors.  run_per_device short-circuits
-one device to a direct call, and the banded drivers short-circuit a trivial
-placement to the plain projectors.  vcd_recon owns one reused per-device
-thread pool for the whole loop.  One planned element changed: the
-single-compiled-call mega-region is NOT in this stage.  Fusing through the
-update-direction seam would compile a geometry override into the chain and
-change the n=1 graph structure, a parity risk.  The stage instead reuses
-the exact compiled units the n=1 path already had, so n=1 is call-for-call
-identical.  The mega-region remains the recorded orchestration lever, now
-cleanly implementable in the uniform body, gated on the re-measured
-1-device diagnostic.  Local evidence: 251 tests pass with 1 skip, and the
-goldens, cone goldens, and the seeded n=2 parity test all pass.  The n=1
-A/B against the pre-stage-2 baseline shows MPS within run noise, CPU
-32-cell +0.7 percent, and CPU 96-cell about 5 percent faster, with
-checksums identical.  
-
- - Stage 3: the deferred seams land
-ONCE in the unified path -- padded (non-dividing) axes in the drivers,
-prepare_sino_for_devices with its weights zero-fill, the cone DC-damping
-profile split per shard (un-guarding the cone sharded engine), the
-per-device view-batch budget, sub-band streaming, and the panel's
-low-severity items (prox_data cleared on reconfigure, device-resident pad
-construction, the Shards identity check, transfer-primitive coverage for
-small moves, pool churn).  Sequencing rationale: implementing the seams
-before unification would write each one twice and refactor it after.
-Phase 5 (kernels) then starts from a single clean engine path.
-STAGE 3 COMPLETE 2026-08-06; the seam inventory, mechanisms, and evidence
-are in phase4_findings.md's stage-3 section.  Every seam was implemented
-to the mbirjax semantics after reading its source: row-pad tie, real-view
-spans, post-reduce slice masking, interface masks, 1.0-padded damping
-profile, streaming bounds.  Two deliberate extensions go beyond mbirjax
-(Greg's review): an all-padded shard on ONE axis is legal, so extreme
-aspect ratios use more devices than the short axis allows.  A thin
-volume (few slices, many views) gives its extra devices view work; a
-sparse-view problem (few views, large volume) gives its extra devices
-slice shards and prior work.  A device idle on BOTH axes is refused.
-The suite grew to 260 tests; the padded, cone, thin-volume, and
-sparse-view n>1 engines all carry seeded parity gates, the latter
-calibrated to the same cell's dividing-case floor (the calibration
-finding is in phase4_findings.md).
-
-**AMD/ROCm portability (recorded 2026-08-05; Greg: users at ORNL have
-large-scale AMD cluster access).**  PyTorch runs on AMD Instinct GPUs
-through ROCm, and the HIP backend masquerades as ``torch.cuda``, so the
-port's engine, projectors, memory rulers, and device resolution carry over
-without code changes.  The sharding layer is already hardware-agnostic by
-design: transfers ride ``tensor.to()`` over whatever fabric exists, and the
-``is_dev2dev_safe`` probe validates them empirically rather than trusting a
-vendor list.  torch.compile generates Triton kernels and Triton maintains
-an AMD backend, so the Phase 5 plan of TRITON kernels (not CUDA-native
-ones) is exactly the choice that keeps the tuned kernels AMD-portable --
-and the compile-race lock already matters there (the triton thread-safety
-issue was reported on ROCm).  What an AMD target would actually need:
-hardware access for validation and CI (neither Purdue cluster has AMD
-GPUs; ORNL machines are the natural venue), an AMD performance sweep (the
-view-batch budget, autotune behavior, and kernel tuning do not transfer
-across vendors, the SXM4-vs-PCIe lesson generalized), a ``rocm-torch``
-platform column in the regression harness, and golden revalidation at the
-established f32 floors.  This is also a genuine advantage of the port over
-mbirjax: jax's ROCm support is thin and second-class, while torch-on-ROCm
-is a first-class production target.
-
-**Build-for-the-future rule (Greg, 2026-08-05).**  Where mbirjax carries a
-cheap guard or seam that only matters under sharding, the port includes it
-now rather than rediscovering it in Phase 4; the danger class is padded
-device-form inputs silently biasing statistics.  Included 2026-08-05, each
-with a padded-invariance regression test: the detector-row crop in
-`auto_set_regularization_params` (the view guard was already ported), the
-`num_real_elements`/`real_sino_size` normalization seam in
-`get_forward_model_loss` and `_vcd_iteration_stats`, and the padded-slice
-zero guard in `helical_fdk_z_weight`.  Also included 2026-08-05 (Greg's
-suggestion): the four placement chokepoints `_shard_sinogram` /
-`_shard_recon` / `_gather_sinogram` / `_gather_recon` as their single-device
-forms (float32-on-device placement plus the sharded-axis validation; the
-gathers are the numpy exits carrying the padded-crop obligation), wired at
-every mbirjax call site -- forward/back_project, the sparse delegates, the
-Hessian (which previously never moved user weights to the device), the
-direct filters and FBP/FDK exits, the vcd_recon entries, the recon/prox
-exits, the denoiser, and a new `gen_weights(..., ct_model=)` parameter.
-Phase 4 then changes those four functions instead of rediscovering every
-entry point.  Known seams deliberately DEFERRED to
-Phase 4 because they arrive with the sharding machinery itself (listed here
-so the Phase 4 sweep cannot overlook them): the qGGMRF interface masks
-(reflected boundary at the last real slice), the weights zero-fill
-obligation in the `prepare_sino_for_devices` port (gen_weights is
-elementwise, so padded entries would otherwise get weight exp(0)=1),
-relaxing the recon-entry shape validations that today loudly reject any
-padded input, and re-deriving the view-batch transient budget from
-PER-DEVICE shard shapes (a measured TODO block sits on the budget constants
-in projectors.py: nominal-slab accounting vs the ~2-5x actual multiplier,
-the deliberate vb~10 plateau, and the vb=1 insufficiency past ~1400^3 that
-needs pixel chunking or the Phase 5 fused kernels).  The vcd_recon
-checkpoint-resume path (init_error_sinogram / fm_hessian /
-return_checkpoint) was ported 2026-08-05 after Greg caught its absence from
-this list.  REVISED same day (Greg): the initial clone-on-resume was
-dropped -- at 32 GB scale defensive copies of the state arrays defeat the
-checkpoint path's purpose -- in favor of ADVERTISED in-place mutation, the
-no-copy analog of jax's donation (the caller's arrays become the loop's
-working buffers; copy before resuming to keep or branch; the one hazard
-donation made loud and mutation leaves silent -- pairing a pre-resume recon
-copy with a post-resume error sinogram -- is documented in the docstring).
-The chained 3+3+3 regression
-test sits at the engine's own ~1e-6 CPU rerun-jitter floor (parallel
-index_add_ ordering), which is also why all parity gates are
-tolerance-based rather than bitwise.  The device-form all-ones sinogram
-(`_sino_ones_device_form`, real entries 1 / padded entries 0) moved OFF the
-deferred list 2026-08-05 after Greg flagged the trap: leaving weights=None
-to become a bare ones at the padded size is exactly the silent Hessian bias
-the rule exists to prevent; the seam now feeds both the constant-weights
-vcd path and compute_hessian_diagonal's None branch, with a contract test.
-A full line-by-line sweep of vcd_recon against mbirjax followed (Greg's
-request, 2026-08-05) and closed the remaining gaps: the sinogram is placed
-only when the error sinogram must be computed and its reference is dropped
-after the fold (the resume path had held a wasted full device copy through
-the loop); prox_input flattens before placement (the flat form is the
-sharded device form, the same ordering as flat_recon); the error sinogram
-gets the loop-boundary re-placement; real_sino_size (math.prod, the 2^31
-lesson) now feeds _vcd_iteration_stats at its one call site, where the seam
-had been dead wiring; and compute_prior_loss was ported along with
-qggmrf_loss (numpy, host-side debug path; cross-checked against mbirjax at
-2.3e-7 rel), keeping the mbirjax quirk that pm_loss records only at
-verbose >= 1.  Checked and intentionally different: torch refcounting
-replaces mbirjax's own_sinogram delete bookkeeping.  The verbose >= 2
-memory-stat dumps got their torch counterpart same day (Greg's request):
-`get_memory_stats` ported into mbirtorch/memory_stats.py against the torch
-allocator rulers (CUDA allocated/peak/reserved/limit; MPS current/driver/
-recommended-max, which tracks no peak; psutil host RSS/USS kept verbatim),
-wired into both vcd_recon verbose >= 2 blocks and the demo tail exactly as
-in mbirjax; the jax-only memory_report live-array inventory has no torch
-analog and was not ported.  Still deferred with
-the validation item: accepting device-form (padded) shapes for
+**Build-for-the-future rule (Greg, 2026-08-05) -- DISCHARGED through
+Phase 4a.**  Where mbirjax carries a cheap guard or seam that only matters
+under sharding, the port included it early rather than rediscovering it
+later; the danger class is padded device-form inputs silently biasing
+statistics.  What the rule produced, each with regression tests: the four
+placement chokepoints (`_shard_sinogram`/`_shard_recon` and their gathers)
+wired at every entry point; the padded-statistics guards
+(`num_real_elements`, the detector-row crop, the helical z-weight zero
+guard, the device-form all-ones sinogram feeding the Hessian's
+weights-None branch); the checkpoint-resume path with ADVERTISED in-place
+mutation (the no-copy analog of jax's donation, hazards documented in the
+docstring); a line-by-line vcd_recon sweep against mbirjax; and the
+`get_memory_stats` port against the torch allocator rulers.  The seams
+deliberately deferred to the sharding machinery all landed in Phase 4a
+stage 3.  Still open: accepting device-form (padded) shapes for
 init_recon/prox_input.
 
 ## 1. Motivation and decision rule
@@ -570,13 +440,15 @@ checklist item for review, and the value-critical ones get targeted tests.
 
 ## 8. Interaction with current release goals
 
-The port coexists with the jax release goals until the gate decision.  The
-sharpness-schedule work (§1) and MAR H-caching (§3) continue on mbirjax.  The
-LEAP/SVMBIR goal (§2) is back-burnered per §1 above.  A feature freeze on
-mbirjax starts only if the replacement decision triggers; until then the
-policy is bugfixes-mirrored, features-unfrozen.  The metrics harness gains its
-backend column in Phase 2, and the jax baselines freeze at the version
-recorded in Phase 0.
+The replacement rule has now passed at every gate cell (Phase 5), so the
+formal replacement decision rides the release workflow (current_plans item
+7).  Until it triggers, the policy on mbirjax remains bugfixes-mirrored,
+features-unfrozen.  The sharpness-schedule question closed on the jax side
+(the streaks are the converged minimizer's content;
+`plans/sharpness_schedule/converged_streaks.html`); MAR H-caching
+(current_plans item 9) continues on mbirjax; the LEAP/SVMBIR goal (item 10)
+is back-burnered per §1 above.  The jax baselines stay frozen at the
+Phase 0 version.
 
 ## 9. Decisions (confirmed by Greg, 2026-08-04)
 

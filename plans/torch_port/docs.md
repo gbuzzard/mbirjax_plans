@@ -363,20 +363,29 @@ with the docstring.  Replace the method with:
 Check the imports at the top of `parameter_handler.py`: the replacement uses
 `np`, so add `import numpy as np` if the module does not already import it.
 
-### 4. Multi-GPU stays opt-in (decision, with the rationale for the docs)
+### 4. Multi-GPU: the default WILL change to inherit mbirjax's auto-spread
 
-The `num_devices=1` default is intended and persists.  Three reasons, in
-order of weight.  First, device placement is explicit state in the mbirtorch
-engine: `configure_devices` is the single entry point that validates a layout
-and rebuilds the per-device projectors, and a silent default would hide that
-step.  Second, multi-device runs produce compiled-variant float differences
-within a documented envelope, so widening the device count changes values
-run to run as hardware changes; that trade should be chosen, not inherited.
-Third, automatic widening on shared or heterogeneous machines risks
-out-of-memory failures that a planned admission check would catch; automatic
-selection is worth revisiting only after that check lands.  Write
-`usr_multi_gpu.rst` to present `configure_devices(num_devices=n)` as the
-explicit gate, with the value-envelope sentence included.
+**Decision revised by Greg 2026-08-07** (superseding the earlier
+opt-in-persists decision recorded here).  mbirtorch will adopt the mbirjax
+policy: a reconstruction spreads across the available GPUs by default, with
+`configure_devices(num_devices=1)` remaining the way to pin a run to one
+device.  The reasoning: a user who has four GPUs and silently gets one — or
+gets a late out-of-memory failure — is worse off than a user who pays a
+small device-count-dependent float difference (measured to decay from
+6.1e-3 at 3 iterations to 8.8e-4 at 10) or a modest time penalty on small
+problems.  The change ships together with a memory preflight check, whose
+priority is raised for exactly this reason; the charter is
+`current_plans.md` item 2.
+
+For the docs, until the code lands: the three sentences already rewritten
+to name `configure_devices` as an explicit step remain CORRECT for the
+current package and stay as they are.  Do not write `usr_multi_gpu.rst`
+against either behavior yet — stage it as `PENDING(auto-spread)` with a
+one-line note that the default is changing, and write it when the flip
+lands.  When it does, its content: the auto-spread default, the preflight
+that guards it, `configure_devices(num_devices=1)` as the reproducibility
+pin, and one sentence stating that results can differ slightly with device
+count and that the difference decays with iterations.
 
 ### 5. Classify the absent API for the PENDING markers
 

@@ -59,10 +59,12 @@ current state; these carry the why and the numbers.
   as-is; the restructured viewer is built greenfield into mbirtorch, in four
   checkpointed stages, with an mbirjax retrofit after field use.
   `viewer/mbirtorch_viewer_findings.md` is the as-built record (2026-08-05,
-  built and field-tested): feature parity with the mbirjax viewer, the
-  latent-bug non-reproduction checklist, the deviations that field testing
-  drove (native-first dialogs, the restored right-click menu), and three
-  matplotlib 3.11 macosx problems the retrofit will meet.
+  built and field-tested; ThinLinc-verified 2026-08-07): feature parity with
+  the mbirjax viewer, the latent-bug non-reproduction checklist, the
+  deviations that field testing drove (native-first dialogs, the restored
+  right-click menu), and three matplotlib 3.11 macosx problems.  Decision
+  2026-08-07: mbirjax keeps its current viewer; the retrofit is recorded but
+  not planned.
 - `preprocessing/` — the scanner-reader API refactor (readers return a ready model via
   `get_sino_and_model` / `build_model`; landed on `prerelease` 2026-07, PR #219):
   `preprocessing_pipeline_refactor_plan.md` is its plan and as-built design record;

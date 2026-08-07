@@ -1,76 +1,184 @@
 # Current forward plan — goals for the next release
 
 (The EVOLVING running list of open work, at `plans/current_plans.md`.  Rewritten
-2026-07-25.  Completed campaigns live in their own findings docs,
-cited where their results guide the work below.  Roughly ordered by likely value.
-This file should be cleaned periodically to avoid build-up of historical detail.)
+2026-08-07 around the agreed mbirtorch priorities; renumbered the same day — the
+kernel follow-ups formerly §5 are now §1, and the device policy formerly §6 is
+now §2.  Completed campaigns live in their own findings docs, cited where their
+results guide the work below.  This file should be cleaned periodically to avoid
+build-up of historical detail.)
 
-## Goals for the next release
+## Contents
 
-* **Simple per-iteration schedule for large sharpness and/or snr_db** (§1).
-* **Wrapper or utility to provide interfaces that mimic LEAP (https://github.com/LLNL/leap) 
-and SVMBIR (https://github.com/cabouman/svmbir) to operate MBIRJAX** (§2).
-* **MAR: cache H** (§3).
-* **Cleanup** (§4).
-* **mbirtorch kernel follow-ups: kernel-aware view batching, then sorted streams
-  on measured need** (§5).
+Items 1–8 are the agreed top priorities (2026-08-07), in rough order.
+
+1. [Finish the kernel-aware view batching](#1-finish-the-kernel-aware-view-batching)
+2. [Device policy: all-device default behind a memory preflight](#2-device-policy-all-device-default-behind-a-memory-preflight)
+3. [Multi-GPU performance investigation and tuning](#3-multi-gpu-performance-investigation-and-tuning)
+4. [mbirtorch in the nightly, including multi-GPU](#4-mbirtorch-in-the-nightly-including-multi-gpu)
+5. [Remaining Sphinx documentation pages](#5-remaining-sphinx-documentation-pages)
+6. [Additional geometries: translation and multiaxis](#6-additional-geometries-translation-and-multiaxis)
+7. [Release workflow](#7-release-workflow)
+8. [Remaining utility API surface](#8-remaining-utility-api-surface)
+9. [MAR: cache H](#9-mar-cache-h)
+10. [LEAP/SVMBIR interfaces (back-burnered)](#10-leapsvmbir-interfaces-back-burnered)
+11. [Miscellaneous / cleanup](#11-miscellaneous--cleanup)
+12. [Possible future direction: multi-resolution reconstruction](#12-possible-future-direction-multi-resolution-reconstruction-post-next-main)
 
 ---
 
-## 1. Remediation of streaks associated with large sharpness and/or snr_db.
+## 1. Finish the kernel-aware view batching
 
-**State:** Not started.
+**State:** In flight in a separate session with Fable approval gates.  The
+checkpoint-1 design is approved (`plans/torch_port/kernel_batching_design.md`);
+checkpoint 2 (implementation, sweep, composed gates) is in progress.
 
-**Overview:** In early VCD iterations with large sharpness and/or snr_db, the 
-recon can develop streaks associated with voxel cylinders (1D sets of voxels
-parallel to the rotation axis, updated as a group in MBIRJAX).  We hypothesize
-that this arises from large early steps with a random subset.  The steps are large 
-because they are underregularized, and these large steps introduce large differences 
-with neighboring voxels in some directions but small differences in other directions.
-As a result, the prior essentially treats this streak as some kind of edge to be 
-preserved rather than an artifact to be removed.  This is only a hypothesis at this time.  
-This effect is most prominent in cone beam.  
+**Overview:** The projector driver charges every body the torch body's gather
+transient when choosing view batches, so the Triton kernels run at view batch 1
+at 1024-class cells — a thousand per-view launches for kernels that hold no
+such transient.  The fix rides a cost attribute on the kernel body itself, so
+the batching rule always follows the body actually bound.
 
-**Goals:** 
-1. A consistent reproduction of this effect in real and synthetic data and
-an investigation of the role of sharpness and snr_db in modulating it.  
-2. Evaluation of methods to reduce/eliminate this effect, including the use of
-a simple per-iteration schedule to increase from low values to target high values.  The
-methods should be simple and apply to multiple geometries.  
-3. Implementation and validation of the chosen method.  
+**Goals:**
+1. Checkpoint 2: implement, sweep the view chunks, re-run the composed five-arm
+   gates for both geometries against the Phase 5 baselines (parallel
+   1.21x/1.90x of jax, cone 1.00x/1.18x).
+2. The sorted-stream forward go/no-go is decided on the re-measured
+   parallel-1024 number (Fable decides); if taken, it runs the full kernel
+   protocol of `plans/torch_port/phase5_kernel_design.md`.
 
-**Notes:** Roughly, for small Delta (the difference between adjacent voxels), 
-the influence function in the QGGMRF prior is  `(1/2) abs(Delta / sigma_x)`, where
-sigma_x is proportional to `2**sharpness` and is defined in tomography_model.py -> 
-auto_set_sigma_x.  So, increasing sharpness widens this curve and reduces the penalty
-between voxels at a fixed difference.  I.e., this changes the prior function. 
-In contrast, snr_db is used to determine sigma_y, which is proportional to 
-`10**(-snr_db/20)` and is defined in auto_set_sigma_y.  sigma_y is then used in 
-vcd_recon to define fm_constant proportional to `1 / sigma_y^2`, and fm_constant is 
-used to multiply the forward gradient and Hessian in the calculation of
-delta_recon_at_indices.  I.e., increasing snr_db puts more weight on the forward 
-but leaves the form of the prior model unchanged.  
+## 2. Device policy: all-device default behind a memory preflight
 
-A possibly incomplete list of things that would have to be changed to support a
-sharpness/snr_db schedule:  auto_set_sigma_x, auto_set_sigma_y, qggmrf_params,
-fm_constant, vcd_recon, vcd_subset_updater (possibly changed to accept qggmrf_params,
-fm_constant as inputs), prox_map.  
+**State:** Decided 2026-08-07 (Greg), not started.  Supersedes the
+opt-in-persists decision; the revision is recorded in
+`plans/torch_port/docs.md` §4.
 
-## 2. Wrapper or utility to provide interfaces to LEAP and SVMBIR
+**Overview:** mbirtorch inherits the mbirjax policy: a reconstruction spreads
+across the available GPUs by default.  A user with four GPUs who silently gets
+one, or who gets a late out-of-memory failure, is worse off than a user who
+pays a device-count-dependent float difference (measured to decay from 6.1e-3
+at 3 iterations to 8.8e-4 at 10) or a modest time penalty on small problems.
+The memory preflight moves up in priority because it is what makes the
+widening safe, and it doubles as the widening criterion (spread only onto
+devices that can hold their share).  `configure_devices(num_devices=1)`
+remains the reproducibility pin.
 
-**State:** Not started.
+**Goals:**
+1. The mbirtorch preflight ledger, checked at the top of `recon()` (the parked
+   mbirjax design in §11 transfers; the torch version is simpler because the
+   engine is eager and the batching work already counted the residencies).
+2. The default flip: capacity-aware widening at layout-build time, validated
+   by the existing empty-shard rules with graceful fallback.
+3. The docs step: `usr_multi_gpu.rst` written against the new behavior.
 
-**Overview:** Some of our collaborators are using LEAP (https://github.com/LLNL/leap)
-or SVMBIR (https://github.com/cabouman/svmbir - parallel beam only).  We'd like to 
-lower the barriers to entry for them to transition to using MBIRJAX.  So, 
-we'd like to develop an easy way to replace LEAP/SVMBIR with MBIRJAX.  
+## 3. Multi-GPU performance investigation and tuning
 
-**Goals:** 
-1. Download and run some examples using each of these packages.
-2. Determine the scope of a possible translation from these to MBIRJAX.
-3. Design, implement, and validate interfaces.  
+**State:** Not started; follows items 1–2.
 
-## 3. MAR: cache H
+**Overview:** The n=2/4 gates predate the Triton kernels, and the kernels plus
+the batching change shift the multi-device balance (the measured n>1 back
+limiter was the band transpose).  With the all-device default, multi-GPU
+becomes the out-of-box experience, so its performance and its knobs need the
+same measured treatment the single-device path got.
+
+**Goals:**
+1. A full n=1/2/4 gate readout with kernels on, at the new default, both
+   geometries — the composed-gate discipline of `phase5_findings.md` (arm
+   checks, shared-sinogram value protocol, memory re-measured).
+2. Attribute any gaps and tune what the data indicates: per-device view
+   chunks, the seam/streaming hooks, and the widening rule's parameters.
+3. The deferred value comparison rides along: jax vs torch across device
+   counts, separating the shared partition-order term from torch's
+   compile-latitude term.
+
+## 4. mbirtorch in the nightly, including multi-GPU
+
+**State:** Not started.  The torch harness writer exists, and the first real
+gpu-torch H100 run landed at `results/gpu-torch/` in mbirjax_metrics.
+
+**Overview:** Wire the torch writer into the nightly so mbirtorch gets the
+same regression protection as mbirjax: correctness gating against goldens,
+time and memory gates, and the dashboard rows already built for it.  Multi-GPU
+rows join once item 3 establishes their baselines.
+
+**Goals:**
+1. The scheduling decision and the writer wiring (the open Phase 2 tail item).
+2. n>1 nightly rows with the established memory-gate discipline (the
+   rolling-min lesson and the platform-mismatch guard both apply).
+
+## 5. Remaining Sphinx documentation pages
+
+**State:** The docs port session finished the build scaffold, the background
+pages, the user-API pages, and the two sharding developer pages; six pages
+remain (two blocked on the kernel work, four held at Greg's request), and the
+package-side instruction list in `plans/torch_port/docs.md` awaits execution.
+
+**Overview:** The remaining build warnings are references to the unwritten
+developer pages, so finishing them also gets the build to warning-free (and
+lets CI adopt `-W`).  `usr_multi_gpu.rst` stays deferred until item 2 lands,
+per the revised decision in docs.md §4.
+
+**Goals:**
+1. The five developer pages.
+2. The docs.md package-change instructions (narrowed `__all__`, the four
+   docstrings, the cross-reference demotion, the print_params guard).
+3. `usr_multi_gpu.rst` after the device-policy flip.
+
+## 6. Additional geometries: translation and multiaxis
+
+**State:** Not started (~3.4k lines in mbirjax; the beyond-gates tail of the
+port plan).
+
+**Overview:** Port TranslationModel and the multiaxis parallel geometry.  The
+jax regression harness already carries both, so gate rows have baselines from
+day one.  Translation is where two recorded lessons become first-class: the
+pixel-axis chunking need (detectors heading to 6K x 10K views) and the
+collision-cliff class (probe production shapes before enabling any tuned
+path).
+
+**Goals:**
+1. Port both geometries with goldens and convergence parity at the
+   established floors.
+2. Gate rows on both platforms; kernel treatment decided by measurement (the
+   torch bodies may suffice — the Phase 5 protocol applies if not).
+
+## 7. Release workflow
+
+**State:** A complete proposal exists at
+`plans/torch_port/release_workflow.md`; nothing implemented.
+
+**Overview:** GitHub-Release-driven publishing for mbirtorch: the
+main/prerelease branch model (renaming `master`), CI on pull requests, PyPI
+via Trusted Publishing with a tag-vs-version check, and Read the Docs wired to
+`stable`/`latest`.  The proposal ends with five open decisions — the GPU
+coverage gap in CI, the TestPyPI cadence, the Python version matrix,
+post-publish wheel testing, and the release home repository.
+
+**Goals:**
+1. Decide the five open questions and refine the proposal accordingly.
+2. Implement: the eight manual setup steps, the three workflow files, and the
+   `dev_maintenance.rst` rewrite around the new routine.
+
+## 8. Remaining utility API surface
+
+**State:** Confirmed 2026-08-07 (Greg).  The work list is the absent-API
+census in `plans/torch_port/docs.md` §5.  The preprocessing piece is
+delegated to Charlie's session under its own plan,
+`plans/torch_port/preprocessing.md`.
+
+**Overview:** Twenty-one documented mbirjax names do not exist in mbirtorch,
+and replacement needs most of them: the HDF5 save/load family (recon and data),
+the model factories (`get_ct_model`, `copy_ct_model`, `build_model`), the demo
+utilities, and the preprocessing/MAR entry points (`gen_weights_mar`,
+`median_filter3d`).  The docs pages carry PENDING markers that restore as each
+lands.
+
+**Goals:**
+1. The preprocessing package plus MAR, `gen_weights_mar`, and
+   `median_filter3d` — Charlie's session, per `preprocessing.md`.
+2. The HDF5 save/load family and `get_recon_dict`/`get_all_params`.
+3. The factories and demo utilities.
+
+## 9. MAR: cache H
 
 Reframed 2026-07-10 (from `mar_refactor_plan.md` Phase 3, which is SPEED-only — the
 fit's memory was solved in Phase 2):
@@ -80,14 +188,32 @@ fit's memory was solved in Phase 2):
 - **Subsampling is deprioritized**: uniform view/stride subsampling is wrong for this
   fit (the model is identifiable only from pixels spanning diverse metal path length,
   which are sparse in a mostly-plastic object), and metal-thresholded stratification is
-  exactly the finicky-threshold pattern §1's remedies work deliberately avoided.  If it
+  exactly the finicky-threshold pattern the streak-remedy work deliberately avoided.  If it
   is ever revisited: A/B the estimation in isolation first (fitted `theta` + corrected
   recon, full vs subsample) and gate on the corrected recon within a documented
   tolerance — not byte-identical by design.
 
-## 4. Miscellaneous / cleanup
+## 10. LEAP/SVMBIR interfaces (back-burnered)
 
-- **Compile-free memory preflight in `recon()`** (parked 2026-07-10; design agreed with
+**State:** Back-burnered per the port decision (`port_plan.md` §1): a jax-side
+wrapper would be throwaway work if replacement proceeds, and LEAP itself
+presents as a PyTorch front end, so the wrapper is thinner on mbirtorch.
+
+**Overview:** Some of our collaborators are using LEAP (https://github.com/LLNL/leap)
+or SVMBIR (https://github.com/cabouman/svmbir - parallel beam only).  We'd like to
+lower the barriers to entry for them to transition to using MBIRJAX.  So,
+we'd like to develop an easy way to replace LEAP/SVMBIR with MBIRJAX.
+
+**Goals:**
+1. Download and run some examples using each of these packages.
+2. Determine the scope of a possible translation from these to MBIRJAX.
+3. Design, implement, and validate interfaces.
+
+## 11. Miscellaneous / cleanup
+
+- **Compile-free memory preflight in `recon()`** (parked 2026-07-10; priority
+  raised 2026-08-07 — the mbirtorch charter is §2, and this design transfers to
+  it; design agreed with
   Greg after a student's 2-GPU full recon at 1600×1617×1422 spent 32 min in XLA's BFC
   retry loop before surfacing RESOURCE_EXHAUSTED — ~1,900 warning lines; the allocator's
   retry policy is not user-tunable, so fail BEFORE the first doomed allocation).
@@ -129,54 +255,18 @@ fit's memory was solved in Phase 2):
   views (or both).  Small, clearly right, and independent of any cost model.
   2. The full choose-N policy (when does adding a device pay vs its comms cost, incl. the
   CPU-cluster topology rule) stays deferred unless a real workload demands it
-  (`sharding_implementation_plan_v3.md` §5/§6).
+  (`sharding_implementation_plan_v3.md` §5/§6) — with the mbirtorch widening rule
+  (§2 above) as the live consumer of whatever simple rule emerges.
 - **Suite efficiency:** simplify tests and reduce time on tests.
 - **Minor API opens:** `configure_devices`/`use_gpu` unification; the forward
   pixel-batch default.
 - **Residual rounding-bug risk (monitor only)**: the six vertical-fan per-slice round
   sites keep the in-jit precondition — accepted + monitored
   (`plans/bugs_and_artifacts/jax rounding bug/phase_d_design.md` §7).
-- **Archive plans:** Many plan docs and scripts could be moved out of the repo and into 
- archived storage - e.g., another repo or data depot.  
+- **Archive plans:** Many plan docs and scripts could be moved out of the repo and into
+ archived storage - e.g., another repo or data depot.
 
-## 5. mbirtorch kernel follow-ups (view batching, then sorted streams)
-
-**State:** Not started (added 2026-08-07, from the Phase 5 Triton campaign's
-close-out; delegated to a separate session with Fable approval gates).
-
-**Overview:** The Phase 5 kernels pass the replacement rule at every gate cell
-of both geometries.  The weakest cell is parallel-1024 at 1.90x of jax, and its
-decomposition names two follow-ups.  First, the projector driver charges a
-Triton kernel the TORCH BODY's gather transient when choosing view batches, so
-1024-class cells run at view batch 1 (the body's per-view transient is ~3.1 GB
-against a 2 GiB budget) — a thousand per-view launches with a per-call hfan
-build, for kernels that hold no such transient and want view chunks near 128.
-The batching hook was designed in `plans/torch_port/phase5_kernel_design.md`
-("the batching rule is implementation-supplied") but not implemented.  Second,
-the torch parallel forward is 2.3–3.0x behind jax's sorted-stream pallas
-forward at that cell; the plain-atomic form was adopted measure-first, and the
-sorted-stream variant (K5: two-phase walk from the hfan contract, plans cached
-per subset-by-view-chunk through the existing `plan` slot) was deliberately not
-taken for cone because no measured need appeared.  Parallel-1024 is the one
-cell with a measured need — contingent on what batching alone recovers.  A
-cheap middle option is recorded in the forward kernel's docstring: a view-loop
-variant exploiting parallel's view-independent values tile.
-
-**Goals:**
-1. Kernel-aware view batching: a per-body cost model consulted by the driver
-   (mixed selection included: kernel back with body forward must batch each
-   correctly).  Design first; Fable reviews before implementation.  Changing
-   batch sizes changes float summation order and measured peaks (the
-   calibration warning on `_transient_cols`), so the composed gates and value
-   envelopes re-run at both cells and geometries.
-2. Re-measure the parallel-1024 composed gate; the sorted-stream decision is
-   made on that number (Fable decides go/no-go).
-3. If taken: the sorted-stream parallel forward with plan caching, through the
-   full kernel protocol — emulator validation, CUDA battery, constant sweep,
-   composed gate — with the same default-on flip discipline as the four
-   shipped kernels.
-
-## 7. Possible future direction: multi-resolution reconstruction (post-next-main)
+## 12. Possible future direction: multi-resolution reconstruction (post-next-main)
 
 Coarse-to-fine MBIR: reconstruct at binned resolution(s), upsample as the init for the
 next-finer level.  Added 2026-07-10 (Greg); investigation-first, not for the next main.
@@ -220,10 +310,22 @@ auto-regularization, loose stopping on coarse levels).
 
 ---
 
-**Recently completed (records live elsewhere):** the **Pallas projector-kernel campaign**
+**Recently completed (records live elsewhere):** the **sharpness/snr_db streak
+study, CLOSED 2026-08-07** — the two-start experiment showed the streaks are the
+converged minimizer's own content under lateral truncation (a ground-truth start
+converges to the same streaked solution, which fits the truncated data 2.3×
+better than the truth), so the per-iteration schedule premise is refuted and the
+remedy question moves to truncation handling in the model
+(→ `plans/sharpness_schedule/converged_streaks.html`, with the Phase A/B record
+in `findings.html` and `phase_b_results.html`); the **mbirtorch Phase 5 Triton
+kernel campaign** — all four projector kernels default-on, the replacement rule
+passing at every gate cell of both geometries
+(→ `plans/torch_port/phase5_findings.md`); the **mbirtorch slice viewer port**
+— the package-independent greenfield viewer plus the tensor-aware wrapper,
+field-tested through four review rounds; the **Pallas projector-kernel campaign**
 — the full custom-kernel path for both projectors and geometries, shipped and
-soak-validated (design → `docs/source/dev_projector_kernels.rst`; measured record →
-`plans/projector_kernels/gpu_headroom_findings.md`); the **default partition-sequence
+soak-validated (design → `docs/source/dev_projector_kernels.rst`; measured record
+→ `plans/projector_kernels/gpu_headroom_findings.md`); the **default partition-sequence
 change to `[2, 4, 6, 7]`** (→ `plans/partition_sequence/`); the **flash-remediation
 padding remedies** (→ `plans/flash_remediation/`); the earlier projector-kernel /
 profiling campaign (→ `plans/projector_kernels/fwd_back_findings.md`); the multiaxis
