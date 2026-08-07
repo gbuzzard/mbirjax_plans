@@ -186,6 +186,23 @@ design left them: the cheap view-loop forward variant recorded in the
 kernel's docstring, and the two-phase sorted-stream forward with plan
 caching.  The decision is Fable's on these numbers.
 
+**Decision (Fable, 2026-08-07): NOT TAKEN.**  The replacement rule now
+passes every cell with margin, and the worst cell sits at 1.56x
+against the 2x line with cone at or below jax outright.  The
+measured-need doctrine that declined sorted streams for cone applies
+with the same force here: no gate demands the work, and the queued
+priorities outrank a one-cell refinement.  Two trend facts soften the
+1.56x further: the gate measures 3 unconverged iterations, and the
+10-iteration shared-sinogram traces showed the torch ratio improving
+with depth (the fine tail is the kernels' best regime).  The revisit
+triggers, recorded so the decision is re-openable on evidence: a
+multi-GPU readout or real workload that shows the parallel forward as
+the limiting term; the translation-geometry port, whose forward
+shares this structure at larger detector scales; or any future cell
+failing the rule.  If reopened, the view-loop variant is the cheap
+first probe, and the sorted-stream design in
+`phase5_kernel_design.md` stands ready.
+
 ## Files this checkpoint staged
 
 Every file below was staged by explicit name; Greg committed the

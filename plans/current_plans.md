@@ -26,25 +26,20 @@ Items 1–8 are the agreed top priorities (2026-08-07), in rough order.
 
 ---
 
-## 1. Finish the kernel-aware view batching
+## 1. Kernel-aware view batching — COMPLETE (2026-08-07)
 
-**State:** In flight in a separate session with Fable approval gates.  The
-checkpoint-1 design is approved (`plans/torch_port/kernel_batching_design.md`);
-checkpoint 2 (implementation, sweep, composed gates) is in progress.
+**State:** COMPLETE; both goals resolved.  The record is
+`plans/torch_port/kernel_batching_findings.md` (Fable-reviewed at both
+checkpoints).
 
-**Overview:** The projector driver charges every body the torch body's gather
-transient when choosing view batches, so the Triton kernels run at view batch 1
-at 1024-class cells — a thousand per-view launches for kernels that hold no
-such transient.  The fix rides a cost attribute on the kernel body itself, so
-the batching rule always follows the body actually bound.
-
-**Goals:**
-1. Checkpoint 2: implement, sweep the view chunks, re-run the composed five-arm
-   gates for both geometries against the Phase 5 baselines (parallel
-   1.21x/1.90x of jax, cone 1.00x/1.18x).
-2. The sorted-stream forward go/no-go is decided on the re-measured
-   parallel-1024 number (Fable decides); if taken, it runs the full kernel
-   protocol of `plans/torch_port/phase5_kernel_design.md`.
+**Outcome:** The driver now batches each body by the body's own cost model,
+and the composed gates improved at every cell: parallel 1.13x/1.56x of jax
+(was 1.21x/1.90x), cone 0.88x/1.00x (was 1.00x/1.18x) — cone now at or
+below jax outright — with memory 0.57–0.63x and the pure-torch control arms
+reproducing the Phase 5 numbers within 0.4 percent.  The sorted-stream
+forward was NOT taken (Fable, on the 1.56x number): no gate demands it, and
+the revisit triggers are recorded in the findings.  The gate baselines for
+item 3 are this table's.
 
 ## 2. Device policy: all-device default behind a memory preflight
 
