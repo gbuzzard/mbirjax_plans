@@ -7,6 +7,9 @@ found in the field.  mbirjax's viewer remains unchanged.
 **Decision (Greg, 2026-08-05):** mbirjax's viewer stays as-is for now; the
 restructured viewer is built greenfield into mbirtorch instead (see
 `mbirtorch_viewer_build.md`), with an mbirjax retrofit after field use.
+**Decision (Greg, 2026-08-07):** mbirjax keeps its current viewer; the
+retrofit is not planned.  The findings page records the retrofit path in
+case that changes.
 Produced by a dedicated evaluation agent at Greg's request, against three
 questions: a more modern GUI framework?  simpler event handling?  other
 refactor recommendations.  Constraints applied: stable on macOS and Linux

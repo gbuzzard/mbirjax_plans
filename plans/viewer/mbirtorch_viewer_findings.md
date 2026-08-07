@@ -1,7 +1,11 @@
 # mbirtorch viewer — build findings
 
 **Status:** AS BUILT (2026-08-05); field-tested by Greg through four rounds of
-interactive review.
+interactive review, and verified in a ThinLinc session on the cluster
+(2026-08-07).
+**Decision (Greg, 2026-08-07):** mbirjax keeps its current viewer; the
+retrofit is not planned.  The retrofit section below records the path in
+case that changes.
 **Basis:** `mbirtorch_viewer_build.md` (the build spec) and
 `slice_viewer_eval.md` (the evaluation it executes).
 **Code:** `mbirtorch/viewer.py` (2416 lines, package-independent) and
@@ -186,7 +190,10 @@ Programmatic untoggling of the tool is not an alternative.  The macosx
 backend's native buttons do not track `toolbar.zoom()` calls, so the attempt
 inverted the button state.
 
-## The mbirjax retrofit path
+## The mbirjax retrofit path (recorded; not planned)
+
+Greg decided on 2026-08-07 that mbirjax keeps its current viewer.  This
+section records the retrofit path in case that decision changes.
 
 The viewer file drops into mbirjax unchanged; the wrapper is the only
 mbirjax-side work.  The wrapper must supply three things: conversion of
@@ -197,9 +204,16 @@ of data dicts to strings (mbirjax already has
 should export the wrapper lazily and drop `from .viewer import *`; that
 change alone delivers the headless-silent import.  The TkAgg paths (native
 menu, Tk range dialog, save-time dict editor, Tk file dialog) are the ones
-the ThinLinc cluster will exercise; they follow the reference's own
-`window.after` deferral recipe but have not yet been field-tested over
-remote X11.
+the ThinLinc cluster exercises; they follow the reference's own
+`window.after` deferral recipe.  Greg ran the viewer in a ThinLinc session
+on 2026-08-07 and it worked, with the blit fast path active under TkAgg.
+Plain `ssh -Y` X11 forwarding was verified the same day: the viewer ran on a
+gautschi compute node via `srun --x11`, displayed through XQuartz on the
+Mac, and resolved to TkAgg with the blit fast path active.  Greg judged the
+slice-slider latency good on that link.  A blit-off comparison was skipped
+deliberately.  The viewer ships with blitting enabled for TkAgg either way,
+so no decision depended on that measurement.  The A/B harness remains in
+`dev_scripts/viewer_blit_ab.py` if the question ever returns.
 
 ## Tests and how to run them
 
