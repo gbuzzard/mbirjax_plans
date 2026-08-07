@@ -75,7 +75,18 @@ the cone back projector at 3.4-6.2x, with vcd device memory 4.3-5.9x at
 small/mid cells and 0.92x at the 1024 capacity cell.  Correctness is
 settled; the CUDA gaps are Phase 5 scope.
 
-**Ahead (unchanged from the plan).**  Phase 4 multi-device; Phase 5 Triton
+**Phase 5 status (2026-08-07).**  IN EXECUTION under the panel-reviewed
+projector-layer restructure and the kernel design
+(phase5_kernel_design.md); the running record is phase5_findings.md.
+Cone BACK kernel: shipped, gate-passed, DEFAULT-ON (composed 1.90-1.91x
+over the compiled torch body; 512 cell now 1.61x of jax = replacement
+rule passed; 1024 at 2.04x with the forward as the remaining term;
+memory 0.57-1.49x of jax).  Cone FORWARD kernel: shipped and H100-green,
+swept (isolated 2.43x/1.88x over the compiled body), composed five-arm
+gate in flight; its pass flips its default and should bring 1024 inside
+the line.  Parallel pair and optional sorted streams follow.
+
+**Ahead (original plan text).**  Phase 4 multi-device; Phase 5 Triton
 kernels -- now with a measured target list (the CONE back projector's
 3.4-6.2x across all CUDA cells plus its 4.3-5.9x small/mid-cell vcd memory,
 the parallel back projector's 4.4-7.8x at large cells, the sinogram layout
