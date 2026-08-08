@@ -837,6 +837,37 @@ parent's layout (made so in review), so a half never enters the automatic
 widening path; the checkpoint-3 audit can treat `split_sino_recon` as
 pinned by construction.
 
+## Checkpoint-2 closure ruling (Fable, 2026-08-08): CLOSED; checkpoint 3 proceeds
+
+Both residency fixes landed and beat their prediction (13.0 and 11.2
+percent at the weighted 1024 cells against the predicted ~12, with a
+14.6 percent bonus at parallel 512), and the post-fix ledger envelops at
+1.001–1.104.  Three rulings on the closure record:
+
+1. The EAGER form of the whole-recon parity proof is ACCEPTED as stronger
+   than the compiled form the earlier ruling asked for.  The reasoning
+   stands: the masked and full paths compile different shapes, and dynamo's
+   shape specialization perturbs unrelated kernels, so a compiled
+   end-to-end diff measures the compiler.  Bitwise identity at every masked
+   index under both execution modes, the partitions-inside-mask test, and
+   the eager end-to-end bitwise identity settle the value claim.
+2. The per-iteration-statistics term is APPROVED as charged (persistent
+   set plus two sinogram-shaped arrays).  A second declined residency is
+   RECORDED beside `hess_weights`: fusing the statistics phase's two
+   squared-error products would cut about 7.6 GB where that phase
+   dominates, which today is only the unweighted cell — not a gate cell.
+   The revisit trigger is a stats-dominated or unweighted production
+   workload.
+3. The cold-compile control (four repeats: warm runs bitwise identical,
+   the cold run off at 2.1e-4) is a standing fact for every future value
+   protocol: warm compiled runs are reproducible, and a cold-vs-warm diff
+   measures the compile.  The warm protocols already discard the cold run;
+   now the record says why that is load-bearing.
+
+The probe's own two failures — the tail reading masquerading as a
+whole-run peak, and the uninstrumented fifth region — are the checkpoint's
+most durable lesson: every phase enveloping is not the peak enveloping.
+
 ## Checkpoint-1 staged files
 
 `plans/torch_port/device_policy_design.md` (this document).

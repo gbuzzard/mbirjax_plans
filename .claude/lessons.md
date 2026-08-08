@@ -229,6 +229,22 @@ as suspect — and note small phantoms can never reproduce these (size-dependent
   chain in one cached jit, and gate the LIBRARY path at production shapes — the spike harness's
   glue is not the driver's glue.  Fixed form gated 2.57×; same file, sections above.
 
+- **"Every phase envelops" is not the same claim as "the peak envelops."**  A phase-decomposed
+  model can validate at every instrumented region and still under-predict the run peak, because a
+  coverage claim is only as complete as the instrumentation — the peak may sit in a region no
+  wrapper measured.  And the probe's own aggregate row needs validating like any other number: in
+  the mbirtorch memory-ledger calibration the "whole warm run" row read the peak counter AFTER the
+  per-phase wrappers had reset it, so it was a tail reading, not a whole-run peak.  Tell: an
+  IMPOSSIBLE reading — the "whole-run peak" sitting BELOW a phase peak — which is what exposed
+  both defects.  The missing region itself had been charged as zero on dominated-by-others grounds
+  that two landed memory fixes later falsified (the per-iteration statistics phase; its 7.63 GB
+  transient closed the attribution as exactly two sinogram-shaped squared-error products).  Rules:
+  measure the whole-run peak with its OWN counter, independent of per-phase instrumentation;
+  require whole-run vs max-over-phases to agree within the model's band (the residual check that
+  makes coverage a measurement instead of a claim); and re-examine every dominated-therefore-zero
+  term whenever the dominant terms change, because a fix elsewhere can promote it.  Full record:
+  `plans/torch_port/device_policy_findings.md` (the third-term section).
+
 ## 6. Performance expectations
 
 - **Projection time ∝ N⁴ (voxels × views); memory ∝ N³.**  Ideal curves for size sweeps must use
