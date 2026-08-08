@@ -379,13 +379,16 @@ priority is raised for exactly this reason; the charter is
 
 For the docs, until the code lands: the three sentences already rewritten
 to name `configure_devices` as an explicit step remain CORRECT for the
-current package and stay as they are.  Do not write `usr_multi_gpu.rst`
-against either behavior yet — stage it as `PENDING(auto-spread)` with a
-one-line note that the default is changing, and write it when the flip
-lands.  When it does, its content: the auto-spread default, the preflight
-that guards it, `configure_devices(num_devices=1)` as the reproducibility
-pin, and one sentence stating that results can differ slightly with device
-count and that the difference decays with iterations.
+current package and stay as they are.  **RESOLVED 2026-08-07 (the page
+already existed when the earlier "stage as PENDING" wording was written):
+`usr_multi_gpu.rst` STAYS LIVE.**  It documents the current opt-in behavior
+accurately, and accurate documentation of the shipped package beats five
+restored warnings and a hidden page.  Its TBD entry at the top of this file
+already names exactly which sections revert when the flip lands.  When it
+does land, rewrite the page to: the auto-spread default, the preflight that
+guards it, `configure_devices(num_devices=1)` as the reproducibility pin,
+and one sentence stating that results can differ slightly with device count
+and that the difference decays with iterations.
 
 ### 5. Classify the absent API for the PENDING markers
 
@@ -634,9 +637,13 @@ modules are in flight in the preprocessing session (its increment 6) and get
 their treatment when they land.
 
 **Verify:** rebuild after the restores; the expected result is the warning
-count unchanged (restored blocks resolve against real objects) and the
-`usr_api` page growing by exactly the names added to `__all__` — compare its
-size against mbirjax's as before.
+count unchanged (restored blocks resolve against real objects).
+**CORRECTED 2026-08-07:** the page-size check stated here was wrong — with
+`:members:` dropped from the `usr_api` directive, that page does not grow
+with `__all__`, and the docs session rightly substituted the
+preprocess-vs-mbirjax page comparison as the instrument.  The `__all__`
+additions remain correct either way: the invariant is declared-matches-
+documented, not what one directive renders.
 
 ## Outcome of item 8 (docs session, 2026-08-07)
 
