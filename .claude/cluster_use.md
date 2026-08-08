@@ -424,6 +424,7 @@ did not think you were running.
 | symptom | cause / fix |
 |---|---|
 | `ls: Cannot send after transport endpoint shutdown`, or an intermittent `ModuleNotFoundError` for numpy/stdlib internals that **differs run to run and hits every env** | the LOGIN NODE's home mount is flapping.  The files are fine and compute nodes are unaffected — retry, or move the work to a node.  Do not go hunting for a broken install.  (Bit three times on 2026-07-25.) |
+| one specific file returns `Input/output error` on EVERY read/write, across connections, while its siblings are fine | an INTERRUPTED transfer (scp killed by a mount flap) left a corrupt Lustre file — this is persistent damage, not the transient flap above.  `rm -f` the file and rewrite it; then verify by md5, and do the verification **in the batch job on the compute node**, not on a login node (2026-08-08, nt1 staging). |
 | sbatch/srun on gautschi `ai` rejected for a memory request | that partition refuses `--mem` (`DefMemPerCPU == MaxMemPerCPU == 9200`).  Drop `--mem`; ask for more GPUs if you need more host RAM. |
 | job exits 1, log looks empty or truncated mid-write | **home quota full** (25 GB, fails SILENTLY).  `myquota`; write to scratch instead. |
 | `Access denied by pam_slurm_adopt: you have no active jobs on this node` | ssh to a compute node is only allowed while you hold a job there.  Get an allocation first, or `srun --overlap --jobid=<id>` instead. |
