@@ -589,3 +589,126 @@ about three times *slower* than one at that size, which the phase 4 page
 attributes to the per-subset band loop growing as bands times devices.  If the
 band-loop work has since changed that number, `usr_multi_gpu.rst` needs updating;
 the table is the only place a user sees it.
+
+### 8. Restore the landed API surface (added 2026-08-07)
+
+A large slice of the absent-API census has now LANDED: the preprocessing port
+(merged from Charlie's branch) plus its coupled main-package pieces.  These
+names exist and are importable — verify each by import per your own census
+discipline, then act as follows.
+
+**Landed, restore their PENDING blocks:** `gen_weights_mar`,
+`median_filter3d`, `download_and_extract`, `build_model`, `save_data_hdf5`,
+`load_data_hdf5`, `export_recon_hdf5`, `import_recon_hdf5`, the model methods
+`save_recon_hdf5`/`load_recon_hdf5` with `get_recon_dict`/`get_all_params`,
+and the whole `mbirtorch.preprocess` package (any pure-autodoc pages staged
+under `_pending/` for preprocess modules can come back).  Remember the
+`_SaveLoadDocs` three-way coupling recorded in `_pending/README.rst`: those
+three blocks restore together or the build breaks.
+
+**The `__all__` rule, stated plainly** (this is the "one-line decision"
+mentioned earlier, now decided): the item-1 policy is that `__all__` is the
+DECLARED public surface and matches what the docs document.  The landed names
+above are imported in `mbirtorch/__init__.py` but not yet listed in
+`__all__`, so the `automodule`-driven `usr_api` page will not render them
+even after their blocks restore.  As each name's documentation restores, ADD
+that name to `__all__` — the invariant to preserve is documented if and only
+if declared.  Edit only the `__all__` list in `__init__.py` (the file
+recently gained a lazy-import block below it; leave that untouched).  The
+preprocess package itself is a namespace, not an `__all__` entry.
+
+**One package behavior worth a sentence in the docs:** `mbirtorch.preprocess`
+now loads LAZILY (PEP 562) — `import mbirtorch` no longer pays for the
+preprocessing dependency stack, and `import mbirtorch.preprocess` or first
+attribute access loads it.  Autodoc is unaffected (`automodule::
+mbirtorch.preprocess` imports the module directly), but if any prose says
+"importing mbirtorch imports everything", correct it.
+
+**Still absent, keep their markers:** `stitch_arrays`, `get_ct_model`,
+`copy_ct_model`, `generate_demo_data`, `generate_3d_shepp_logan_reference`
+(all on the mbirtorch team's list); `split_sino_recon`
+(`PENDING(split_sino_recon)` per the item-5 amendment — a full-logic port is
+chartered); `gen_translation_phantom` (blocked on the translation geometry);
+`device_summary` and `use_gpu` (REPLACED, unchanged).  The `hsnt` and `vcls`
+modules are in flight in the preprocessing session (its increment 6) and get
+their treatment when they land.
+
+**Verify:** rebuild after the restores; the expected result is the warning
+count unchanged (restored blocks resolve against real objects) and the
+`usr_api` page growing by exactly the names added to `__all__` — compare its
+size against mbirjax's as before.
+
+## Outcome of item 8 (docs session, 2026-08-07)
+
+All thirteen landed names were verified by import before any block was restored,
+and the census matched item 8 exactly.  The ten names item 8 lists as still
+absent were verified the same way and are still absent.  The restores are done
+and the build is green.
+
+### What was restored
+
+The preprocess page moved out of staging with `git mv`, and its twenty-six
+autodoc targets were each verified present before the move.  The rendered page is
+180 KB against mbirjax's 179 KB, a 0.4 percent difference, which is the parity
+check for a page that is almost entirely autodoc.
+
+The `_SaveLoadDocs` trio restored together, as the coupling note required.  The
+three sites are the label and section in `usr_tomography_model.rst`, and the
+references to it in `usr_utilities.rst` and `usr_api_overview.rst`.
+
+Nine other blocks restored: `median_filter3d` in `usr_denoising.rst` and
+`usr_api_overview.rst`, `gen_weights_mar` in `usr_utilities.rst` and
+`advanced_features.rst`, `build_model` in `usr_utilities.rst`, the whole IO
+Functions section, `get_all_params` and `get_recon_dict`, the preprocess sentence
+in `quick_start.rst`, and the NSI and Zeiss unit examples in
+`unit_conversion.rst`.  Those last two had been commented out only because they
+cross-reference `PreprocessDocs`.
+
+`split_sino_recon` flipped from `REPLACED` to `PENDING` at both of its sites, per
+the item-5 amendment, with the charter reason recorded in the marker.
+
+Seven names in `__all__`: `gen_weights_mar`, `median_filter3d`,
+`download_and_extract`, `build_model`, `save_data_hdf5`, `load_data_hdf5`,
+`export_recon_hdf5`, and `import_recon_hdf5`.  The declared-and-documented
+invariant is now also recorded in `_pending/README.rst`, so the next restore
+does not have to rediscover it.
+
+### One expectation in item 8 that does not hold
+
+Item 8 expects the `usr_api` page to grow "by exactly the names added to
+`__all__`".  It does not, and cannot.  The `:members:` option is dropped from that
+page's `automodule` directive, per the option-one decision recorded above, so the
+directive renders no members regardless of what `__all__` declares.  The page grew
+from 17.3 KB to 18.1 KB, and that 0.8 KB is the new `PreprocessDocs` bullet and
+toctree entry, not the `__all__` additions.
+
+Adding the names to `__all__` was still correct, and it was done.  The invariant
+it serves is that the declared public surface matches what the docs document, and
+that invariant holds independently of whether the `automodule` renders anything.
+The page-size guard that item 8 proposes is simply not the right instrument here.
+The preprocess page comparison against mbirjax served that role instead.
+
+### Two package docstrings still dangle
+
+The build ends at 17 warnings.  Fifteen are references to the pages not yet
+written and will clear on their own.  Two are new, and both are the same defect in
+`mbirtorch/tomography_model.py`: the docstrings of `get_recon_dict` (line 2655)
+and `save_recon_hdf5` (line 2709) both write `:func:`mbirtorch.slice_viewer``.
+That target does not resolve, because `slice_viewer` is documented under
+`mbirtorch.view_utils.slice_viewer`, and because the package-level name is a lazy
+PEP 562 export that autodoc cannot see.
+
+This is the same class of defect as the `get_2d_ror_mask` reference fixed under
+item 2, and the same two fixes apply: demote the role to a literal, or write the
+full `mbirtorch.view_utils.slice_viewer` path.  The second is better here, since
+it keeps the link.  Both lines are package source, so they are left for the code
+session.
+
+### One fix that diverges from mbirjax deliberately
+
+`usr_preprocess.rst` line 22 writes `:func:`mbirjax.gen_weights`` in the original.
+That reference does not resolve, and it is the single warning mbirjax's own docs
+build reports.  The mbirtorch copy uses `mbirtorch.vcd_utils.gen_weights` instead,
+which resolves.  A `DIVERGENCE(gen_weights ref)` comment at the site records that
+this is a fix rather than a porting error, so a later diff against mbirjax does
+not "correct" it back.

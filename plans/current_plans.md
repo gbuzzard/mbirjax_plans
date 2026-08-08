@@ -263,6 +263,13 @@ we'd like to develop an easy way to replace LEAP/SVMBIR with MBIRJAX.
   CPU-cluster topology rule) stays deferred unless a real workload demands it
   (`sharding_implementation_plan_v3.md` §5/§6) — with the mbirtorch widening rule
   (§2 above) as the live consumer of whatever simple rule emerges.
+- **mbirtorch denoiser sharding gap (found 2026-08-07 during the
+  device-policy design):** `QGGMRFDenoiser.denoise` raises under any
+  non-trivial placement — it calls `.clone()` on a `_shard_recon` result and
+  `Shards` has no `clone`.  The device-policy work deliberately leaves the
+  denoiser single-device and outside the widening; fix or formally scope the
+  denoiser to one device (error message at configure time) as a small
+  follow-up.
 - **Suite efficiency:** simplify tests and reduce time on tests.
 - **Minor API opens:** `configure_devices`/`use_gpu` unification; the forward
   pixel-batch default.
