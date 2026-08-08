@@ -86,9 +86,18 @@ the same measured treatment the single-device path got.
 
 ## 4. mbirtorch in the nightly, including multi-GPU
 
-**State:** Plan approved (`plans/torch_port/nightly_plan.md`, Fable-reviewed);
-implementation in flight in its own session, gated on a real end-to-end trial
-run before any schedule change.
+**State:** Implemented through the trial-run gate and the first real
+scheduled-path run (2026-08-08; findings in `nightly_plan.md` §10).  The
+gpu-torch series is live at origin: 35 cells at mbirtorch `ae9bb6f9`, with
+records, tests, and the dashboard row rendering.  The trial measured the
+two open knobs: the memory window is 1 (a 0.000% spread over five fresh
+subprocesses) and a changed night costs about 0.26 GPU-hours.  Remaining:
+install the 03:00 scrontab block (`enable_torch_nightly.sh`, one command),
+then increment 6 (cpu-torch on the Mac) and increment 7 (the n>1 rows —
+the flip has landed, the window ablation must repeat at n=2 and n=4, and
+the n=1 soak clock started 2026-08-08).  One coverage gap for Greg's
+call: `tests/goldens/` is gitignored, so the suite's torch-vs-jax golden
+check skips on the nightly's fresh clones (§10.4).
 
 **Overview:** Wire the torch writer into the nightly so mbirtorch gets the
 same regression protection as mbirjax: correctness gating against goldens,

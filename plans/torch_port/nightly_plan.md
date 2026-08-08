@@ -1,7 +1,9 @@
 # mbirtorch in the nightly, including multi-GPU — plan
 
-**Status:** DRAFT, awaiting Fable review at the plan STOP.  No
-implementation code has been written.
+**Status:** IMPLEMENTED through the trial-run gate and the first real
+scheduled-path run (2026-08-08).  The findings and the closing state are
+in §10.  Increments 6 (cpu-torch) and 7 (the n>1 rows) remain, and §10
+lists their preconditions as measured.
 
 The charter is `current_plans.md` item 4.  Two of its sentences set the
 scope: wire the torch writer into the nightly so mbirtorch gets the same
@@ -1004,3 +1006,170 @@ re-running it after the §7 increment-5 pull rewrites the block from the
 current knobs and closes the gap.  This matters only on a worst-case
 all-branches-changed night, which is exactly the night the 6 hours was
 chosen for.
+
+---
+
+## 10. Findings and closing (2026-08-08)
+
+The plan is implemented through the first real scheduled-path run.  The
+gpu-torch series now exists at origin: commit `ee1b249` carries
+`results/gpu-torch/main/` with 35 measured cells at mbirtorch `ae9bb6f9`,
+a records book, a `_table.yaml` companion, a tests file, and
+`state/gpu-torch/main`.  The dashboard renders the series with the
+GPU-TORCH tile column live and the torch History row below the jax row.
+The jax nightly ran untouched through the whole change; its own
+2026-08-08 gpu run (`e37bc93`) landed mid-implementation.
+
+### 10.1 What shipped, against the increments
+
+Increments 1 and 2 were committed by the prior session and re-verified
+here.  The gate-control re-run at HEAD reproduced the recorded
+post-edit state exactly: 16 cases, 523 hard, 504 soft, with FORCED
+gpu-torch at 168 hard and 0 soft.  The writer's local verification
+passed all four checks: a cold-start run file with a real gate block, a
+same-commit rerun that overwrites, a perturbed prior that fires a hard
+fingerprint finding with exit 1, and a clean `build_dashboard.py` parse.
+
+The writer then needed one adaptation the plan did not anticipate.  The
+device-policy flip landed in mbirtorch (`aa9644b`) nine hours after the
+writer was committed, and it removed the constructor `device` argument
+the writer passed.  The adaptation has three parts: models are built
+with no device argument, every pin goes through `configure_devices`, and
+the pin is platform-aware.  Platform-aware means cpu-torch pins
+`devices=['cpu']` explicitly.  The count-only pin would bind MPS on a
+Mac, because the lazy device preference is cuda, then mps, then cpu — so
+a cpu-torch row would silently measure Apple's GPU.  Each row now also
+verifies the KIND of every realized device, not just the count.
+
+Increment 3 shipped as planned: the wrapper, the two env files,
+`lib_torch_env.sh`, the three schedule scripts on both platforms, the
+manual slurm file, the launchd template, the four `action_scripts` entry
+points, the `recent_runs.py` column widening, and README sections.  The
+kickoff decisions are applied: `main` is the sole tracked branch, the
+incomparable `results/gpu-torch/master/` run is deleted, and the
+dashboard's default landing view prefers the newest JAX-family run, with
+torch one Platform-dropdown click away.
+
+### 10.2 The trial-run gate, item by item
+
+The gate ran as job 14987177 on one H100: 30m21s wall, exit 0, all
+steps passing.  Its evidence, against the §7 checklist:
+
+* **A complete run file.**  Two, in fact: the trial measured the real
+  pair `aa9644b` (writer-direct) then `ae9bb6f9` (through the wrapper),
+  35 of 35 cells each, zero failures, with records, `_table.yaml`, and a
+  tests file beside them.
+* **A measured wall time.**  A full changed-branch pass is 15m48s:
+  install 8 s, suite 4m37s, sweep 11m01s.  That is about 0.26 GPU-hours
+  per changed night, half the §3(a) estimate.
+* **The device-pin assertion.**  Every row's realized list has length
+  one on a CUDA device, and the mispinned control raised
+  `configure_devices(2) needs 2 CUDA devices; found 1` rather than
+  measuring.
+* **The platform guard.**  Declaring gpu-torch with CUDA hidden aborted
+  with `PLATFORM MISMATCH` at exit 2.
+* **The cone recon shapes.**  mbirtorch's auto shapes at all four GPU
+  cells match the writer's pin table exactly, through (1024, 1008, 992)
+  → (992, 992, 1008).
+* **The §3(c-ii) memory ablation.**  Five fresh-subprocess repeats of
+  parallel/vcd_nonconst at 512×448×384 read 1974.6 MB every time: a
+  0.000% spread.  `max_memory_allocated` is deterministic at n=1, so
+  `TORCH_MEM_GATE_WINDOW=1` is the measured setting.  The jax window of
+  3 exists for a jax artefact the torch ruler does not share.  The n>1
+  increment must repeat this ablation at n=2 and n=4 before trusting 1
+  there.
+* **A second run against the first.**  The wrapper's run gated the tip
+  against the prior with `GATE: PASS`, zero hard and zero soft findings.
+  The tip-vs-prev diff is the forward-kernel repair, which touches only
+  non-trivial placements, so a clean n=1 pair is the expected reading.
+  The clean pair also shows that day-over-day noise sits inside the
+  tolerances.
+
+The trial's seed baselines for the headline VCD cells: parallel 1.51 s
+and 36.4 s at 512 and 1024, cone 2.40 s and 57.8 s, with 23.2 to
+23.7 GB peaks at the 1024 cells.  These sit below the campaign's
+composed-gate numbers by construction, because the nightly times
+`vcd_recon` with initialization outside the measured region, while the
+campaign's gate timed whole reconstructions.
+
+### 10.3 The first scheduled-path run
+
+The first real run was job 14989680, triggered through
+`run_one_torch_night.sh --sbatch` from the standing checkout after its
+pull from `7965e83` to the current tip.  The run exercised the entire
+production path on its own: the phase-1 bootstrap re-exec, the one-time
+auto-creation of the `mbirtorch_regression` env, fire-on-change reading
+`main @ ae9bb6f9: CHANGED (was none)`, the suite, the sweep, the
+cold-start gate, and the rebase-push that produced `ee1b249`.  Wall
+time was 20m58s including the env creation.
+
+The run surfaced one provenance defect.  The wrapper wrote its install
+log inside the library clone, and mbirtorch's `.gitignore` has no
+`*.log` rule, so `git_provenance` read the pristine origin tip as
+`git_dirty: true` and the dashboard stamped the row "dirty".  mbirjax
+never hit this because its `.gitignore` covers `*.log`.  The fix
+(`3ada7ba`) moves the log outside the clone, which also lets a FAILED
+install's log survive the clone's deletion.  A forced re-measure (job
+14991549) reseeded the same commit with clean provenance.
+
+### 10.4 The goldens gap: the suite's cross-framework check skips in the nightly
+
+`tests/goldens/` is gitignored in mbirtorch, so a fresh clone has no
+goldens and `test_vs_goldens` skips.  The nightly runs from fresh
+clones, so the suite's torch-vs-jax value check — the §3(e) reason this
+plan put no cross-framework column in the nightly — is inert on the
+nightly path.  The cluster suite read 396 passed, 99 skipped, and the
+skips include both golden families.  The gap does not affect the gate,
+and the check still runs in dev checkouts, where the goldens exist.
+Three options, in rising cost: accept dev-checkout-plus-campaign
+coverage as sufficient; commit the goldens to mbirtorch so clones carry
+them; or have the nightly generate goldens, which would put jax inside
+the torch env against the §3(f) separation.  This is Greg's call, and
+the item-3 session's deferred value comparison bears on it.
+
+### 10.5 Smaller observations
+
+The H100 flags heavy torch kernels as throttled.  Two of the trial's 35
+rows carry the flag at `sw_power_cap` and 45°C, which is the boost
+governor, not thermal distress.  The production night sampled up to
+87°C during the 1024 VCD cells and flagged them; history-based gating
+absorbs the noise, and the flag is informational on the tiles.
+
+Row records show the device as unindexed `cuda` rather than `cuda:0`.
+The unindexed form is what `configure_devices(num_devices=1)` binds at
+n=1; the kind check accepts it and the measurement reads the current
+device.  Cosmetic, and worth normalizing if it ever matters.
+
+An sbatch shell has no `module` function, so the preamble's `module
+load` lines fail in the torch job's log.  The torch stack does not
+need them: the cu130 wheels bundle their CUDA runtime, conda resolves
+through `lib_torch_env.sh`'s fallback, and the proxy exports still run.
+The lines are noise, not a defect.
+
+A killed scp can leave a Lustre file that fails every read with
+`Input/output error`.  The staging hit this once; the remove-and-rewrite
+remedy and the verify-on-the-compute-node rule are recorded in
+`cluster_use.md`'s failure table.
+
+### 10.6 What remains
+
+The scrontab installation is the one step left of increment 5.  Running
+`action_scripts/enable_torch_nightly.sh` on gautschi installs the
+`mbirtorch-nightly` block at 03:00 with one GPU; `status_torch_nightly.sh`
+then confirms both layers, and the §9 note about re-running the JAX
+`enable_nightly.sh` to close its walltime gap still stands.
+
+Increment 6 (cpu-torch on the Mac) is unblocked: the writer's
+platform-aware pin already guards the MPS hole it would otherwise hit,
+and the launchd template and schedule scripts are in place.
+
+Increment 7 (the n>1 rows) has its preconditions measured: the
+device-policy flip has landed, the window ablation exists and must be
+repeated at n=2 and n=4, and the n=1 soak clock started 2026-08-08.
+The trial's 0.26 GPU-hour figure halves the §3(c) cost basis for the
+cadence decision.
+
+The dashboard's vs-main correctness reference is active by
+construction, because the tracked branch is literally `main`; the
+cross-device reference activates with increment 7 and the
+cross-platform reference with increment 6.
