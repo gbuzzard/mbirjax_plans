@@ -55,15 +55,17 @@ def _build(geometry, cell, compile_mode, disable_kernels):
     num_views, _, num_channels = cell
     if geometry == "parallel":
         angles = np.linspace(0, np.pi, num_views, endpoint=False)
-        model = mbirtorch.ParallelBeamModel(cell, angles, device="cuda",
+        model = mbirtorch.ParallelBeamModel(cell, angles, 
                                             compile_mode=compile_mode)
+        model.configure_devices(devices=["cuda"])
     else:
         angles = np.linspace(0, 2 * np.pi, num_views, endpoint=False)
         model = mbirtorch.ConeBeamModel(cell, angles,
                                         source_detector_dist=4.0 * num_channels,
                                         source_iso_dist=2.0 * num_channels,
-                                        device="cuda",
+                                        
                                         compile_mode=compile_mode)
+        model.configure_devices(devices=["cuda"])
     model.set_params(no_warning=True, verbose=0)
     return model
 

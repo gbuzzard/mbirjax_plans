@@ -19,8 +19,11 @@ angles = np.linspace(0, np.pi, cell[0], endpoint=False)
 def build(n):
     m = mbirtorch.ParallelBeamModel(cell, angles)
     m.set_params(no_warning=True, verbose=0)
-    if n > 1:
-        m.configure_devices(n)
+    # UNCONDITIONAL: a CUDA model without an explicit
+    # configure_devices call now spreads across every visible
+    # device, so the n=1 arm must pin itself or it silently
+    # becomes the very multi-device run it is the baseline for.
+    m.configure_devices(n)
     return m
 
 

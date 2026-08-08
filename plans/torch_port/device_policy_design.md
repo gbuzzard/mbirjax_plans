@@ -868,6 +868,88 @@ The probe's own two failures — the tail reading masquerading as a
 whole-run peak, and the uninstrumented fifth region — are the checkpoint's
 most durable lesson: every phase enveloping is not the peak enveloping.
 
+## Constructor amendment (Greg + Fable, 2026-08-08): the `device` kwarg is REMOVED
+
+The model constructors lose their `device` argument.  Greg's rationale is
+the mbirjax history replayed: `use_gpu` accreted options, whittled to almost
+nothing, and was replaced by `configure_devices` — and the kwarg was already
+growing the same way here ('auto', 'cpu', 'cuda', and 'cuda:N', the last two
+carrying a subtle eligibility distinction).  Four further reasons close it:
+
+1. **Constructor parity with mbirjax.**  mbirjax models take no device
+   argument, so the kwarg was a signature divergence in the drop-in surface.
+2. **The eligibility rule simplifies to one bit.**  With no device string to
+   parse, "automatic" means exactly "no explicit `configure_devices` call
+   has been made" — the named-with-an-index subtlety disappears.
+3. **`configure_devices(devices=[...])` already covers every explicit case**:
+   `['cpu']` (the tests use it today), `['mps']`, `['cuda:1']`, and lists.
+   One API, one place to document, one flag to consult.
+4. **It forces the right laziness.**  Construction today eagerly resolves
+   the device and builds projectors in `__init__`.  With the kwarg gone,
+   resolution and the first projector build DEFER to first use or to the
+   first `configure_devices` call (a cached property is the natural shape),
+   so a CPU-bound user on a CUDA machine never pays CUDA context
+   initialization plus a rebuild.  This laziness aligns with the
+   widening-at-`vcd_recon` trigger already in this design, and it is a
+   standalone improvement for import-and-inspect usage.
+
+**Semantics after the change.**  A model with no `configure_devices` call
+resolves 'auto' lazily (cuda, else mps, else cpu) and, on CUDA with two or
+more visible devices, takes the automatic widening path of this design.  Any
+explicit choice — count, device list, cpu, a single index — goes through
+`configure_devices`, which switches the model out of automatic mode
+permanently, exactly as already specified.  `MBIRTORCH_NUM_DEVICES` and
+`CUDA_VISIBLE_DEVICES` semantics are unchanged.
+
+**Migration.**  Removal is outright, not deprecation-shimmed: the package is
+pre-release and the users are in this room.  About 95 call sites pass
+`device=` today, 65 of them `device='cpu'` in tests; each becomes either
+nothing (where 'auto' resolves the same) or a `configure_devices` call
+(tests wanting CPU on any machine use `configure_devices(devices=['cpu'])`
+or the suite's pinning fixture).  The nightly plan's row pinning already
+uses `configure_devices` and is unaffected.  The just-updated constructor
+docstrings fold their device paragraph into the `configure_devices`
+docstring, which becomes the single home for the layout story.
+
+## Checkpoint-3 closing ruling (Fable + Greg, 2026-08-08): the interim ships the flip
+
+The checkpoint-3 findings are approved: the flip is built, its mechanism
+checks pass, the n=1 gates reproduce with the residency fixes confirmed in
+composition, and the hold on shipping was the right call.  The forward-kernel
+defect is dispositioned as follows, and checkpoint 3 closes by implementing
+the INTERIM below; the kernel repair moves to a dedicated session.
+
+**The interim selection rule.**  Each geometry's `_view_batch_bodies` binds
+the Triton FORWARD body only when the model's placement is trivial; on any
+non-trivial placement the torch forward body binds.  The BACK kernels stay
+selected at every device count — the isolation matrix earned them that
+(back-kernel arms reproduce the pure-torch arms to four significant figures
+at n=2 and n=4 in both geometries).  Selection already re-runs when
+`configure_devices` recreates the projectors, so the rule follows layout
+changes with no new machinery.  The comment at the selection site states the
+measured basis (the matrix of job 14954801) and points at the repair record.
+The selection tests gain the non-trivial-placement branch: kernel forward at
+trivial placement, torch forward at a fabricated non-trivial one, back
+kernel at both.
+
+**The permanent kernel-times-sharding gate.**  The isolation probe's matrix
+harness is promoted to a standing 2-GPU gate (a CUDA test file marked for
+multi-GPU runs plus its sbatch): torch-body arms at the multi-device float
+floor, back-kernel arms equal to the torch arms within that floor, and the
+selection contract asserted (the forward kernel NOT bound at n>1 under the
+interim).  This harness is also the acceptance bar for the repaired forward
+kernel: restoration means its arms join the torch arms at the floor and the
+interim rule retires.
+
+**Protocol note, recorded for every future gate.**  `compile_mode='off'`
+does not disable the kernels — selection is availability-driven, not
+compile-driven.  An arm that intends the plain torch engine sets
+`MBIRTORCH_DISABLE_TRITON=1`.  The checkpoint-3 gate scripts are updated to
+say what they run.
+
+With the interim landed and gated, the flip ships: the all-device default
+goes live against a multi-device forward path that is measured correct.
+
 ## Checkpoint-1 staged files
 
 `plans/torch_port/device_policy_design.md` (this document).

@@ -25,15 +25,22 @@ ITERS = 4
 
 def build():
     angles = np.linspace(0, np.pi, CELL[0], endpoint=False)
-    m = mbirtorch.ParallelBeamModel(CELL, angles, device="cuda")
+    m = mbirtorch.ParallelBeamModel(CELL, angles)
+    m.configure_devices(devices=["cuda"])
     m.set_params(no_warning=True, verbose=0)
     return m
 
 
 def run(label, devices, sino, weights, ref=None):
     m = build()
+    # UNCONDITIONAL: a CUDA model without an explicit
+    # configure_devices call now spreads across every visible
+    # device, so the n=1 arm must pin itself or it silently
+    # becomes the very multi-device run it is the baseline for.
     if devices is not None:
         m.configure_devices(devices=devices)
+    else:
+        m.configure_devices(1)
     times = []
     for _ in range(2):
         np.random.seed(13)

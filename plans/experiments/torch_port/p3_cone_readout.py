@@ -104,7 +104,8 @@ def worker(cfg):
         import torch
         import mbirtorch
         model = mbirtorch.ConeBeamModel(cell, angles, source_detector_dist=sdd,
-                                        source_iso_dist=sid, device=device)
+                                        source_iso_dist=sid)
+        model.configure_devices(devices=[device])
         recon_shape = tuple(model.get_params('recon_shape'))
         phantom = mbirtorch.generate_3d_shepp_logan_low_dynamic_range(recon_shape)
         sinogram = model.forward_project(phantom)

@@ -60,10 +60,14 @@ def worker(cfg):
     else:
         import torch
         import mbirtorch
-        model = mbirtorch.ParallelBeamModel(cell, angles, device="cuda")
+        model = mbirtorch.ParallelBeamModel(cell, angles)
+        model.configure_devices(devices=["cuda"])
         model.set_params(no_warning=True, verbose=0)
-        if n_dev > 1:
-            model.configure_devices(n_dev)
+        # UNCONDITIONAL: a CUDA model without an explicit
+        # configure_devices call now spreads across every visible
+        # device, so the n=1 arm must pin itself or it silently
+        # becomes the very multi-device run it is the baseline for.
+        model.configure_devices(n_dev)
         recon_shape = tuple(model.get_params('recon_shape'))
         phantom = mbirtorch.generate_3d_shepp_logan_low_dynamic_range(recon_shape)
         sinogram = model.forward_project(phantom)

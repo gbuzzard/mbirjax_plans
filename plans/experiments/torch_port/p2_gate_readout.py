@@ -103,7 +103,8 @@ def worker(cfg):
     else:
         import torch
         import mbirtorch
-        model = mbirtorch.ParallelBeamModel(cell, angles, device=device)
+        model = mbirtorch.ParallelBeamModel(cell, angles)
+        model.configure_devices(devices=[device])
         recon_shape = tuple(model.get_params('recon_shape'))
         phantom = mbirtorch.generate_3d_shepp_logan_low_dynamic_range(recon_shape)
         sinogram = model.forward_project(phantom)

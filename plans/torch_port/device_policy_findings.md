@@ -359,17 +359,294 @@ also shrank: the weighted-versus-unweighted gap fell from 2.97 GB to
 0.47 GB, because fix 1 removed the larger of the two arrays that made the
 weighted arm the heavier one.
 
+## Checkpoint 3: the flip is built, and it must not ship yet
+
+The widening rule is implemented and every mechanism check passes on four
+H100s.  The flip is nevertheless BLOCKED, by a defect it did not introduce
+and would expose to every multi-GPU user.
+
+**The Triton FORWARD kernels are wrong under the banded multi-device
+drivers.**  The back kernels are correct.  The torch bodies are correct.  At
+one device nothing is wrong, which is why this was never seen.
+
+### The evidence, in the order it arrived
+
+The flip gate read n=2 and n=4 against n=1 at order-1 relative difference,
+where the established multi-device float floor is about 1e-3.  A difference
+that size is not a float floor, so the first question was whether the
+device-policy work had broken the engine.
+
+A CPU bisection cleared it.  The same seeded n=1-versus-n=2 comparison reads
+9.569e-04 on the current tree and 9.569e-04 on the pre-checkpoint-3 tree, to
+every printed digit, under three different weighting choices.  The engine is
+unchanged by this work.
+
+What CPU does not exercise is the Triton kernels.  They are selected by their
+own availability probe, and `compile_mode='off'` does not disable them, so
+the gate's "eager" arms were running kernels.  A probe varying the kernels
+alone, at fixed device counts, separated the two cleanly (job 14954801):
+
+| geometry | forward body | back body | n=2 | n=4 |
+|---|---|---|---|---|
+| parallel | torch | torch | 4.466e-04 | 9.492e-04 |
+| parallel | torch | **kernel** | 4.466e-04 | 9.492e-04 |
+| parallel | **kernel** | torch | **1.161** | **7.954e-01** |
+| parallel | **kernel** | **kernel** | **1.438** | **9.187e-01** |
+| cone | torch | torch | 4.574e-04 | 4.953e-04 |
+| cone | torch | **kernel** | 4.575e-04 | 4.954e-04 |
+| cone | **kernel** | torch | **1.251** | **1.142** |
+| cone | **kernel** | **kernel** | **1.380** | **1.085** |
+
+The kernel-back rows reproduce the pure-torch rows to four significant
+figures.  These results indicate the back kernels are value-equivalent under
+sharding.  Every row with the kernel FORWARD is off by order one, whatever
+the back body is, in both geometries and at both device counts.
+
+The defect is also not reproducible.  The both-kernel arm read 1.413 at n=2
+in job 14954680 and 1.438 in job 14954801, and 7.459e-01 against 9.187e-01
+at n=4, from identical code, cell and seed.  The torch arms across the same
+two jobs agree to four digits.  Two arms inside the flip gate itself, both
+at four devices with kernels, disagreed with each other at 4.58e-01.  The
+forward kernels accumulate through atomics, which is consistent with an
+order-dependent accumulation, though this work did not isolate that.
+
+### Why it was never caught
+
+A single device does not run the banded drivers at all.  The trivial
+placement short-circuits to the plain projectors, with the whole volume and
+`slice_start=0`, so the kernels never see a slice band there.  The composed
+n=1 gates therefore exercise the kernels thoroughly and cannot see this.
+
+The n=2 and n=4 gates predate the Triton kernels, which `current_plans.md`
+item 3 states directly.  The kernel-times-sharding combination has never had
+a gate.  This checkpoint is the first time the two were measured together.
+
+### What it means for the flip
+
+Shipping the flip as it stands would make multi-device the default while the
+default forward body is wrong there.  Every multi-GPU user would get
+silently incorrect reconstructions.  The flip must not land in that state.
+
+Two ways forward, and the choice is a ruling rather than a finding.  The
+first is to fix the forward kernels against the banded contract, which is
+the real repair and belongs with whoever owns the kernels.  The second is an
+interim: bind the TORCH forward body whenever the placement is non-trivial,
+which is a small change in each geometry's `_view_batch_bodies` and makes
+the default safe immediately.  The interim costs multi-GPU forward
+performance, and item 3 already owns the multi-GPU performance readout, so
+it could restore the kernel forward once repaired.
+
+The recommendation is the interim plus the flip, with the kernel repair
+tracked as its own item.  The alternative, holding the flip until the
+kernels are fixed, leaves users on one GPU for longer to protect a
+performance property that item 3 has not yet measured.
+
+### What passed
+
+Every mechanism check passed on four H100s, in both geometries (job
+14954423).  The automatic path chose 4 of 4 visible devices.  The chosen
+layout stayed automatic, so a later entry re-evaluates it.
+`MBIRTORCH_NUM_DEVICES=1` held the count at one.  An impossible budget was
+refused before any allocation, and the refusal named the dominant phase and
+a remedy the user can act on.
+
+The rule itself is pinned by sixteen CPU tests in `tests/test_device_policy.py`,
+which drive the policy with fabricated device lists and budgets.  They cover
+the largest-that-fits selection, the fallback past a device another process
+is using, the empty-shard refusal, both forms of opt-out, the malformed pin,
+the doomed run through both the internal and the public entry, the
+force-run escape, the tunable margin, and the cone-only `split_sino_recon`
+remedy.
+
+Two protections keep the n=1 path free.  A single visible device gets no
+preflight at all, so nothing new runs there and a single-GPU user cannot be
+refused a run that previously started.  A CPU or MPS model is never
+eligible, so those backends are untouched.
+
+### The n=1 composed gates did not move, and their memory improved
+
+The composed five-arm gate re-ran on one H100 at all four cells (job
+14954403).  Every cell passes both rules, and the time ratios reproduce the
+recorded baselines within two percent.
+
+| geometry, cell | torch/jax time | recorded | torch/jax memory | recorded |
+|---|---|---|---|---|
+| parallel 512 | 1.11 | 1.13 | **0.54** | 0.63 |
+| parallel 1024 | 1.54 | 1.56 | **0.51** | 0.59 |
+| cone 512 | 0.88 | 0.88 | **0.58** | 0.60 |
+| cone 1024 | 0.98 | 1.00 | **0.50** | 0.57 |
+
+The time columns are the protection this work owed: nothing in the n=1 path
+changed, and the measurement says so.  The memory columns moved, and they
+moved DOWN.  That is the two residency fixes arriving in the composed gate,
+which measured them independently of the ledger that predicted them.  The
+kernel-arm peaks are 1.93, 23.22, 2.15 and 23.68 GB, against the 2.26, 26.68,
+2.26 and 26.68 GB the same gate measured before the fixes.
+
+The value columns hold their established classes exactly.  Kernel-versus-body
+reads 3.17e-03, 2.31e-03, 2.76e-04 and 9.74e-05, against the recorded
+3.17e-03, 2.32e-03, 2.75e-04 and 9.74e-05.  The one over-envelope number is
+the parallel-1024 shared-sinogram cross-framework column at 6.11e-03, which
+reproduces its own recorded 6.11e-03 to three digits and is the documented
+trajectory spread of unconverged 3-iteration runs.
+
+### The script audit
+
+The audit covered `plans/experiments/`, the mbirjax_metrics harness, and the
+mbirtorch demos, as the checkpoint-1 ruling required.  Eight scripts were at
+risk, all with one defect shape: a `configure_devices` call guarded by
+`if n > 1`, on a 2- or 4-GPU allocation, which leaves the n=1 REFERENCE arm
+unpinned.  Those are `p4_gate_readout.py`, `p4a3_seam_smoke.py`,
+`p4a3b_thin_smoke.py`, `p4c_n4_probe.py`, `p4d_n4_bisect.py`,
+`p4e_variant_probe.py`, `p4f_shared_probe.py`, and
+`p4s3_engine_dispatch.py`.  Each would have compared a widened run against
+itself and reported a false pass.  All eight now pin unconditionally.
+
+The metrics harness needed no change.
+`tooling/scaling_tests/torch_backend_writer.py` already calls
+`configure_devices` unconditionally on every branch, before any model use,
+and its docstring names this exact flip as the hazard.
+
+One item is a policy call rather than a defect.  `demo/demo_1_shepp_logan.py`
+pins nothing, so on a multi-GPU interactive node it will show the new
+default.  That is the intended behavior for a user-facing demo, so it was
+left alone.
+
+## The constructor amendment, applied
+
+The `device` keyword is gone from all three model constructors, and device
+resolution is now lazy.  The suite is green at 423 passed.
+
+`configure_devices` is the single door.  A model with no call to it resolves
+cuda, then mps, then cpu, and takes the automatic widening path on CUDA with
+two or more visible devices.  Every explicit choice, including `['cpu']` and
+`['mps']` and an indexed CUDA device, arrives through `configure_devices`.
+The eligibility rule collapsed to one bit, exactly as the amendment
+predicted: "automatic" now means "no `configure_devices` call has been made",
+with no device string to parse.
+
+The laziness is real and asserted.  Construction resolves no device, builds
+no placements, and builds no projectors.  A test pins all three, and a second
+pins that a params change rebuilds the projectors only when they already
+exist.  Two consequences follow.  A caller who constructs a model and then
+calls `configure_devices(devices=['cpu'])` never initializes a CUDA context.
+And the projectors are built once, against the layout in force, rather than
+built at construction and thrown away by the first `configure_devices` call.
+
+The migration touched 88 call sites: 68 in mbirtorch and its tests and demo,
+and 20 in the measurement scripts.  Three needed judgement rather than a
+rule.  `mbirtorch/vcls.py` passed the parent's device through a params dict
+into `build_model`, and now calls `configure_devices` on the sibling
+instead.  The demo names no device at all, so it shows the new default, which
+is what a user-facing demo should do.  `dp4_flip_gate.py` must NOT pin in its
+builder, because its `auto` arm exists to observe the policy's own choice.
+
+One test changed meaning rather than syntax.
+`test_cone_forward_kernel_selects_by_default` asserted the availability gate
+was consulted DURING construction.  That was construction-time eagerness, and
+the amendment removed it deliberately, so the test now asserts the opposite:
+construction consults nothing, and the gate is consulted on first use.  Its
+real contract, that the gate's verdict alone selects the body, is unchanged
+and still asserted.
+
+## The interim landed, and the flip ships
+
+The interim selection rule is implemented and gated, and the flip gate is
+clean at 18 of 18 checks on four H100s (job 14971897).
+
+Each geometry's `_view_batch_bodies` now binds the Triton FORWARD body only
+on a trivial placement.  The BACK kernels stay selected at every device
+count, which the isolation matrix earned them.  Selection already re-runs
+whenever `configure_devices` recreates the projectors, so the rule follows
+layout changes with no new machinery, and a CPU test asserts it follows a
+layout back to trivial rather than latching.
+
+The value columns moved to where the torch bodies were.
+
+| geometry | n=2 vs n=1 | n=4 vs n=1 |
+|---|---|---|
+| parallel | 4.47e-04 | 9.49e-04 |
+| cone | 4.58e-04 | 4.95e-04 |
+
+These reproduce the isolation matrix's torch-forward arms to three
+significant figures, which is the confirmation that the interim binds what
+it intends to bind.  The automatic path also agrees with an explicit
+`configure_devices(4)` at 3.0e-07 and 3.1e-07.
+
+That last check was mine to correct.  It originally demanded BITWISE
+agreement, on the reasoning that the two arms differ only in when the layout
+is installed.  The back kernel is bound in both arms and is not
+bit-reproducible across runs, which the kernel campaign had already
+documented, so the demand was wrong on principle rather than the code being
+wrong in fact.  The check now reads against a 1e-5 floor, two orders above
+the measured 3e-07 and four orders below the multi-device divergence the
+other checks read.
+
+## The standing kernel-times-sharding gate
+
+`tests/test_kernels_sharded.py` is the isolation matrix promoted to a
+standing gate, with `dp6_sharded_kernels.sbatch` running it on two devices.
+Six tests pass (job 14971684).
+
+It asserts three things in the order they matter.  The torch-body arms sit at
+the multi-device float floor, which says the engine is sound and gives every
+other arm its reference.  The back-kernel arms match the torch arms within
+that floor, which is the evidence the back kernels' default-on status rests
+on.  And the selection contract holds on real hardware: the forward kernel is
+not bound on a sharded layout.
+
+The file is also the acceptance bar for the repaired forward kernel.
+Restoration means its arms join the torch arms at the floor, and the interim
+retires when they do.  Two devices suffice, because the defect showed equally
+at two and four and a 2-GPU allocation schedules soon enough to run this gate
+on every kernel or engine change.
+
+## The protocol note, now standing
+
+`compile_mode='off'` does NOT disable the Triton kernels.  Selection is
+availability-driven, not compile-driven.  An arm that intends the plain torch
+engine must set `MBIRTORCH_DISABLE_TRITON=1` or bind the torch bodies itself.
+
+This cost a full investigation once: the flip gate's arms were labelled eager
+and were running kernels, which is why an order-one divergence first looked
+like an engine defect.  The note is now in `dp4_flip_gate.py`,
+`dp5_kernel_shard_probe.py`, the dp2 and dp3 sbatch files, and the standing
+gate's own docstring, so no future arm can quietly measure kernels while
+believing it measured eager.
+
+## A concurrent session's flaky test
+
+`tests/test_hsnt_vcls.py::test_dehydrate_rehydrate_parity` fails about one
+run in five, and it is not related to this work.  Five isolated repeats gave
+four passes and one failure at 2.68e-03 against a 2e-03 tolerance.  Its NMF
+factorization is unseeded, so the FACTORS vary run to run while their
+product, which carries the tight gate, stays stable at 1.4e-04 to 2.0e-04.
+It arrived with commit `47b4ba4`.  The suite figure above excludes it; a
+separate task carries the fix.
+
 ## Files
 
 Every file below carries this checkpoint's work.  Most are already committed,
 by the concurrent sessions of open item 4 rather than by this one, so the
 list separates the two states as they stand at the time of writing.
 
-Committed in mbirtorch:
-`mbirtorch/_memory_ledger.py` (new), `mbirtorch/projectors.py`,
-`mbirtorch/tomography_model.py`, `tests/test_memory_ledger.py` (new).  The
-mbirtorch working tree is clean, and the committed `_memory_ledger.py`
-includes the per-device sub-phase fix.
+Checkpoint 3 and the interim, in mbirtorch:
+`mbirtorch/tomography_model.py`, `mbirtorch/_memory_ledger.py`,
+`mbirtorch/parallel_beam.py`, `mbirtorch/cone_beam.py`,
+`mbirtorch/denoising.py`, `mbirtorch/kernel_availability.py`,
+`mbirtorch/vcls.py`, `demo/demo_1_shepp_logan.py`, `tests/conftest.py`,
+`tests/test_device_policy.py` (new), `tests/test_kernels_sharded.py` (new),
+and the twenty test files the constructor amendment migrated.
+
+Checkpoint 3 and the interim, in mbirjax_plans:
+`plans/experiments/torch_port/dp4_flip_gate.py`,
+`dp4_gautschi.sbatch`, `dp5_kernel_shard_probe.py`, `dp5_gautschi.sbatch`,
+`dp6_sharded_kernels.sbatch`, the eight scripts the audit pinned, and the
+twelve the constructor amendment migrated.
+
+Checkpoint 2, committed in mbirtorch by concurrent sessions:
+`mbirtorch/projectors.py` and the earlier `_memory_ledger.py` and
+`tomography_model.py` work.
 
 Committed in mbirjax_plans:
 `plans/experiments/torch_port/dp2_ledger_calib.py`,

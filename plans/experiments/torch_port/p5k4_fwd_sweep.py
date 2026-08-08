@@ -380,7 +380,8 @@ def torch_worker(cfg):
     model = mbirtorch.ConeBeamModel(cell, angles,
                                     source_detector_dist=4.0 * num_channels,
                                     source_iso_dist=2.0 * num_channels,
-                                    device=DEVICE, compile_mode="off")
+                                    compile_mode="off")
+    model.configure_devices(devices=[DEVICE])
     model.set_params(no_warning=True, verbose=0)
     device = model.torch_device
 

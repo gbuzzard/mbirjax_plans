@@ -416,8 +416,9 @@ def torch_worker(cfg):
     # compile_mode='off' so the MODEL compiles nothing behind the bench: the
     # compiled torch baseline below is compiled explicitly, by the driver's own
     # maybe_compile, and is the only compiled thing in the row.
-    model = mbirtorch.ParallelBeamModel(cell, angles, device=DEVICE,
+    model = mbirtorch.ParallelBeamModel(cell, angles, 
                                         compile_mode="off")
+    model.configure_devices(devices=[DEVICE])
     model.set_params(no_warning=True, verbose=0)
     device = model.torch_device
 

@@ -772,3 +772,19 @@ team's list), `gen_translation_phantom` (blocked on the translation
 geometry), and the two REPLACED names (`use_gpu`, `device_summary`),
 unchanged.  The `__all__` rule of section 8 applies to the newly landed
 documented names as their blocks restore.
+
+### 10. MBIRTORCH_DISABLE_TRITON, for the kernel developer page (added 2026-08-08)
+
+When `dev_projector_kernels.rst` is written, it documents the kill switch
+with three facts.  First, its role: a diagnostic escape hatch and bisection
+handle, not a tuning knob — the per-device first-use self-check is the
+automatic guard users rely on, and it needs no environment variable.
+Second, its timing: the variable is read inside the availability probe,
+whose result is cached per process, so it must be set BEFORE the first
+model is built in the process; changing it afterwards has no effect (the
+private cache resets are test machinery, not API).  Third, its scope: it
+disables all hand-written kernels at once and falls back to the compiled
+torch bodies, which are the permanent value reference — results stay
+correct, only speed changes.  Do not present it beside the user knobs; a
+short paragraph in the troubleshooting/developer context is the right
+weight.

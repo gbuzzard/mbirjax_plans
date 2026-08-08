@@ -234,7 +234,8 @@ def torch_worker(cfg):
 
     cell = tuple(cfg["cell"])
     angles = np.linspace(0, np.pi, cell[0], endpoint=False)
-    model = mbirtorch.ParallelBeamModel(cell, angles, device=DEVICE)
+    model = mbirtorch.ParallelBeamModel(cell, angles)
+    model.configure_devices(devices=[DEVICE])
     model.set_params(no_warning=True, verbose=0)
 
     def sync():

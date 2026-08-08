@@ -249,8 +249,8 @@ def torch_worker(cfg):
     angles = np.linspace(0, 2 * np.pi, num_views, endpoint=False)
     model = mbirtorch.ConeBeamModel(cell, angles,
                                     source_detector_dist=4.0 * num_channels,
-                                    source_iso_dist=2.0 * num_channels,
-                                    device=DEVICE)
+                                    source_iso_dist=2.0 * num_channels)
+    model.configure_devices(devices=[DEVICE])
     model.set_params(no_warning=True, verbose=0)
 
     def sync():

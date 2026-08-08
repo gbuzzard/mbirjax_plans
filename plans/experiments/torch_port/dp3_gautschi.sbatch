@@ -26,6 +26,11 @@ export MPLBACKEND=Agg
 "$TORCHPY" -m pip install --no-cache-dir -q --no-deps -e /scratch/gautschi/buzzard/torch_p3/mbirtorch_src || exit 1
 "$TORCHPY" -c "import mbirtorch, torch; assert torch.cuda.is_available()" || exit 1
 
+# Protocol note: compile_mode='off' does NOT disable the Triton kernels.
+# Selection is availability-driven, not compile-driven, so an arm that intends
+# the plain torch engine must set MBIRTORCH_DISABLE_TRITON=1 or bind the torch
+# bodies itself.  This cost a full investigation once; it is stated here so no
+# future arm silently measures kernels while believing it measured eager.
 export MBIRTORCH_DISABLE_TRITON=0
 export MBIRTORCH_MEMORY_CALIBRATION=1
 export DP3_RESULTS=/scratch/gautschi/buzzard/torch_p3/results

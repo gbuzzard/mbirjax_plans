@@ -26,8 +26,11 @@ def parallel_padded():
     def build(n):
         m = mbirtorch.ParallelBeamModel(sino_shape, angles)
         m.set_params(no_warning=True, verbose=0)
-        if n > 1:
-            m.configure_devices(n)
+        # UNCONDITIONAL: a CUDA model without an explicit
+        # configure_devices call now spreads across every visible
+        # device, so the n=1 arm must pin itself or it silently
+        # becomes the very multi-device run it is the baseline for.
+        m.configure_devices(n)
         return m
 
     m1 = build(1)
@@ -54,8 +57,11 @@ def cone_n2():
         m = mbirtorch.ConeBeamModel(cell, angles, source_detector_dist=4 * cell[2],
                                     source_iso_dist=2 * cell[2])
         m.set_params(no_warning=True, verbose=0)
-        if n > 1:
-            m.configure_devices(n)
+        # UNCONDITIONAL: a CUDA model without an explicit
+        # configure_devices call now spreads across every visible
+        # device, so the n=1 arm must pin itself or it silently
+        # becomes the very multi-device run it is the baseline for.
+        m.configure_devices(n)
         return m
 
     m1 = build(1)

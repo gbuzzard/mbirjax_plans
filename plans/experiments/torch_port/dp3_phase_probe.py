@@ -45,7 +45,9 @@ def _sino_path(geometry, cell):
 def _build_model(geometry, cell):
     if geometry == "parallel":
         angles = np.linspace(0, np.pi, cell[0], endpoint=False)
-        return mbirtorch.ParallelBeamModel(cell, angles, device="cuda")
+        _model = mbirtorch.ParallelBeamModel(cell, angles)
+        _model.configure_devices(devices=["cuda"])
+        return _model
     angles = np.linspace(0, 2 * np.pi, cell[0], endpoint=False)
     sdd = 4 * cell[2]
     return mbirtorch.ConeBeamModel(cell, angles, source_detector_dist=sdd,
