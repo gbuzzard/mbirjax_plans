@@ -12,7 +12,7 @@ build-up of historical detail.)
 Items 1–8 are the agreed top priorities (2026-08-07), in rough order.
 
 1. [Finish the kernel-aware view batching](#1-finish-the-kernel-aware-view-batching)
-2. [Device policy: all-device default behind a memory preflight](#2-device-policy-all-device-default-behind-a-memory-preflight)
+2. [Device policy — COMPLETE](#2-device-policy--complete-2026-08-08)
 3. [Multi-GPU performance investigation and tuning](#3-multi-gpu-performance-investigation-and-tuning)
 4. [mbirtorch in the nightly, including multi-GPU](#4-mbirtorch-in-the-nightly-including-multi-gpu)
 5. [Remaining Sphinx documentation pages](#5-remaining-sphinx-documentation-pages)
@@ -24,6 +24,7 @@ Items 1–8 are the agreed top priorities (2026-08-07), in rough order.
 11. [Miscellaneous / cleanup](#11-miscellaneous--cleanup)
 12. [Possible future direction: multi-resolution reconstruction](#12-possible-future-direction-multi-resolution-reconstruction-post-next-main)
 13. [Sorted-stream parallel forward (chartered, after items 2–3)](#13-sorted-stream-parallel-forward-chartered-after-items-2-3)
+14. [Forward-kernel repair under sharding — COMPLETE](#14-forward-kernel-repair-under-sharding--complete-2026-08-08)
 
 ---
 
@@ -42,39 +43,34 @@ forward was NOT taken (Fable, on the 1.56x number): no gate demands it, and
 the revisit triggers are recorded in the findings.  The gate baselines for
 item 3 are this table's.
 
-## 2. Device policy: all-device default behind a memory preflight
+## 2. Device policy — COMPLETE (2026-08-08)
 
-**State:** Decided 2026-08-07 (Greg), not started.  Supersedes the
-opt-in-persists decision; the revision is recorded in
-`plans/torch_port/docs.md` §4.
+**State:** COMPLETE through three Fable-reviewed checkpoints; the record is
+`plans/torch_port/device_policy_design.md` (the rulings) and
+`device_policy_findings.md` (the measurements).
 
-**Overview:** mbirtorch inherits the mbirjax policy: a reconstruction spreads
-across the available GPUs by default.  A user with four GPUs who silently gets
-one, or who gets a late out-of-memory failure, is worse off than a user who
-pays a device-count-dependent float difference (measured to decay from 6.1e-3
-at 3 iterations to 8.8e-4 at 10) or a modest time penalty on small problems.
-The memory preflight moves up in priority because it is what makes the
-widening safe, and it doubles as the widening criterion (spread only onto
-devices that can hold their share).  `configure_devices(num_devices=1)`
-remains the reproducibility pin.
-
-**Goals:**
-1. The mbirtorch preflight ledger, checked at the top of `recon()` (the parked
-   mbirjax design in §11 transfers; the torch version is simpler because the
-   engine is eager and the batching work already counted the residencies).
-2. The default flip: capacity-aware widening at layout-build time, validated
-   by the existing empty-shard rules with graceful fallback.
-3. The docs step: `usr_multi_gpu.rst` written against the new behavior.
+**Outcome:** The memory-ledger preflight is live (calibrated 1.001–1.10
+against measured peaks; two residency fixes it predicted cut the composed
+peaks 11–15 percent), the all-device default SHIPPED (automatic capacity-aware
+widening on multi-GPU CUDA; `configure_devices` is the single explicit door
+and the reproducibility pin), and the constructor `device` kwarg was removed
+with lazy resolution.  Its flip gate found the forward-kernel sharding defect
+(item 14); the flip shipped with the interim (torch forward bodies at
+non-trivial placements) and the permanent kernel-times-sharding gate.  Item
+14 has since landed the launch-context repair and retired the interim.  The
+docs step (`usr_multi_gpu.rst`) unblocks per docs.md §4.
 
 ## 3. Multi-GPU performance investigation and tuning
 
-**State:** Not started; follows items 1–2.
+**State:** Not started; UNBLOCKED 2026-08-08 — item 14 repaired the forward
+kernels and retired the interim, so the readout measures the shipped
+kernel selection in both directions.
 
 **Overview:** The n=2/4 gates predate the Triton kernels, and the kernels plus
 the batching change shift the multi-device balance (the measured n>1 back
-limiter was the band transpose).  With the all-device default, multi-GPU
-becomes the out-of-box experience, so its performance and its knobs need the
-same measured treatment the single-device path got.
+limiter was the band transpose).  With the all-device default now live,
+multi-GPU is the out-of-box experience, so its performance and its knobs need
+the same measured treatment the single-device path got.
 
 **Goals:**
 1. A full n=1/2/4 gate readout with kernels on, at the new default, both
@@ -90,8 +86,9 @@ same measured treatment the single-device path got.
 
 ## 4. mbirtorch in the nightly, including multi-GPU
 
-**State:** Not started.  The torch harness writer exists, and the first real
-gpu-torch H100 run landed at `results/gpu-torch/` in mbirjax_metrics.
+**State:** Plan approved (`plans/torch_port/nightly_plan.md`, Fable-reviewed);
+implementation in flight in its own session, gated on a real end-to-end trial
+run before any schedule change.
 
 **Overview:** Wire the torch writer into the nightly so mbirtorch gets the
 same regression protection as mbirjax: correctness gating against goldens,
@@ -116,14 +113,15 @@ package-side instruction list in `plans/torch_port/docs.md` awaits execution.
 
 **Overview:** The remaining build warnings are references to the unwritten
 developer pages, so finishing them also gets the build to warning-free (and
-lets CI adopt `-W`).  `usr_multi_gpu.rst` stays deferred until item 2 lands,
-per the revised decision in docs.md §4.
+lets CI adopt `-W`).  With item 2 landed, `usr_multi_gpu.rst` is unblocked
+(rewrite to the auto-spread behavior per docs.md §4); the kernel developer
+page waits on item 14 and documents the kill switch per docs.md §10.
 
 **Goals:**
 1. The five developer pages.
 2. The docs.md package-change instructions (narrowed `__all__`, the four
    docstrings, the cross-reference demotion, the print_params guard).
-3. `usr_multi_gpu.rst` after the device-policy flip.
+3. `usr_multi_gpu.rst`, now unblocked by item 2's landing.
 
 ## 6. Additional geometries: translation and multiaxis
 
@@ -366,9 +364,35 @@ atomic contention rises with detector scale.
    gates against the then-current baselines — with the default flip at a
    Fable checkpoint, as for the four shipped kernels.
 
+## 14. Forward-kernel repair under sharding — COMPLETE (2026-08-08)
+
+**State:** COMPLETE in the dedicated Fable session; the record is
+`plans/torch_port/kernel_sharding_findings.md`.
+
+**Outcome:** The defect was the LAUNCH, not the kernels.  A Triton launch
+targets the launching thread's current CUDA device, the banded drivers
+launch from worker threads whose current device is 0, and the shard's own
+consumers raced the misplaced kernel on device 0's stream.  A seven-arm
+single-variable matrix isolated it: the device-context arm alone repaired
+values to the kernel-parity class (3.4e-07/1.1e-06), the
+sync-of-tensor-device and contiguous-copy arms refuted the rival classes,
+and the banded contract was exonerated.  The back kernels' four-digit
+survival was an accident of reduce topology, not a wrapper property.  All
+four wrapper launches now run under `with torch.cuda.device(...)`, the
+device leads the compile-lock launch key, and the interim retired:
+selection is layout-independent again.  Gates: the standing
+kernel-times-sharding gate 12/12 with a new cuda:1 trivial-placement arm,
+the flip gate 18/18 (auto-vs-explicit at n=4 reads 3.4e-07 where it read
+4.58e-01 pre-repair), the composed n=1 cells reproduce the recorded
+baselines in full, and the full suite on H100 is green at 477 (the one
+failure surfaced was a latent pre-amendment ledger test, brought to the
+amended contract).
+
 ---
 
-**Recently completed (records live elsewhere):** the **sharpness/snr_db streak
+**Recently completed (records live elsewhere):** the **mbirtorch device
+policy** (item 2 above; preflight, all-device default, constructor
+simplification); the **sharpness/snr_db streak
 study, CLOSED 2026-08-07** — the two-start experiment showed the streaks are the
 converged minimizer's own content under lateral truncation (a ground-truth start
 converges to the same streaked solution, which fits the truncated data 2.3×

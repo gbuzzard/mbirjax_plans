@@ -4,11 +4,14 @@
 # This combination had no gate before.  A single device never runs the banded
 # multi-device drivers, so the composed n=1 gates cannot see it, and the
 # multi-device value gates predate the Triton kernels.  The gap is what hid
-# the forward-kernel defect that the interim selection rule now works around.
+# the forward launch-context defect (order-1, non-reproducible), whose
+# diagnosis and repair are the kernel-sharding findings in the plans repo.
 #
-# The file it runs, tests/test_kernels_sharded.py, is also the acceptance bar
-# for the repaired forward kernel: restoration means its arms join the torch
-# arms at the multi-device float floor and the interim retires.
+# The file it runs, tests/test_kernels_sharded.py, was the acceptance bar for
+# that repair: the forward-kernel arms joined the torch arms at the
+# multi-device float floor and the interim selection rule retired.  The file
+# now also pins the trivial-placement twin (kernels on a cuda:1 pin) and the
+# layout-independent selection contract.
 #
 # Two devices are enough.  The isolation matrix found the defect equally at
 # two and four, and a 2-GPU allocation schedules far sooner, so this gate is
