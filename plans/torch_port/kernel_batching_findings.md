@@ -201,7 +201,10 @@ the limiting term; the translation-geometry port, whose forward
 shares this structure at larger detector scales; or any future cell
 failing the rule.  If reopened, the view-loop variant is the cheap
 first probe, and the sorted-stream design in
-`phase5_kernel_design.md` stands ready.
+`phase5_kernel_design.md` stands ready.  (Reopened as a charter
+2026-08-07: `current_plans.md` item 13, sequenced after the device
+policy and the multi-GPU readout, with the readout's
+forward-attribution arm as its entry gate.)
 
 ## Files this checkpoint staged
 

@@ -21,11 +21,14 @@ planned, matching mbirjax.  The examples in that page need a third form when it
 lands.
 
 **An automatic device path.**  The same page states that multi-device is opt-in,
-and gives three reasons drawn from decision 4 below.  A zero-effort path that
-widens the device count automatically may be added after all.  If it is, the
+and gives three reasons drawn from decision 4 below.  The default is changing to
+auto-spread, per the 2026-08-07 revision of that decision.  When it lands, the
 "Turning it on" section reverts toward mbirjax's wording, and so do the
-corresponding paragraphs in `overview.rst`, `advanced_features.rst`, and
-`usr_tomography_model.rst`.
+corresponding paragraphs in four other pages: `overview.rst`,
+`advanced_features.rst`, `usr_tomography_model.rst`, and the "How can I do larger
+reconstructions?" FAQ in `demos_and_faqs.rst`.  The memory preflight that ships
+with the flip also wants documenting at that point; its user-facing knobs are
+`skip_memory_preflight` and `memory_preflight_margin`.
 
 **The scaling numbers.**  The measured table in `usr_multi_gpu.rst` comes from the
 phase 4 gate matrix and is expected to improve.  The entry most likely to change
@@ -45,12 +48,19 @@ a measurement changes.
 
 ### On hold — pages not yet written
 
-Six pages remain.  Two are blocked on the code session: `dev_projector_kernels.rst`
-and `dev_api.rst`, together with the `new_model_template.py` code sample.  All
-three depend on kernel work in progress.  Four are held at the user's request:
-`install.rst`, `dev_maintenance.rst`, `dev_performance_dashboard.rst`, and the demo
-portion of `demos_and_faqs.rst`.  The FAQ portion of that last page is mostly
-portable and was scoped as the smaller half of the work.
+Five pages remain, and one page is half written.  Two are blocked on the code
+session: `dev_projector_kernels.rst` and `dev_api.rst`, together with the
+`new_model_template.py` code sample.  All three depend on kernel work in progress.
+Three are held at the user's request: `install.rst`, `dev_maintenance.rst`, and
+`dev_performance_dashboard.rst`.
+
+`demos_and_faqs.rst` now exists with its FAQ half live and its Demos and Data
+Generation halves commented out.  Both of those halves turned out to be blocked on
+code rather than merely held.  The Demos section needs a demo set that does not
+exist yet, since mbirtorch ships one script against mbirjax's notebook and scripts,
+and it cross-references `InstallationDocs`, which `install.rst` has not defined.
+The Data Generation section is built entirely on `generate_demo_data`, which is not
+ported, so every code line in it would fail today.
 
 The port is deliberately mechanical.  Pages are copied from mbirjax and changed
 only where a sentence would otherwise be false for mbirtorch.  That constraint is
@@ -719,3 +729,30 @@ build reports.  The mbirtorch copy uses `mbirtorch.vcd_utils.gen_weights` instea
 which resolves.  A `DIVERGENCE(gen_weights ref)` comment at the site records that
 this is a fix rather than a porting error, so a later diff against mbirjax does
 not "correct" it back.
+
+## Two outdated mbirjax sentences found by the FAQ port (2026-08-07)
+
+The FAQ half of `demos_and_faqs.rst` is written.  Porting it surfaced two mbirjax
+sentences that are no longer true for mbirtorch, both because the preprocessing
+port overtook them.  Neither is a porting judgment call; both are statements of
+fact that the landed code contradicts.
+
+mbirjax's artifacts FAQ says of cupping that "We are working on utilities to do
+beam hardening correction in the future."  mbirtorch has them.  The sentence now
+names `BH_correction`, `fit_beam_hardening_curve`, and
+`apply_beam_hardening_curve`, each verified present in `mbirtorch.preprocess`.
+
+The same FAQ says of detector nonuniformity that "We are working on preprocessing
+utilities for reducing these ring artifacts."  mbirtorch has those too.  The
+sentence now names `remove_all_stripe` and `remove_stripe_fw` for the sinogram
+stripes that produce the rings, plus `interpolate_defective_pixels` for isolated
+bad pixels and `remove_sino_offset` for a residual offset.
+
+These are worth flagging back to mbirjax if the same utilities exist there.  The
+port only checked mbirtorch, so whether mbirjax's own sentences are stale is
+unknown from here.
+
+Five other sentences in the FAQ half are commented out rather than rewritten.
+Three cross-reference demos that mbirtorch does not have, one mentions
+`split_sino_recon`, and one is the multi-GPU paragraph noted in the TBD list above.
+Each carries a `PENDING(...)` marker naming its blocker.

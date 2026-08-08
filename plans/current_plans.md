@@ -23,6 +23,7 @@ Items 1–8 are the agreed top priorities (2026-08-07), in rough order.
 10. [LEAP/SVMBIR interfaces (back-burnered)](#10-leapsvmbir-interfaces-back-burnered)
 11. [Miscellaneous / cleanup](#11-miscellaneous--cleanup)
 12. [Possible future direction: multi-resolution reconstruction](#12-possible-future-direction-multi-resolution-reconstruction-post-next-main)
+13. [Sorted-stream parallel forward (chartered, after items 2–3)](#13-sorted-stream-parallel-forward-chartered-after-items-2-3)
 
 ---
 
@@ -84,6 +85,8 @@ same measured treatment the single-device path got.
 3. The deferred value comparison rides along: jax vs torch across device
    counts, separating the shared partition-order term from torch's
    compile-latitude term.
+4. A forward-attribution arm: the parallel forward's measured share of the
+   composed time at n=1/2/4.  This number is item 13's entry gate.
 
 ## 4. mbirtorch in the nightly, including multi-GPU
 
@@ -320,6 +323,36 @@ infrastructure (ds4/ds8 pipelines, converged references, seam/region metrics) is
 directly reusable.  If the pilot wins: implementation is a `split_sino_recon`-shaped
 driver (~100 lines — `copy_ct_model` per level, physical-coordinate upsample, per-level
 auto-regularization, loose stopping on coarse levels).
+
+## 13. Sorted-stream parallel forward (chartered, after items 2–3)
+
+**State:** Chartered 2026-08-07 (Greg); sequenced explicitly after items 2–3.
+The entry gate is item 3's forward-attribution arm, and the decision record
+that declined this work at the batching checkpoint — with its revisit
+triggers — is in `plans/torch_port/kernel_batching_findings.md`.
+
+**Overview:** The parallel forward is the one remaining measured gap: 14.4 s
+over jax at the 1024 cell, atomic-bound and flat across batch sizes, where
+jax runs its sorted-stream pallas design (2.1x over plain scatter on subset
+batches, 16–26x in the fine tail with plan caching).  A torch sorted-stream
+forward would build its streams from the existing hfan contract and cache
+them through the `plan` slot every body already accepts.  Memory headroom is
+ample (0.57–0.63x of jax) and the kernel protocol machinery (emulator,
+battery, sweep, five-arm gate) is amortized; the cost is the plan builder,
+the cache lifecycle, and the two-phase kernel itself.  The value likely
+grows by waiting: translation (item 6) shares this forward structure, and
+atomic contention rises with detector scale.
+
+**Goals:**
+1. A feasibility probe on item 3's attributed numbers: plan build cost and
+   stream sizes at the gate cells, with the view-loop forward variant (the
+   note recorded in the kernel's docstring) as a cheap comparison arm in the
+   same harness.  Stop here if the projected composed win falls below a few
+   seconds.
+2. If the probe holds: the sorted-stream kernel through the full protocol —
+   emulator validation, CUDA battery, constant sweep, composed five-arm
+   gates against the then-current baselines — with the default flip at a
+   Fable checkpoint, as for the four shipped kernels.
 
 ---
 
