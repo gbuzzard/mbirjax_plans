@@ -87,6 +87,11 @@ def main():
     wrap("direct_recon", "direct recon")
     wrap("_initial_error_state", "initial error state")
     wrap("compute_hessian_diagonal", "hessian diagonal")
+    # The per-iteration stats run between subset steps and are the one region
+    # the first version of this probe left uninstrumented.  The ledger charged
+    # them as zero on the grounds that other phases dominate, which stopped
+    # being true once the residency fixes shrank those other phases.
+    wrap("_iteration_stats", "iteration stats")
 
     # The subset step, labelled by its subset size so the granularity that
     # produced each reading is unambiguous.
@@ -150,9 +155,15 @@ def main():
               f'{entry["peak_bytes"] / 2 ** 30:>11.2f}G'
               f'{modeled / 2 ** 30:>11.2f}G{ratio:>9.3f}')
     print("-" * 71)
-    print(f'{"whole warm run":>26}{"":>12}{whole_run_peak / 2 ** 30:>11.2f}G'
-          f'{ledger.peak_bytes(0) / 2 ** 30:>11.2f}G'
-          f'{ledger.peak_bytes(0) / whole_run_peak:>9.3f}')
+    # NOT a whole-run peak: the per-phase resets clear the counter, so this
+    # reads only from the last reset onward.  The whole-run peak is the
+    # calibration mode's number (dp2), and the max over the rows above is the
+    # instrumented-region peak.  A whole-run peak ABOVE every row means the
+    # true peak falls outside every wrapped region.
+    print(f'{"tail after last reset":>26}{"":>12}{whole_run_peak / 2 ** 30:>11.2f}G')
+    print(f'{"max over rows above":>26}{"":>12}'
+          f'{max(r["peak_bytes"] for r in rows) / 2 ** 30:>11.2f}G'
+          f'{ledger.peak_bytes(0) / 2 ** 30:>11.2f}G')
 
     print("\n--- the ledger's own phase table ---")
     print(ledger.format_table())

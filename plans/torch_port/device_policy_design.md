@@ -828,6 +828,15 @@ and exposed an over-tight tolerance on a non-converging fit
 (`test_beam_hardening_family`, fixed separately); golden regeneration in the
 shared checkout should be announced between sessions.
 
+## Post-merge notes for checkpoint 3 (2026-08-07, late)
+
+`split_sino_recon` is now ported and reviewed, so the preflight error
+message adds it as a named remedy for cone models, as this design
+anticipated.  Its half models pin their devices UNCONDITIONALLY to the
+parent's layout (made so in review), so a half never enters the automatic
+widening path; the checkpoint-3 audit can treat `split_sino_recon` as
+pinned by construction.
+
 ## Checkpoint-1 staged files
 
 `plans/torch_port/device_policy_design.md` (this document).

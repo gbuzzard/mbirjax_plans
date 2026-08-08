@@ -756,3 +756,19 @@ Five other sentences in the FAQ half are commented out rather than rewritten.
 Three cross-reference demos that mbirtorch does not have, one mentions
 `split_sino_recon`, and one is the multi-GPU paragraph noted in the TBD list above.
 Each carries a `PENDING(...)` marker naming its blocker.
+
+### 9. Census update after the main merge (2026-08-07, late)
+
+Five more names now EXIST (verify by import as always): `stitch_arrays` and
+`copy_ct_model` (in `mbirtorch.utilities`, imported at package level), the
+`hsnt` and `vcls` modules (LAZY package-level exports — the module names and
+their public functions resolve through the package `__getattr__` exactly
+like `preprocess`; autodoc's `automodule:: mbirtorch.hsnt` imports the
+module directly and is unaffected), and `ConeBeamModel.split_sino_recon`
+(reviewed; flip its `PENDING(split_sino_recon)` marker back to live
+documentation).  The still-absent set shrinks to: `get_ct_model`,
+`generate_demo_data`, `generate_3d_shepp_logan_reference` (the mbirtorch
+team's list), `gen_translation_phantom` (blocked on the translation
+geometry), and the two REPLACED names (`use_gpu`, `device_summary`),
+unchanged.  The `__all__` rule of section 8 applies to the newly landed
+documented names as their blocks restore.

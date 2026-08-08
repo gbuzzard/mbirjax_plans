@@ -165,10 +165,17 @@ post-publish wheel testing, and the release home repository.
 
 ## 8. Remaining utility API surface
 
-**State:** Confirmed 2026-08-07 (Greg).  The work list is the absent-API
-census in `plans/torch_port/docs.md` §5.  The preprocessing piece is
-delegated to Charlie's session under its own plan,
-`plans/torch_port/preprocessing.md`.
+**State:** LARGELY DELIVERED (updated 2026-08-07 late).  Charlie's session
+completed its full scope — the preprocess package, MAR, the coupled
+functions, the download utilities, the HDF5 family, and the hsnt and vcls
+modules — and additionally delivered `split_sino_recon` with
+`stitch_arrays` and `copy_ct_model` (goal 3, reviewed by Fable against the
+mbirjax logic: line-faithful, with the half-model device pin made
+unconditional so the halves never enter a future automatic device-count
+path).  Merged to greg_dev; suite 402 passed.  Still open: the Lilly NSI
+end-to-end run (needs Charlie and real data), and goal 2 below.  The
+original work list is the absent-API census in `plans/torch_port/docs.md`
+§5, with the plan at `plans/torch_port/preprocessing.md`.
 
 **Overview:** Twenty-one documented mbirjax names do not exist in mbirtorch,
 and replacement needs most of them: the HDF5 save/load family (recon and data),
@@ -182,14 +189,15 @@ lands.
    MAR, `gen_weights_mar`, `median_filter3d`, the download utilities, the
    HDF5 save/load family (with `get_recon_dict`/`get_all_params`), and the
    `hsnt` and `vcls` modules, gated end to end on the Lilly NSI script.
-2. The factories, the phantom/demo-data generators, and `device_summary`.
-3. `split_sino_recon`, ported with the full mbirjax logic (overlapping
-   detector-row halves reconstructed separately and stitched, with
-   `stitch_arrays`).  This is a capacity feature, not a compatibility shim:
-   it nearly doubles the feasible cone recon size at a fixed GPU count, and
-   it composes with the item-2 preflight (which budgets it per half).
-   Reversed from the docs replaced bucket 2026-08-07 — the nsi
-   split-sinogram demo calls it.
+2. STILL OURS: `get_ct_model`, the phantom/demo-data generators
+   (`generate_demo_data`, `generate_3d_shepp_logan_reference`), and
+   `device_summary` (replaced by `get_memory_stats`; confirm-or-port).
+3. DONE (Charlie's session, Fable-reviewed): `split_sino_recon` with
+   `stitch_arrays` and `copy_ct_model` — the full mbirjax logic including
+   the cone-divergence overlap bound and the opt-in `align_split_grid`,
+   with cross-framework golden parity and exact overlap-integer agreement.
+   It composes with the item-2 preflight, whose error message can now name
+   it as a remedy.
 
 ## 9. MAR: cache H
 

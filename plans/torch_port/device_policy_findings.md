@@ -247,6 +247,118 @@ files.  Every change is correct as committed and nothing needs undoing.  It
 is recorded because it makes the file list below read differently from the
 usual checkpoint record.
 
+## The two approved fixes, landed and measured
+
+Both fixes of the checkpoint-2 ruling are implemented, each as its own
+change, and both deliver their predicted moves.  Landing them exposed a
+third term the ledger had charged as zero.
+
+| geometry, cell | arm | measured before | measured after | change |
+|---|---|---|---|---|
+| parallel 512 | weighted | 2.26 GB | 1.93 GB | **−14.6%** |
+| parallel 1024 | weighted | 26.68 GB | 23.22 GB | **−13.0%** |
+| cone 512 | weighted | 2.26 GB | 2.15 GB | −4.9% |
+| cone 1024 | weighted | 26.68 GB | 23.68 GB | **−11.2%** |
+| parallel 1024 | unweighted | 23.71 GB | 22.75 GB | −4.0% |
+
+The ruling predicted roughly 12 percent combined at the weighted 1024
+cells.  The measurement gives 13.0 percent at parallel and 11.2 percent at
+cone.  The ledger still envelops every cell, at 1.001 to 1.104, from job
+14952801.
+
+| geometry, cell | arm | modeled | measured | ratio | dominant phase |
+|---|---|---|---|---|---|
+| parallel 512 | weighted | 1.96 GB | 1.93 GB | 1.016 | initial dot products |
+| parallel 1024 | weighted | 23.43 GB | 23.22 GB | 1.009 | subset back projection |
+| cone 512 | weighted | 2.37 GB | 2.15 GB | 1.104 | direct recon (back loop) |
+| cone 1024 | weighted | 24.17 GB | 23.68 GB | 1.021 | subset back projection |
+| parallel 1024 | unweighted | 22.78 GB | 22.75 GB | 1.001 | per-iteration statistics |
+
+### Fix 1 moved exactly as predicted
+
+`_initial_error_state` now rebinds `weighted_fwd = None` after its second
+dot product.  The ledger drops the term from the error sinogram assignment
+in the same change, and it adds a sub-phase for the moment the array IS
+alive, which is co-live with the product temporary of its own dot product.
+
+The ledger then reproduced the ruling's prediction before any cluster time
+was spent: the weighted 1024 peak moves from 26.71 to 24.53 GB modeled,
+with the dominant phase passing to the hessian diagonal.
+
+### Fix 2 is value-preserving, and the proof is direct rather than end-to-end
+
+`compute_hessian_diagonal` gained `indices=None`, which keeps the full-grid
+path and its single reshape exactly.  `vcd_recon` passes the ROR-masked set,
+and the masked path scatters into a zero-filled volume with `index_copy_`.
+An unmasked model keeps the dense path, because it has nothing to gain.
+
+The value claim rests on two facts, and both are now asserted as tests.
+The hessian is bitwise equal to the dense one at every masked index,
+measured as 0.000e+00 under both compiled and eager execution.  Every index
+the loop reads is inside that mask, which a test checks by comparing every
+partition index against the mask itself.  Back projection is independent
+per pixel, so those two facts settle it.
+
+The whole-recon comparison the ruling asked for runs in EAGER, and the
+reason is not that compilation hides a difference.  The two arms
+back-project at different pixel counts, so they compile different shapes,
+and dynamo's shape specialization then perturbs the float realization of
+kernels unrelated to the hessian.  A compiled whole-recon comparison
+therefore measures the compiler.  In eager the two runs are bitwise
+identical.
+
+One control from that investigation is worth recording on its own.  Four
+repeats of the same compiled run gave runs 1, 2 and 3 bitwise identical to
+each other, and run 0 different from all of them at 2.1e-4 relative.
+Compiled reconstructions are therefore reproducible once warm, and the
+first run is not comparable to them.  Anyone diffing a cold run against a
+warm one is measuring the compile.
+
+### The third term: the per-iteration statistics
+
+The checkpoint-1 design charged the statistics phase as zero, on the stated
+grounds that the other phases dominate it.  That was true when it was
+written.  The two fixes shrank the other phases and falsified it.
+
+The first post-fix calibration read 0.971 at the unweighted cell, below the
+floor.  The phase probe then showed something that looked impossible: every
+instrumented phase enveloped its measurement, at ratios of 1.002 to 1.043,
+while the run's peak exceeded every one of them.  The peak was therefore
+outside every instrumented region.
+
+The probe's own reporting had hidden this.  Its "whole warm run" row read
+the peak counter after the per-phase wrappers had already reset it, so the
+row was a tail reading rather than a whole-run peak.  In the weighted arm
+that row sat BELOW a phase peak, which is impossible for a true whole-run
+number, and that is what exposed it.  The probe now reports the tail and
+the max-over-phases separately, and the whole-run peak comes from the
+calibration mode.
+
+Instrumenting `_iteration_stats` closed the attribution in one run.  The
+phase measures 22.75 GB against an entry of 15.12 GB, so its transient is
+7.63 GB.  Two sinogram-shaped arrays at this cell are 7.629 GB.  These
+results indicate the phase materializes the two squared-error products and
+nothing else; the recon L1 fuses into its own reduction.  The ledger now
+charges the persistent set plus two sinogram-shaped arrays, and the
+unweighted cell reads 1.001.
+
+The methodological lesson repeats the campaign's standard.  The first probe
+was itself the thing that misled, twice: once through a meaningless
+whole-run row, and once by instrumenting four regions and leaving a fifth
+uncovered.  A phase model is only as complete as its instrumentation, and
+"every phase envelops" is not the same claim as "the peak envelops".
+
+### What these fixes leave open
+
+The projector batch-charge under-statement of open item 1 did NOT bind at
+any cell here.  The unweighted cell's shortfall was the statistics phase
+rather than the projector charge, so the revisit trigger has not fired.
+
+The `hess_weights` release stays unmade, as ruled.  Its measured signature
+also shrank: the weighted-versus-unweighted gap fell from 2.97 GB to
+0.47 GB, because fix 1 removed the larger of the two arrays that made the
+weighted arm the heavier one.
+
 ## Files
 
 Every file below carries this checkpoint's work.  Most are already committed,
@@ -260,14 +372,19 @@ mbirtorch working tree is clean, and the committed `_memory_ledger.py`
 includes the per-device sub-phase fix.
 
 Committed in mbirjax_plans:
-`plans/torch_port/device_policy_design.md` (the checkpoint-1 ruling),
 `plans/experiments/torch_port/dp2_ledger_calib.py`,
-`plans/experiments/torch_port/dp2_gautschi.sbatch`,
+`plans/experiments/torch_port/dp2_gautschi.sbatch`.
+
+Staged in mbirjax_plans:
+`plans/torch_port/device_policy_design.md` (both review rulings),
+`plans/torch_port/device_policy_findings.md` (this document),
 `plans/experiments/torch_port/dp3_phase_probe.py`,
 `plans/experiments/torch_port/dp3_gautschi.sbatch`.
 
-Staged in mbirjax_plans:
-`plans/torch_port/device_policy_findings.md` (this document).
+The mbirtorch state was re-checked at the time of writing rather than
+recalled.  Its working tree is clean, and `HEAD` carries the
+`weighted_fwd` release, the `indices` argument with its masked call site,
+and the per-iteration statistics phase.
 
 Raw rows stay on scratch per convention.  The accepted table is
 `/scratch/gautschi/buzzard/torch_p3/results/dp2_ledger_calib_20260807_212442.jsonl`.

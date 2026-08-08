@@ -31,8 +31,6 @@ export MBIRTORCH_MEMORY_CALIBRATION=1
 export DP3_RESULTS=/scratch/gautschi/buzzard/torch_p3/results
 cd /scratch/gautschi/buzzard/torch_p3 || exit 1
 
-DP3_GEOMETRY=parallel DP3_VIEWS=1024 DP3_WEIGHTED=1 "$TORCHPY" -u dp3_phase_probe.py
 DP3_GEOMETRY=parallel DP3_VIEWS=1024 DP3_WEIGHTED=0 "$TORCHPY" -u dp3_phase_probe.py
-DP3_GEOMETRY=cone     DP3_VIEWS=1024 DP3_WEIGHTED=1 "$TORCHPY" -u dp3_phase_probe.py
-DP3_GEOMETRY=parallel DP3_VIEWS=512  DP3_WEIGHTED=1 "$TORCHPY" -u dp3_phase_probe.py
+DP3_GEOMETRY=parallel DP3_VIEWS=1024 DP3_WEIGHTED=1 "$TORCHPY" -u dp3_phase_probe.py
 echo "DP3 DONE"
