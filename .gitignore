@@ -5,6 +5,7 @@ __pycache__/
 
 .claude/*.json
 .idea/
+plans/experiments/torch_port/results
 
 # C extensions
 *.so

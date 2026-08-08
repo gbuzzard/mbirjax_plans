@@ -757,6 +757,77 @@ full-plus-shard; it rides the margin); and the checkpoint-3 script audit
 extends to the mbirjax_metrics harness scripts, not only
 `plans/experiments/`.
 
+## Checkpoint-2 review ruling (Fable, 2026-08-07): APPROVED, and the two residency fixes are greenlit
+
+Checkpoint 2's record is `device_policy_findings.md`, approved as written:
+the ledger calibrates inside the 1.00–1.30 band at all five cells
+(1.001–1.169) through five attributed corrections and one named constant
+term, and the acceptance controls anchor it to the composed-gate
+configuration.  The open items resolve as the findings recommend, with the
+`weighted_fwd` and masked-Hessian fixes approved as follow-on changes under
+the instructions below.  Land them in this order, each as its own change.
+
+### Fix 1: release `weighted_fwd` before the error sinogram assignment
+
+One line in `_initial_error_state`: rebind `weighted_fwd = None` after its
+second dot product and before the `error_sinogram = sinogram - alpha * fwd`
+assignment.  The ledger's initial-error-state enumeration drops the term in
+the SAME change, and the calibration re-run must confirm the predicted move
+at the weighted 1024 cells: 26.71 to 24.53 GB modeled, with the dominant
+phase passing to the Hessian diagonal.  The sharded branch already has no
+such array and is untouched.
+
+### Fix 2: the masked Hessian, with the scatter-into-zeros step
+
+`compute_hessian_diagonal` gains an `indices=None` argument.  `None` keeps
+today's exact behavior — the full-grid `arange`, whose dense back projection
+IS the flat recon, finished by a plain reshape — so the public contract, the
+goldens on the public method, and mbirjax parity on that surface are
+untouched, bit for bit.  `vcd_recon` passes the ROR-masked index set at its
+one internal call site.
+
+The masked path needs the step the full-grid path never did.  A masked back
+projection returns a `(P_full, num_slices)` cylinder array that is NOT
+reshapeable to the grid, so the implementation allocates a full flat
+`(P_grid, num_slices)` zeros array, `index_copy_`s the rows in at the masked
+indices, and reshapes as before.  Downstream flat indexing is unchanged.
+Every index the engine ever reads is ROR-masked, and the back projection is
+per-pixel independent, so the values at every read site are bitwise
+identical; the outside-ROR entries become zeros instead of
+computed-but-never-read values.
+
+The accounting to encode in the ledger, in the same change: the Hessian
+phase's cylinder terms move from `P_grid` to `P_full` (the transient saving,
+about 2.4–2.6 GB at the 1024 cells), and a scatter co-residency term is
+added for the moment the full zeros output and the `P_full` accumulator
+coexist (about 1.78 cylinders).  That moment sits below the loop's own
+three-cylinder peak, so it must not become the phase maximum — the
+calibration re-run checks this along with the headline move.
+
+Tests for fix 2: a masked-vs-full agreement test asserting equality AT THE
+MASKED INDICES (the only places the engine reads), and a bitwise recon
+parity test (one small seeded recon before and after the internal call-site
+change must produce identical results).
+
+### The compounding, for the record
+
+The findings priced the fixes separately (8 percent, then 4 percent at the
+unweighted cell).  They compound at the weighted gate cells: after fix 1
+the Hessian dominates there too, so fix 2 then moves the weighted-1024 peak
+down to the subset phase, about 23.4 GB — roughly 12 percent combined.  The
+post-fix calibration table is the check on that arithmetic.
+
+### Also recorded at this checkpoint
+
+The projector-batch-charge under-statement (about 45 bytes per view-pixel
+realized against the 16 charged) is recorded with its revisit trigger: a
+future cell whose dominant phase is projector-bound.  The `hess_weights`
+release stays unmade, with the ledger's own refutation as the reason.  A
+concurrent-session note: the preprocess goldens were regenerated mid-review
+and exposed an over-tight tolerance on a non-converging fit
+(`test_beam_hardening_family`, fixed separately); golden regeneration in the
+shared checkout should be announced between sessions.
+
 ## Checkpoint-1 staged files
 
 `plans/torch_port/device_policy_design.md` (this document).

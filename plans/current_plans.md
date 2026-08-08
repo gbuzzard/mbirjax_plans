@@ -96,7 +96,11 @@ gpu-torch H100 run landed at `results/gpu-torch/` in mbirjax_metrics.
 **Overview:** Wire the torch writer into the nightly so mbirtorch gets the
 same regression protection as mbirjax: correctness gating against goldens,
 time and memory gates, and the dashboard rows already built for it.  Multi-GPU
-rows join once item 3 establishes their baselines.
+rows start EARLY per the approved plan (amended 2026-08-07, superseding the
+original wait-for-item-3 sequencing): history-based gates self-seed, and the
+risky interval the rows should protect is exactly the items-2-3 multi-device
+work.  Their preconditions are the device-policy flip landing, the measured
+rolling-min window, and a three-night n=1 soak — `nightly_plan.md` §3(c).
 
 **Goals:**
 1. The scheduling decision and the writer wiring (the open Phase 2 tail item).
