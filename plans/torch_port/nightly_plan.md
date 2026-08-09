@@ -1127,6 +1127,32 @@ them; or have the nightly generate goldens, which would put jax inside
 the torch env against the §3(f) separation.  This is Greg's call, and
 the item-3 session's deferred value comparison bears on it.
 
+**Resolution (2026-08-08, Greg + Fable): the goldens are development and
+release instruments, not nightly ones.**  The nightly's question — did
+tonight's commit change behavior — is answered by its own history and
+vs-main references, the same machinery that replaced goldens in mbirjax.
+The port-fidelity question is asked at development time and at releases,
+where the archives exist.  The goldens are furthermore OPT-IN everywhere (Greg, same day,
+superseding the first form of this ruling): mbirjax development is
+expected to stop in favor of mbirtorch, intentional
+non-backward-compatible changes will follow, and goldens that sit in
+every run's path would then be an impediment.  Every archive-consuming
+test carries a `goldens` pytest marker, and mbirtorch's pyproject
+`addopts` deselects the marker by default (landed 2026-08-08).  A plain
+`pytest tests` therefore runs the self-contained suite on every
+machine, including the nightly's fresh clones, so this plan's owner has
+NO wiring step.  The fresh-clone skip set is hardware gates alone, and
+any new skip is signal.  Opting in is a run-time flag: `-m goldens` for
+the parity tests alone, `-m "goldens or not goldens"` for the full
+suite, or `RUN_GOLDENS=1` for dev_scripts/run_tests.sh.  Porting
+charters (the Lilly gate, item 6's translation parity) and the release
+gate opt in explicitly.  One correction to the count above: the marker covers 79 tests,
+not 65 — the 65 missed the `golden_*.npz` consumers in `test_cone`,
+`test_denoiser`, and `test_phantom`.  The archives stay gitignored and
+regenerate on announcement, as now.  The release workflow
+(current_plans item 7) carries the backstop: a release candidate passes
+the full suite, goldens included, in a provisioned dev environment.
+
 ### 10.5 Smaller observations
 
 The H100 flags heavy torch kernels as throttled.  Two of the trial's 35

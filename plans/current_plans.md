@@ -108,9 +108,12 @@ The multi-GPU baseline item 3 starts from is in §11.4: memory shards
 Remaining: increment 6 (cpu-torch on the Mac).  Two things to watch.  The
 three-night soak was waived at Greg's direction to give item 3 a
 baseline, so the first unattended nights deserve a `status_torch_nightly.sh`
-look rather than assumed success.  And `tests/goldens/` is gitignored, so
-the suite's torch-vs-jax golden check skips on the nightly's fresh clones
-— a coverage gap for Greg's call (§10.4).
+look rather than assumed success.  The goldens question (§10.4) is
+RESOLVED 2026-08-08: goldens are OPT-IN parity instruments headed for
+retirement, not nightly ones.  The archive-consuming tests carry a
+`goldens` pytest marker (79 tests), and pyproject `addopts` deselects
+the marker by default, so the nightly needs no wiring at all and its
+fresh-clone skip set is hardware gates alone.
 
 **Overview:** Wire the torch writer into the nightly so mbirtorch gets the
 same regression protection as mbirjax: correctness gating against goldens,
@@ -179,7 +182,13 @@ main/prerelease branch model (renaming `master`), CI on pull requests, PyPI
 via Trusted Publishing with a tag-vs-version check, and Read the Docs wired to
 `stable`/`latest`.  The proposal ends with five open decisions — the GPU
 coverage gap in CI, the TestPyPI cadence, the Python version matrix,
-post-publish wheel testing, and the release home repository.
+post-publish wheel testing, and the release home repository.  The
+2026-08-08 goldens ruling adds one requirement and one expectation: the
+release gate opts in to the full suite including the `goldens`-marked
+parity tests (`-m "goldens or not goldens"`, in a provisioned dev
+environment), and the goldens retire at the first intentional
+non-backward-compatible change rather than being regenerated against a
+frozen mbirjax.
 
 **Goals:**
 1. Decide the five open questions and refine the proposal accordingly.
@@ -436,9 +445,9 @@ amended contract).
 
 ## 15. Sharded phantom generation (chartered 2026-08-08)
 
-**State:** Chartered 2026-08-08 (Greg); not started.  Sequenced after the
-prerelease merge, because it lands in `utilities.py`, which that branch
-grew by ~500 lines.
+**State:** Chartered 2026-08-08 (Greg); not started.  Sequenced after
+item 3 (Greg, 2026-08-08) — the multi-GPU campaign is the higher
+priority.  The prerelease merge it also waited on has landed.
 
 **Overview:** mbirjax's `generate_3d_shepp_logan_low_dynamic_range` builds
 the phantom across devices and always gathers the result to host; the
