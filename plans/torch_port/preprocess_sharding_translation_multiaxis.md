@@ -46,10 +46,26 @@ supports multiple devices in mbirjax must support them in mbirtorch.
 Go down this list.  Each entry names the mbirtorch function and the
 mbirjax reference implementation.
 
-- [ ] STARTED 2026-08-09 (Charlie's session) `preprocess/segmentation.py: segment_plastic_metal` — accepts only a
-      single-device volume.  mbirjax version accepts host, single-device,
-      or sharded (per-shard Otsu histogram, no gather).  Blocks full-res
-      MAR (OOM, job 15001292).
+- [x] COMPLETED 2026-08-09 (Charlie's session, mbirtorch a5b04ce)
+      `preprocess/segmentation.py: segment_plastic_metal`.
+      Status: per-shard histogram in bounded chunks, int64 host sum, so
+      thresholds equal the unsharded ones exactly; edge masking, class
+      masks, and scale factors run shard by shard; masks return sharded on
+      the volume's devices.  Inputs follow the array-forms rule (numpy /
+      tensor / 1-shard Shards / N-shard Shards in, same form out; rule
+      recorded in Charlie's notes, emailed to Greg).  Three tensor-only
+      seams in _est_plastic_metal_sinos_from_recon fixed with it.  Gate:
+      sharded vs unsharded masks identical (tests/test_sharded_segmentation.py);
+      suite 368 + goldens 62 pass; single-device behavior unchanged.
+      NOT covered (new item A7 below): the downstream beam-hardening fit.
+- [ ] **A7 (found during A1)** `preprocess/mar.py: correct_sino_plastic_metal`
+      — everything downstream of segmentation (sinogram maxima and
+      normalization, the polynomial H fit, the constraint updates) operates
+      on plain tensors and has never run multi-device; mbirjax's version
+      works on sharded sinograms via jax's global-array semantics, so its
+      docstrings never say "sharded" and the checklist grep missed it.
+      Full-resolution MAR needs this after A1.  Needs Greg's triage: it
+      touches sinogram-side statistics, not the projector internals.
 - [ ] `tomography_model.py: direct_recon / fdk_recon` — never make the
       use-N-GPUs decision (`_apply_device_policy` runs only in recon).
       A direct FDK call runs on 1 GPU.  Small fix.
