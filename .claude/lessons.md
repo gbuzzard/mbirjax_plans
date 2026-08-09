@@ -305,6 +305,16 @@ overridable per-run via the environment (it was a hard-set '0.98' the env var co
 
 - **Gitignored `results/` does not survive a handoff** — numbers that drive decisions get written
   into committed prose (status/plan/here), or they evaporate with the session.
+- **A branch that only executes at n>1 cannot be verified at n=1 — and virtual CPU devices are
+  the cheap way to reach it.**  The torch nightly's `to_numpy` detached the result of
+  `Shards.gather()`, which already returns numpy; every single-device check passed because the
+  n=1 path returns a plain tensor and never enters that branch.  The defect surfaced only on a
+  4-GPU allocation, where it cost all 32 multi-device rows of a trial run.  `configure_devices(
+  devices=['cpu'] * n)` reproduces the entire sharded seam on a laptop in about a minute, values
+  included (measured cross-count agreement 0 to 8.6e-9 against 1e-5 tolerances).  Rule: before
+  any cluster multi-device submission, run the CPU-virtual-device equivalent; a GPU queue is a
+  slow, expensive place to learn that a host-side type assumption was wrong.  Worked example:
+  `plans/experiments/torch_port/nt2_local_shard_check.py`.
 - **uPlot's log-axis auto-tick generator can freeze on tight non-power-of-10 bounds** — pass explicit
   splits (`logTicks` in the shared `linePlot` wrapper); see the `dashboard-verify-gotchas` memory for
   the full diagnosis pattern (rAF-throttle, probe synchronously).

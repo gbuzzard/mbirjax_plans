@@ -25,6 +25,7 @@ Items 1–8 are the agreed top priorities (2026-08-07), in rough order.
 12. [Possible future direction: multi-resolution reconstruction](#12-possible-future-direction-multi-resolution-reconstruction-post-next-main)
 13. [Sorted-stream parallel forward (chartered, after items 2–3)](#13-sorted-stream-parallel-forward-chartered-after-items-2-3)
 14. [Forward-kernel repair under sharding — COMPLETE](#14-forward-kernel-repair-under-sharding--complete-2026-08-08)
+15. [Sharded phantom generation (chartered)](#15-sharded-phantom-generation-chartered-2026-08-08)
 
 ---
 
@@ -75,7 +76,9 @@ the same measured treatment the single-device path got.
 **Goals:**
 1. A full n=1/2/4 gate readout with kernels on, at the new default, both
    geometries — the composed-gate discipline of `phase5_findings.md` (arm
-   checks, shared-sinogram value protocol, memory re-measured).
+   checks, shared-sinogram value protocol, memory re-measured).  The stale
+   `usr_multi_gpu.rst` timing table refreshes from this readout; the docs
+   review found it unchanged from its pre-kernel numbers.
 2. Attribute any gaps and tune what the data indicates: per-device view
    chunks, the seam/streaming hooks, and the widening rule's parameters.
 3. The deferred value comparison rides along: jax vs torch across device
@@ -86,18 +89,28 @@ the same measured treatment the single-device path got.
 
 ## 4. mbirtorch in the nightly, including multi-GPU
 
-**State:** Implemented through the trial-run gate and the first real
-scheduled-path run (2026-08-08; findings in `nightly_plan.md` §10).  The
-gpu-torch series is live at origin: 35 cells at mbirtorch `ae9bb6f9`, with
-records, tests, and the dashboard row rendering.  The trial measured the
-two open knobs: the memory window is 1 (a 0.000% spread over five fresh
-subprocesses) and a changed night costs about 0.26 GPU-hours.  Remaining:
-install the 03:00 scrontab block (`enable_torch_nightly.sh`, one command),
-then increment 6 (cpu-torch on the Mac) and increment 7 (the n>1 rows —
-the flip has landed, the window ablation must repeat at n=2 and n=4, and
-the n=1 soak clock started 2026-08-08).  One coverage gap for Greg's
-call: `tests/goldens/` is gitignored, so the suite's torch-vs-jax golden
-check skips on the nightly's fresh clones (§10.4).
+**State:** LIVE, single-device and multi-device both (2026-08-08; findings
+in `nightly_plan.md` §10 and §11).  The `mbirtorch-nightly` scrontab block
+runs at 03:00 on four GPUs with a 4-hour ceiling, beside the unchanged
+02:00 jax block, whose walltime this session also corrected from a stale
+4 hours to the configured 6.  The gpu-torch series is live at origin, and
+its multi-device rows seed from a trial that read 67 cells with zero
+failures: n∈{1,2,4} at parallel and cone for 512×448×384 and
+1024×1008×992, n=1 everywhere else.  Every knob is measured rather than
+assumed — the memory window is 1 at n=1, n=2 and n=4 (0.000% spread over
+five fresh subprocesses at each), an n=1 night costs 0.26 GPU-hours and a
+multi-device night about 2.
+
+The multi-GPU baseline item 3 starts from is in §11.4: memory shards
+3.55x and 2.86x at the two 1024 cells, while time reaches only 2.02x
+(parallel) and 1.19x (cone) at n=4, and the 512 cells regress at n=4.
+
+Remaining: increment 6 (cpu-torch on the Mac).  Two things to watch.  The
+three-night soak was waived at Greg's direction to give item 3 a
+baseline, so the first unattended nights deserve a `status_torch_nightly.sh`
+look rather than assumed success.  And `tests/goldens/` is gitignored, so
+the suite's torch-vs-jax golden check skips on the nightly's fresh clones
+— a coverage gap for Greg's call (§10.4).
 
 **Overview:** Wire the torch writer into the nightly so mbirtorch gets the
 same regression protection as mbirjax: correctness gating against goldens,
@@ -115,22 +128,25 @@ rolling-min window, and a three-night n=1 soak — `nightly_plan.md` §3(c).
 
 ## 5. Remaining Sphinx documentation pages
 
-**State:** The docs port session finished the build scaffold, the background
-pages, the user-API pages, and the two sharding developer pages; six pages
-remain (two blocked on the kernel work, four held at Greg's request), and the
-package-side instruction list in `plans/torch_port/docs.md` awaits execution.
+**State:** LARGELY DELIVERED (updated 2026-08-08).  Charlie's session
+executed the docs.md list on `origin/prerelease`: the section-8 restores
+with the `__all__` rule, the multi-GPU rewrite, the demos and
+data-generation halves, and the kernel and geometry developer pages.  The
+build is clean; the only warnings are references to the held pages.  The
+panel review left a six-spot doc fix list (the sharding-overview claims,
+the preflight-margin wording, and four smaller items), which rides the
+post-merge fix pass.
 
-**Overview:** The remaining build warnings are references to the unwritten
-developer pages, so finishing them also gets the build to warning-free (and
-lets CI adopt `-W`).  With item 2 landed, `usr_multi_gpu.rst` is unblocked
-(rewrite to the auto-spread behavior per docs.md §4); the kernel developer
-page waits on item 14 and documents the kill switch per docs.md §10.
+**Overview:** The remaining unwritten pages are the three held at Greg's
+request (install, maintenance, performance dashboard) and the two geometry
+pages.  The build goes warning-free (and CI can adopt `-W`) when those
+land.
 
 **Goals:**
-1. The five developer pages.
-2. The docs.md package-change instructions (narrowed `__all__`, the four
-   docstrings, the cross-reference demotion, the print_params guard).
-3. `usr_multi_gpu.rst`, now unblocked by item 2's landing.
+1. The review's doc fixes, in the post-merge fix pass.
+2. The held pages when their blockers lift: install and maintenance ride
+   item 7, and the dashboard page stays held at Greg's request.
+3. The geometry pages, with item 6.
 
 ## 6. Additional geometries: translation and multiaxis
 
@@ -179,10 +195,12 @@ modules — and additionally delivered `split_sino_recon` with
 `stitch_arrays` and `copy_ct_model` (goal 3, reviewed by Fable against the
 mbirjax logic: line-faithful, with the half-model device pin made
 unconditional so the halves never enter a future automatic device-count
-path).  Merged to greg_dev; suite 402 passed.  Still open: the Lilly NSI
-end-to-end run (needs Charlie and real data), and goal 2 below.  The
-original work list is the absent-API census in `plans/torch_port/docs.md`
-§5, with the plan at `plans/torch_port/preprocessing.md`.
+path).  Merged to greg_dev; suite 402 passed.  Goal 2 landed 2026-08-08 on
+`origin/prerelease` and was panel-reviewed the same day; the agreed fix
+list applies after the merge.  Still open: the Lilly NSI end-to-end run
+(needs Charlie and real data).  The original work list is the absent-API
+census in `plans/torch_port/docs.md` §5, with the plan at
+`plans/torch_port/preprocessing.md`.
 
 **Overview:** Twenty-one documented mbirjax names do not exist in mbirtorch,
 and replacement needs most of them: the HDF5 save/load family (recon and data),
@@ -196,9 +214,12 @@ lands.
    MAR, `gen_weights_mar`, `median_filter3d`, the download utilities, the
    HDF5 save/load family (with `get_recon_dict`/`get_all_params`), and the
    `hsnt` and `vcls` modules, gated end to end on the Lilly NSI script.
-2. STILL OURS: `get_ct_model`, the phantom/demo-data generators
-   (`generate_demo_data`, `generate_3d_shepp_logan_reference`), and
-   `device_summary` (replaced by `get_memory_stats`; confirm-or-port).
+2. DONE (Charlie's session 2026-08-08, panel-reviewed): `get_ct_model` and
+   the phantom/demo-data generators, ported faithfully (the phantom builds
+   verified byte-exact against mbirjax), and `device_summary` CONFIRMED
+   replaced by `get_memory_stats`, not ported.  The session also ported the
+   mbirjax run logging beyond its charter; the review accepted it with the
+   post-merge fix list.
 3. DONE (Charlie's session, Fable-reviewed): `split_sino_recon` with
    `stitch_arrays` and `copy_ct_model` — the full mbirjax logic including
    the cone-divergence overlap bound and the opt-in `align_split_grid`,
@@ -291,7 +312,23 @@ we'd like to develop an easy way to replace LEAP/SVMBIR with MBIRJAX.
   `Shards` has no `clone`.  The device-policy work deliberately leaves the
   denoiser single-device and outside the widening; fix or formally scope the
   denoiser to one device (error message at configure time) as a small
-  follow-up.
+  follow-up.  The run-logging port has the matching gap: `denoise` takes no
+  log arguments, and its init line lands unconditionally on the constructor's
+  console logger.  Fold that repair into the same decision.
+- **Run-logging follow-ons (from the 2026-08-08 prerelease panel review):**
+  four reproduced defects are faithful ports of mbirjax behavior.  With
+  `print_logs=False` the run logger still propagates to root handlers; the
+  logger is keyed per class, so two live models of one class stomp each
+  other's buffers and files; the `FileHandler` is never closed, so after
+  `split_sino_recon` merges and deletes the half logs, later lines from any
+  cone model land in a deleted inode; and `verbose=0` still creates an empty
+  log file.  Set `propagate = False` in the port now (one line, in the fix
+  pass).  Carry the full set as upstream mbirjax notes; per-instance logger
+  keying and a handler `close()` in `setup_logger` are the candidate repairs.
+  From the same review, the test-quality tail: the demo-data gates sit
+  300–640x above their measured floors and want the measured-floor-times-
+  margin treatment, and `test_logging` wants a two-instance case plus
+  module-scoped cone fixtures (72 s serial today).
 - **Suite efficiency:** simplify tests and reduce time on tests.
 - **Minor API opens:** `configure_devices`/`use_gpu` unification; the forward
   pixel-batch default.
@@ -396,6 +433,37 @@ the flip gate 18/18 (auto-vs-explicit at n=4 reads 3.4e-07 where it read
 baselines in full, and the full suite on H100 is green at 477 (the one
 failure surfaced was a latent pre-amendment ledger test, brought to the
 amended contract).
+
+## 15. Sharded phantom generation (chartered 2026-08-08)
+
+**State:** Chartered 2026-08-08 (Greg); not started.  Sequenced after the
+prerelease merge, because it lands in `utilities.py`, which that branch
+grew by ~500 lines.
+
+**Overview:** mbirjax's `generate_3d_shepp_logan_low_dynamic_range` builds
+the phantom across devices and always gathers the result to host; the
+torch port kept only a single-device host build.  This item restores the
+distributed build and adds one new capability: an option to return the
+phantom in the engine's sharded form, so a large phantom feeds
+`forward_project` or `recon` with no host round-trip.  The phantom is
+voxel-independent, so each device builds only its own slice band with no
+communication, and the padded slices are zeros, which the padding contract
+keeps inert.  The engine's input side already accepts a matching `Shards`
+(`_shard_recon` passes it through), but its placement check is by object
+identity.  The sharded form must therefore be built over the consuming
+model's own placement, so the API takes the model (or its placement) when
+the sharded result is requested.
+
+**Goals:**
+1. Port the mbirjax builder: `devices=`, the row-blocked single-device
+   path under `max_block_gb`, and `target_max_attenuation`, with the host
+   gather as the default contract.
+2. `output_sharded=True` (the established argument name) returning
+   `Shards` over the consuming model's slice placement.
+3. Gates: the gathered sharded build equals the host build exactly at
+   n=1/2/4 — byte equality is the correct gate here, unlike recon, because
+   the build is per-voxel independent — and the host build keeps its
+   existing parity with the mbirjax reference.
 
 ---
 

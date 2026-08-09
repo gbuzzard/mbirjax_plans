@@ -1,9 +1,9 @@
 # mbirtorch in the nightly, including multi-GPU — plan
 
-**Status:** IMPLEMENTED through the trial-run gate and the first real
-scheduled-path run (2026-08-08).  The findings and the closing state are
-in §10.  Increments 6 (cpu-torch) and 7 (the n>1 rows) remain, and §10
-lists their preconditions as measured.
+**Status:** IMPLEMENTED and LIVE (2026-08-08).  Increments 1 through 5
+and increment 7 have shipped; the schedule runs at 03:00 on four GPUs.
+The findings are in §10 (the n=1 series) and §11 (the n>1 rows).  Only
+increment 6, cpu-torch on the Mac, remains.
 
 The charter is `current_plans.md` item 4.  Two of its sentences set the
 scope: wire the torch writer into the nightly so mbirtorch gets the same
@@ -1173,3 +1173,110 @@ The dashboard's vs-main correctness reference is active by
 construction, because the tracked branch is literally `main`; the
 cross-device reference activates with increment 7 and the
 cross-platform reference with increment 6.
+
+---
+
+## 11. Increment 7: the n>1 rows (2026-08-08)
+
+The multi-device rows shipped the same day as the n=1 series, at Greg's
+direction.  The plan's three-night soak was waived deliberately, so that
+item 3's multi-GPU campaign would have a measured nightly baseline to
+start from rather than an empty series.  §11.4 records what the waiver
+costs.
+
+### 11.1 The cell set, and the one writer change it needed
+
+The n>1 rows exist only where §3(c) placed them.  The writer gained one
+function, `cell_device_counts`, which returns the counts a given
+(geometry, size) sweeps: the requested list at parallel and cone for
+512×448×384 and 1024×1008×992, and `[1]` everywhere else.  The denoiser
+returns `[1]` at every size.  So `TORCH_DEVICE_COUNTS="1 2 4"` widens
+exactly sixteen cells and leaves the other thirty-five untouched.
+
+The reduction is a property of the writer rather than of the knob.  A
+future edit that widens the knob cannot accidentally widen the small
+cells or the denoiser, and the trial's sweep headers confirmed the
+behavior directly: `n=[1, 2, 4]` printed at the two large sizes and
+`n=[1]` at every other one.
+
+### 11.2 One bug, and the reason single-device testing could not find it
+
+The first 4-GPU trial (job 15004425) lost every one of its 32 n>1 rows
+to one line of the writer.  `Shards.gather()` already returns numpy,
+because it detaches and concatenates on the host internally, and
+`to_numpy` detached the result again.  Every multi-device cell therefore
+failed with `'numpy.ndarray' object has no attribute 'detach'`.
+
+The n=1 path returns a plain tensor and never reaches that branch.  No
+amount of single-device verification could have found this, and the
+Mac's earlier checks were all single-device.
+
+The remedy is a check, not just a fix.  `nt2_local_shard_check.py` pins
+all four projector ops at n=1 and n=2 on virtual cpu devices, compares
+the two fingerprints at the op's own tolerance, and runs in about a
+minute on a laptop.  It reproduces the whole Shards seam with no
+allocation at all.  Its measured cross-count agreement is 0.0 to 8.6e-9,
+against tolerances of 1e-5 and 1e-4.  The rule this establishes: no
+cluster n>1 submission without a local shard check first.
+
+### 11.3 The trial evidence
+
+Job 15005811 ran on four H100s in 32m59s and passed every step.
+
+The device pin holds at multi-device.  The mispin control asked for four
+devices with two visible and raised rather than measuring.  Every n=2
+row bound `cuda:0, cuda:1` and every n=4 row bound all four.
+
+The values agree across device counts.  All 32 multi-device fingerprints
+matched their n=1 row inside the op tolerances, which is the
+cross-device correctness reference of §3(e) exercised in the trial
+rather than waiting for the dashboard.
+
+The memory ruler is deterministic at n>1 as well.  The §3(c-ii) ablation
+repeated five fresh subprocesses at n=2 and again at n=4, reading
+1138.1 MB and 663.4 MB with a 0.000 percent spread at both counts.  So
+`TORCH_MEM_GATE_WINDOW=1` is measured at every count the nightly
+sweeps, not inherited from the n=1 measurement.
+
+The sweep produced 67 cells with zero failures: 35 at n=1 and 16 each at
+n=2 and n=4.
+
+### 11.4 The multi-GPU baseline the campaign starts from
+
+Memory shards well at every cell.  Time does not, and the pattern is
+the interesting one.
+
+| cell | n=1 | n=2 | n=4 |
+|---|---|---|---|
+| parallel 512 | 1.59 s / 1.94 GB | 1.35 s (1.18x) / 1.11 GB | 2.32 s (0.69x) / 0.65 GB |
+| parallel 1024 | 37.41 s / 25.99 GB | 35.16 s (1.06x) / 14.04 GB | 18.55 s (2.02x) / 7.31 GB |
+| cone 512 | 2.50 s / 2.15 GB | 2.40 s (1.04x) / 1.70 GB | 3.62 s (0.69x) / 1.07 GB |
+| cone 1024 | 59.13 s / 25.99 GB | 63.31 s (0.93x) / 14.32 GB | 49.69 s (1.19x) / 9.08 GB |
+
+Three readings follow.  The 512 cells lose time at n=4, which is the
+communication-dominated behavior §3(c) predicted when it kept the small
+sizes single-device.  The parallel 1024 cell scales 2.02x on four
+devices while cone reaches only 1.19x, and cone at n=2 is slower than at
+n=1.  Memory falls by 3.55x and 2.86x at the two 1024 cells, so capacity
+sharding works even where time does not.
+
+These results indicate that multi-device time on torch has real
+headroom, and that cone is where it is largest.  That is item 3's
+charter, and these rows are its starting baseline.  The rows are
+descriptive, not a gate: history-based gating compares each cell against
+its own future, so a slow n=4 cell is a baseline rather than a finding.
+
+### 11.5 Cost, and what the waived soak costs
+
+A changed-branch night now allocates four GPUs for about 30 minutes, or
+roughly 2 GPU-hours, against 0.26 for the n=1 job.  The walltime is 4
+hours at Greg's request, a ceiling the measured run uses about an eighth
+of.  Fire-on-change means an unchanged night still costs seconds.
+
+The waived soak costs one specific protection.  Three unattended nights
+would have shown the schedule surviving contact with nights nobody
+watches, and the n>1 rows now seed before that evidence exists.  The
+compensating evidence is that the same wrapper has completed four
+supervised end-to-end runs, two of them through the production
+scheduled path.  The first two unattended nights deserve a look at
+`status_torch_nightly.sh` rather than assumed success.
