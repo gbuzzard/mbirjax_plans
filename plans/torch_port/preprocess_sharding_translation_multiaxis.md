@@ -14,12 +14,12 @@ mbirtorch work for these items lands on the `prerelease` branch.
 
 ## Section A, per item
 
-**Go: A7 is the next start; A4 is in flight.  (A1, A5, A3 COMPLETED
-2026-08-09.)**
+**Go: A4 is in flight; section B is the open front.  (A1, A5, A3, A7
+COMPLETED 2026-08-09.)**
 - **A1 `segment_plastic_metal`** — COMPLETED; status report at the checklist entry.
 - **A5 `export_recon_hdf5`** — COMPLETED; status report at the checklist entry.
 - **A3 pipeline view-sharding** — COMPLETED; status report at the checklist entry.  One piece is still owed per its own caveat: the concurrency win is unmeasured until a Gautschi run.
-- **A7 `correct_sino_plastic_metal`** — GO (Greg, 2026-08-09).  A7 is the second half of the full-res MAR unblock, so it precedes any other new start.  It touches sinogram-side statistics, not the campaign's moving parts, so A1's parallel-safety argument applies.  Design gates: the scale factors are maxima, which are order-invariant, so gate them exact, like A1's thresholds.  The fit statistics (`Hty`, the Gram entries, the constraint-update means) are float sums whose summation order changes under sharding: gate them at a stated tolerance, or accumulate per-shard partials in f64 on the host.  The OSQP solve is small and stays host-side.  The array-forms rule applies (`array_forms_rule.md`, adopted with its amendments).  Read `split-sino-device-handling.md` alongside; it is the adjacent sinogram-side device concern.
+- **A7 `correct_sino_plastic_metal`** — COMPLETED; status report at the checklist entry, design gates met (f64 host partials, exact maxima, host-side OSQP).  Its ENGINE NOTE is dispositioned (Fable verified it at source, 2026-08-09): the tensor-only init_recon validation at `tomography_model.py:2469` is real, and it is the only barrier — the engine's own default init is already sharded (`direct_recon(..., output_sharded=True)` at :2465 feeds the same `_shard_recon` passthrough).  The fix rides charter B's `tomography_model.py` commit in the multi-gpu campaign; Fable relays it at the next campaign gate.  The one-gather-per-pass workaround is correct meanwhile: the gather is host-side and the re-shard moves per-slice, so no full volume ever lands on one device, and the Gautschi rerun need not wait.
 - **A4 `QGGMRFDenoiser`** — the sharded denoiser rides the prior/halo path, not the projector internals that Greg's multi-gpu campaign is tuning.  Placing A4 in this list resolves the `current_plans.md` §11 denoiser scope decision in the full-parity direction (Greg, 2026-08-09).  That §11 item bundles two companion gaps, and A4 includes both: the `.clone()`-on-`Shards` failure, and the log arguments the other entry points gained.
 
 **Defer: A2 (`direct_recon` device policy).** Not because it's big — Charlie's "small fix" label is mechanically right — but because it's the same code the guard patch is about to modify, and the semantics question is real: the guard's floors are being calibrated on 3-iteration vcd (the plan says explicitly the guard's subject is out-of-box `recon()`), while a standalone direct recon is one filter plus one back projection with a completely different crossover profile. "Just call `_apply_device_policy`" would consult the wrong ruler. The right semantics — capacity-only, own floors, or guard-exempt — is a guard-design question. This will be done as part of the larger multi-gpu campaign.
@@ -35,7 +35,7 @@ Both mbirjax modules are fully multi-device (Fable verified, 2026-08-09), so per
 3. New-geometry parity against mbirjax uses opt-in goldens, per the recorded ruling that porting charters opt in explicitly.  Mark the new tests with the `goldens` pytest marker, following the existing pattern in `tests/`.  Generate any new golden archives from the mbirjax env, and announce each generation or regeneration to Greg.
 4. Merge hygiene: keep the work off `tomography_model.py`, `projectors.py`, `_memory_ledger.py`, and the policy code while charters A/B land. New-module work naturally does.
 
-**Net state (2026-08-09):** A1, A5, A3 complete; A4 in flight; A7 is the next start.  Section B proceeds in parallel; A2 rides the guard; A6 stays item 15.
+**Net state (2026-08-09, later):** A1, A5, A3, A7 complete; A4 in flight; section B is the open front.  A2 rides the guard; A6 stays item 15.  Section A's close-out gate is the Gautschi rerun of job 15001292's configuration, and it can run now (the init-gather workaround is correct; see A7).
 
 # mbirtorch port — remaining work (updated 2026-08-09)
 
