@@ -60,14 +60,24 @@ mbirjax reference implementation.
       sharded vs unsharded masks identical (tests/test_sharded_segmentation.py);
       suite 368 + goldens 62 pass; single-device behavior unchanged.
       NOT covered (new item A7 below): the downstream beam-hardening fit.
-- [ ] STARTED 2026-08-09 (Charlie's session; Greg approved go-ahead by phone via Charlie) **A7 (found during A1)** `preprocess/mar.py: correct_sino_plastic_metal`
-      — everything downstream of segmentation (sinogram maxima and
-      normalization, the polynomial H fit, the constraint updates) operates
-      on plain tensors and has never run multi-device; mbirjax's version
-      works on sharded sinograms via jax's global-array semantics, so its
-      docstrings never say "sharded" and the checklist grep missed it.
-      Full-resolution MAR needs this after A1.  GO (Greg, 2026-08-09);
-      the design gates are in the A7 instruction bullet above.
+- [x] COMPLETED 2026-08-09 (Charlie's session, mbirtorch 944aec2)
+      **A7** `preprocess/mar.py: correct_sino_plastic_metal`.
+      Status: the whole BH chain runs on sinograms in either form via
+      form-agnostic helpers at the top of mar.py -- elementwise per piece
+      on its own device; reductions combine per-piece partials on the host
+      in f64 (the design-gate option); maxima exact; OSQP host-side
+      unchanged; the constraint argmin combines with per-piece view
+      offsets, preserving tie-breaking.  Gate: seeded 2-CPU-shard vs
+      1-device full MAR pipeline rel_max 1.7e-4 (< the 1e-3 full-pipeline
+      gate); corrected sinogram alone ~1e-6.  Suite 372 + goldens 62 pass.
+      ENGINE NOTE for the campaign: recon()'s user-supplied init_recon
+      validation is tensor-only (np.shape at tomography_model.py:2469), so
+      recon_plastic_metal gathers a sharded init before each pass (one
+      gather per BH pass).  A one-line shards-aware validation there
+      removes the gather; deferred per merge hygiene.
+      With A1 + A5 + A7 the full-res MAR chain is sharded end to end on
+      paper; the Gautschi rerun of job 15001292's configuration is the
+      remaining real-hardware gate.
 - [ ] `tomography_model.py: direct_recon / fdk_recon` — never make the
       use-N-GPUs decision (`_apply_device_policy` runs only in recon).
       A direct FDK call runs on 1 GPU.  Small fix.
