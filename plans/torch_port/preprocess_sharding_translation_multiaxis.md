@@ -81,9 +81,20 @@ mbirjax reference implementation.
       results byte identical (tests/test_sharded_pipeline.py); suite 370 +
       goldens 62 pass.  Caveat: correctness gated on CPU pseudo-devices;
       the concurrency win itself is unmeasured until a Gautschi run.
-- [ ] STARTED 2026-08-09 (Charlie's session) `denoising.py: QGGMRFDenoiser` — single-device only (its docstring
-      says so).  mbirjax slice-shards the image like a reconstruction.
-      Known gap in Greg's plan (denoiser `.clone()` on Shards fails).
+- [x] COMPLETED 2026-08-09 (Charlie's session, mbirtorch 2b1d02c)
+      `denoising.py: QGGMRFDenoiser`.
+      Status: two paths as in mbirjax -- one device keeps the compiled
+      in-place sweep (golden vs mbirjax unchanged); several devices
+      slice-shard the image, stage the qGGMRF halos once per pass, and
+      combine the four line-search sums on the host into one alpha (the
+      single-device formula).  Both companion gaps closed: the
+      .clone()-on-Shards crash, and denoise now takes logfile_path /
+      print_logs and returns via get_recon_dict (recon_log + notes ride
+      along).  Automatic widening still does not apply to the denoiser --
+      multi-device is explicit via configure_devices, matching the
+      guard-scope decision.  Gate: 1-device vs 2-padded-CPU-shards rel_max
+      < 1e-4 (tests/test_denoiser.py); suite 371 + goldens 62 pass.
+      Caveat: CPU-shard correctness only; GPU concurrency unmeasured.
 - [x] COMPLETED 2026-08-09 (Charlie's session, mbirtorch c5b5438)
       `utilities.py: export_recon_hdf5`.
       Status: _to_host (shared by export_recon_hdf5 and save_data_hdf5)
