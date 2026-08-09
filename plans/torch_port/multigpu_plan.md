@@ -418,6 +418,18 @@ decision (large sinogram, small recon), and the measurement records
 which metric the outcome vindicated.  §8 carries the metric question
 this probe informs.
 
+Two off-family probe classes were added by Greg's direction
+(2026-08-09), covering the shapes where the guard could be wrong
+rather than merely conservative.  The thin-volume class proper — few
+slices, many views, (1024, 32, 768) — is the regime where a
+sinogram-elements floor risks holding n=1 where widening pays.  The
+sparse-view class — the 512-cell volume at 64 views — is the opposite
+stress: a small sinogram over a large recon.  Each runs the standard
+four arms as an addendum job (mg4b), and every other shape class the
+campaign does not measure is recorded as out of scope in the findings
+page, with the ledger carrying memory prediction there and the
+guard's conservatism as the stated time policy.
+
 ### mg5 — tuning arms, only where the data points
 
 Tuning is contingent on attribution, so mg5 is a menu with triggers.
