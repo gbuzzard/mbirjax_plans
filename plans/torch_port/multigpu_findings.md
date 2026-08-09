@@ -4,7 +4,9 @@
 already in hand.  mg1, mg2, and mg4 are complete and validated.  mg3a,
 mg3b, and the mg4b probe addendum are running; their sections below are
 marked OPEN and this page closes when they land.  The plan is
-`multigpu_plan.md`; terms and protocols keep its meanings.
+`multigpu_plan.md`; terms and protocols keep its meanings.  The
+checkpoint was RULED AND ENDORSED on 2026-08-09 with one amendment,
+floor_4, folded into §3.1 and §6.1 below.
 
 The campaign's instruments worked.  Every arm of every completed job
 passed every arm check, the n=1 rows reproduce the kb3 baselines to
@@ -43,8 +45,10 @@ kb3 attributed to the forward.  No row was hot with a depressed clock.
 
 Two instrument notes are recorded.  The value-ruler verdict tripped
 once at ratio 3.19 with both divergences in the e-5 class; the
-criterion needs an absolute-floor clause, and the numbers themselves
-are unremarkable.  The twin-within-spread criterion proved stricter
+criterion needed an absolute-floor clause, folded into the harness on
+2026-08-09 per the checkpoint ruling (`VALUE_RULER_FLOOR` raised to
+the documented benign class), and the numbers themselves are
+unremarkable.  The twin-within-spread criterion proved stricter
 than the plan's 2 percent bound, because within-arm spreads came in at
 0.0 to 0.5 percent; eleven of twelve twins sit within 2 percent of
 their siblings, and the twelfth reads 3.6 percent at a 2.7-second
@@ -189,14 +193,22 @@ Speedup over n=1, warm medians, spreads 0.0 to 2.5 percent:
 
 The anchor ties the ladder to mg1: its 1.02x and 1.72x reproduce the
 readout's numbers on a different node and job.  The knees are clean
-under the §4 admission rule.  Parallel n=2 admits at the 512 cell and
-wins at every larger size.  Parallel n=4 admits at the 768 cell.  The
-expected 256-class knee from the vcd size-floor prior was wrong by two
-ladder steps; the measured knee is the 512 cell.
+under the §4 admission rule, which defines each count's crossover
+against the best smaller ADMITTED count, not against n=1.  Parallel
+n=2 admits at the 512 cell and wins at every larger size.  Parallel
+n=4 first beats n=1 at the 768 cell, but its §4 crossover is against
+n=2, and at 768 n=2 still wins, 1.60x to 1.18x; the n=4 floor
+therefore sits at the conservative end of the 768-to-1024 bracket
+(the floor_4 amendment, checkpoint ruling 2026-08-09).  The expected
+256-class knee from the vcd size-floor prior was wrong by two ladder
+steps; the measured knee is the 512 cell.
 
-The largest-first loop with these floors chooses correctly at every
-measured size: n=1 below 512, n=2 at 512, and n=4 from 768 up, which
-at 1024 beats the n=2 flatline.
+The largest-first loop with the amended floors chooses correctly at
+every measured size: n=1 below 512, n=2 from 512 through 768, and n=4
+past the bracket, where its 1.72x anchor beats the n=2 flatline.  The
+pre-amendment floors would have picked a run about 36 percent longer
+than the best choice at the 768 cell — exactly a mid-size the guard
+exists to protect.
 
 ### 3.2 Cone
 
@@ -208,11 +220,11 @@ reads 0.15x, 0.35x, and 0.68x at the spots and 1.16x at 1024, so its
 floor sits between the 512 and 1024 cells.  The floor family
 expresses cone by setting its n=2 floor to infinity, which loses
 nothing measurable.  A bracketing cone cell between 512 and 1024
-would tighten floor_4; it is DECLINED under §3.5's staleness
+would tighten floor_4; it is DECLINED under §3.3's staleness
 reasoning, and the coarse floor takes the conservative end of the
 bracket instead.
 
-### 3.5 Which knees are durable, and the staleness rule
+### 3.3 Which knees are durable, and the staleness rule
 
 The ladder's readings split by what limits them, and the split decides
 how much floor precision is worth buying (Greg's concern, 2026-08-09).
@@ -233,14 +245,14 @@ cells nearest each floor, about fifteen minutes through the harness's
 family and cell knobs — re-measures the floors after any forward-path
 change lands.
 
-### 3.3 The auto arms, and the harm the guard prevents
+### 3.4 The auto arms, and the harm the guard prevents
 
 The automatic policy chose all four devices at every one of the
 eleven measured shapes.  The cost of that choice is now a measured
 curve: 13x slower than n=1 at the 128 cell, 7x at 256, 3x at 384, and
 1.3x at parallel 512.  The choice is right only from the 768 cell up.
 
-### 3.4 The pencil probe, and where discrimination now lives
+### 3.5 The pencil probe, and where discrimination now lives
 
 The pencil probe (1152, 336, 96) measured n=1 best, at n=2 0.48x.
 Both candidate metrics agree with that outcome once the measured knee
@@ -294,19 +306,19 @@ from this table is §6's first item.
 | widening margin and ledger terms | FIRED | sixteen over-ceiling readings at n>1, localized to the back-loop and band-reduce charges; the back-loop item addresses the loop's real residency first, not only its charge (§2, §6) |
 | orchestration (mega-region, CUDA graphs) | recorded, separate charter | the small-cell collapse persists with kernels (0.08x to 0.47x below the knee), dominated by fan-out and glue the regions do not cover |
 
-The ruling on which arms proceed is drafted in §6 and goes to Greg
-with this page.
+The ruling on which arms proceed is §6, endorsed at the increment-1
+checkpoint.
 
 ---
 
-## 6. Recommendations (Fable's draft, for Greg)
+## 6. Recommendations (ruled 2026-08-09)
 
-This section is the checkpoint's output: what should proceed, what
-should wait, and what should not happen, each with its reason.
-Nothing here is executed until Greg's review; the tuning charters and
-the guard implementation all land as their own reviewed changes.
-Each recommendation opens with a two-line summary, and §6.7 gives the
-implementation order.
+This section is the checkpoint's output: what proceeds, what waits,
+and what does not happen, each with its reason.  The increment-1
+ruling endorsed it with one amendment, floor_4, folded into 6.1; the
+tuning charters and the guard implementation still land as their own
+reviewed changes.  Each recommendation opens with a two-line summary,
+and §6.7 gives the implementation order.
 
 ### 6.1 The guard: ship it now, with coarse floors
 
@@ -316,12 +328,18 @@ knees down, so coarse floors stay safe while precision bought now
 would be erased.
 
 The floors are per geometry and per count, consulted only on the
-unpinned automatic branch.  Parallel admits n=2 at the 512 cell's
-work size and n=4 at the 768 cell's.  Cone admits n=4 at the
-conservative end of its 512-to-1024 bracket and never auto-admits
-n=2.  Capacity always wins, exactly as planned.  The floors carry
-§3.5's staleness rule: a fifteen-minute knee refresh re-measures them
-after any forward-path change.  The metric that indexes the floors
+unpinned automatic branch, and each count's floor comes from its
+crossover against the best smaller ADMITTED count (the floor_4
+amendment).  Parallel admits n=2 at the 512 cell's work size and n=4
+at the conservative end of the 768-to-1024 bracket, because at 768
+n=2 still wins, 1.60x to 1.18x.  Cone admits n=4 at the conservative
+end of its own 512-to-1024 bracket — its comparison count is n=1,
+since cone n=2 is never admitted — and never auto-admits n=2.
+Monotone floors express the mid-size reversal under this crossover
+definition, which closes the plan's §8 preference-rule question.
+Capacity always wins, exactly as planned.  The floors carry §3.3's
+staleness rule: a fifteen-minute knee refresh re-measures them after
+any forward-path change.  The metric that indexes the floors
 waits one job.  mg4b's sparse-view probe is the point where the
 candidate metrics disagree, and the metric choice survives forward
 changes even though the knee values do not.
@@ -398,8 +416,12 @@ n=1.  The first two return as charter C's legs at 2K.
 
 ### 6.6 The cadence numbers
 
-The per-cell costs for the nightly's n>1 cadence are in §1.4.  The
-call is Greg's, and the authoritative per-night figure remains the
+The per-cell costs for the nightly's n>1 cadence are in §1.4, and
+the call is made (Greg, 2026-08-09): the n>1 rows keep full nightly
+cadence through the tuning window, cheap insurance at about 2
+GPU-hours per night while the guard, charter B's fix, and any chunk
+changes move the n>1 path.  No nightly wiring changes.  Revisit at
+campaign close; the authoritative per-night figure remains the
 nightly's own trial.
 
 ### 6.7 Sequencing
@@ -415,10 +437,12 @@ Charter B's remedy lands before the ledger charges are re-derived,
 because the charges must describe the fixed loop, not the old one.
 The refined charges then feed charter C's 2K table, because a table
 built on the over-charges mg2 flagged would mis-rank the legs.  The
-table picks charter C's first leg.  Last, the knee refresh of §3.5
+table picks charter C's first leg.  Last, the knee refresh of §3.3
 runs after charter A's remedy (or item 13) changes the forward path,
-and the floors update from it.  The cadence call (6.6) is
-independent and can be made at any point.
+and the floors update from it.  At close-out the `usr_multi_gpu.rst`
+timing table refreshes from mg1's gate table, and the item-13 entry
+gate is formally recorded as satisfied from §1.3's forward shares.
+The cadence call (6.6) is decided and recorded there.
 
 ---
 

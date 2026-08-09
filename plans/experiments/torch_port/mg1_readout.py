@@ -181,9 +181,13 @@ BASELINE_TORCH_PEAK_GB = {("parallel", 512): 1.93, ("parallel", 1024): 23.22,
 # a ratio the record already shows; 3.0 still catches the order-one class the
 # gate exists for by three orders of magnitude.
 VALUE_RULER_FACTOR = 3.0
-# Below this the two frameworks are at the same float floor and the ratio above
-# is meaningless, so no verdict is printed.
-VALUE_RULER_FLOOR = 1e-6
+# Below this the two frameworks are both inside the documented benign
+# divergence class (own-count divergences read 8.7e-5 to 3.0e-4 in the mg1
+# gate table) and the ratio above is meaningless, so no verdict is printed.
+# Raised from 1e-6 per the increment-1 checkpoint ruling: the ruler tripped
+# at ratio 3.19 with BOTH divergences in the e-5 class (parallel 1024 n=2),
+# a benign flag the old floor sat two decades below.
+VALUE_RULER_FLOOR = 1e-4
 
 # The five instrumented regions.  band_reduce is NESTED inside back_funnel and
 # is excluded from the reconciliation sum.

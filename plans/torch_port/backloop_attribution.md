@@ -1,13 +1,18 @@
 # The direct-recon back loop at n>1: the attribution memo
 
 Charter B, step one (multigpu_findings.md §6.3), authored 2026-08-09 by
-the charter's implementation agent and reviewed against source.  Status:
-a code-reading attribution plus a local CPU reproduction of the ledger's
-published numbers.  The GPU confirmation is mg6 (job 15034661,
-mg6_backloop_probe.py), whose readout either confirms this account or
-names the cell where it fails; the shallow fix in §2 is DESCRIBED, not
-applied, and lands paired with the ledger's sub-phase split only after
-mg6 confirms.
+the charter's implementation agent.  Verified against source line by
+line at the increment-1 checkpoint ruling (2026-08-09) and ENDORSED; it
+holds in full.  Status: a code-reading attribution plus a local CPU
+reproduction of the ledger's published numbers.  The GPU confirmation
+is mg6 (job 15034661, mg6_backloop_probe.py), whose readout either
+confirms this account or names the cell where it fails; the shallow fix
+in §2 is DESCRIBED, not applied, and lands paired with the ledger's
+sub-phase split only after mg6 confirms.  The ruling adds one OPTIONAL
+RIDER, at the charter's discretion, only after mg6 confirms, and as its
+own ledger-visible change: release `block` after `out.add_(block)` in
+the worker loop, taking the live-block count from min(3, nb) to
+min(2, nb) — worth about one cylinder per device wherever nb ≥ 3.
 
 **Verdict: neither of the findings page's two §2 readings is right.  The
 residency is REAL but it is not the three-cylinder charge; the

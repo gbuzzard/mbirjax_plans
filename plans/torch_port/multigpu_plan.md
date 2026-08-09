@@ -1,8 +1,11 @@
 # Multi-GPU performance: the n=1/2/4 readout and tuning — plan
 
-**Status:** DRAFT, revised after a three-reviewer panel (accuracy,
-reasoning, style; 2026-08-08), awaiting Fable review at the plan STOP.
-No cluster job has been submitted for this campaign.
+**Status:** EXECUTED through increment 1 and RULED.  The plan passed
+its review STOP (three-reviewer panel 2026-08-08, Fable revision),
+mg1–mg4 ran under it, and the increment-1 checkpoint was endorsed on
+2026-08-09 with the floor_4 amendment.  mg3a/b, mg4b, mg5, and mg6
+are in the queue.  `multigpu_findings.md` is the live record; this
+plan remains the contract for terms, protocols, and triggers.
 
 The charter is `current_plans.md` item 3, and it sets four goals: the
 full n=1/2/4 gate readout with the repaired kernels; the attribution
@@ -605,7 +608,12 @@ say whether that preference is right in the mid sizes, where n=2 can
 beat both neighbors.  The per-count floors encode that reversal
 naturally if the floors are monotone in n; the open question is
 whether the data shows a regime the floor family cannot express, and
-the answer goes to Fable with the curves.
+the answer goes to Fable with the curves.  CLOSED at the increment-1
+ruling (2026-08-09): the ladder's mid-size reversal — n=2 over n=4 at
+the 768 cell, 1.60x to 1.18x — is expressed by monotone floors once
+each count's floor is defined by its crossover against the best
+smaller ADMITTED count (the floor_4 amendment).  No preference rule
+is needed.
 
 **Whether mg3 needs cone depth-10 arms.**  The documented decay cell
 is parallel 1024, and §4 scopes the depth-10 tier to it.  Cone's
