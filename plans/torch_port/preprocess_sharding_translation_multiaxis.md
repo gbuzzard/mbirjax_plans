@@ -7,8 +7,9 @@ Much of this work can proceed in parallel with the multi-gpu investigation, but 
 
 In the mbirjax_plans repo, please read /plans/current_plans.md, plans/torch_port/multigpu_plan.md, and .claude/lessons.md for context.  
 This file is available at https://github.com/gbuzzard/mbirjax_plans/blob/main/plans/torch_port/preprocess_sharding_translation_multiaxis.md.
-Please keep it up-to-date and pushed, including when you start on one of these tasks.  
+Please keep it up-to-date and pushed. Mark an item as "STARTED" when you start one of these tasks and "COMPLETED" when you finish.
 Please leave a status report for each item you complete or for blocked/not fully resolved items.  
+If an item is marked as "STARTED" when you're ready to begin a new task, then choose a different task.
 
 ## Section A, per item
 
