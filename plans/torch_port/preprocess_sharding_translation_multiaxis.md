@@ -70,9 +70,17 @@ mbirjax reference implementation.
       use-N-GPUs decision (`_apply_device_policy` runs only in recon).
       A direct FDK call runs on 1 GPU.  Small fix.
       DEFERRED — rides the multi-gpu campaign's guard change (see A2 above).
-- [ ] STARTED 2026-08-09 (Charlie's session) `preprocess/pipeline.py` (scan preprocessing) — mbirjax runs it
-      view-sharded, one share per device; mbirtorch has no multi-device
-      mode at all.
+- [x] COMPLETED 2026-08-09 (Charlie's session, mbirtorch 712c523)
+      `preprocess/pipeline.py` (scan preprocessing).
+      Status: map_view_batches spreads the views over a device list --
+      contiguous in-order blocks, one worker thread per device, disjoint
+      writes into the one pre-allocated host output (the mbirjax driver's
+      design; host footprint stays input + output).  scan_to_sino defaults
+      to all visible CUDA devices; per the design note the recon policy is
+      NOT consulted anywhere in preprocess.  Gate: 1-device vs 3-device
+      results byte identical (tests/test_sharded_pipeline.py); suite 370 +
+      goldens 62 pass.  Caveat: correctness gated on CPU pseudo-devices;
+      the concurrency win itself is unmeasured until a Gautschi run.
 - [ ] `denoising.py: QGGMRFDenoiser` — single-device only (its docstring
       says so).  mbirjax slice-shards the image like a reconstruction.
       Known gap in Greg's plan (denoiser `.clone()` on Shards fails).
