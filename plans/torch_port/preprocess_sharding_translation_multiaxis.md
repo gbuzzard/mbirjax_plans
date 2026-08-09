@@ -76,7 +76,7 @@ mbirjax reference implementation.
 - [ ] `denoising.py: QGGMRFDenoiser` — single-device only (its docstring
       says so).  mbirjax slice-shards the image like a reconstruction.
       Known gap in Greg's plan (denoiser `.clone()` on Shards fails).
-- [ ] `utilities.py: export_recon_hdf5` — mbirjax accepts sharded arrays;
+- [ ] STARTED 2026-08-09 (Charlie's session) `utilities.py: export_recon_hdf5` — mbirjax accepts sharded arrays;
       mbirtorch accepts only numpy/plain tensors.
 - [ ] `utilities.py: generate_3d_shepp_logan_low_dynamic_range` — mbirjax
       can build the phantom slice-sharded across devices; mbirtorch builds
