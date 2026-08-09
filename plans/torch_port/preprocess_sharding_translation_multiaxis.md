@@ -46,7 +46,7 @@ supports multiple devices in mbirjax must support them in mbirtorch.
 Go down this list.  Each entry names the mbirtorch function and the
 mbirjax reference implementation.
 
-- [ ] `preprocess/segmentation.py: segment_plastic_metal` — accepts only a
+- [ ] STARTED 2026-08-09 (Charlie's session) `preprocess/segmentation.py: segment_plastic_metal` — accepts only a
       single-device volume.  mbirjax version accepts host, single-device,
       or sharded (per-shard Otsu histogram, no gather).  Blocks full-res
       MAR (OOM, job 15001292).
