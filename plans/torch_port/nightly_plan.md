@@ -1,9 +1,10 @@
 # mbirtorch in the nightly, including multi-GPU — plan
 
-**Status:** IMPLEMENTED and LIVE (2026-08-08).  Increments 1 through 5
-and increment 7 have shipped; the schedule runs at 03:00 on four GPUs.
-The findings are in §10 (the n=1 series) and §11 (the n>1 rows).  Only
-increment 6, cpu-torch on the Mac, remains.
+**Status:** COMPLETE and LIVE (2026-08-08).  All seven increments have
+shipped: gpu-torch runs at 03:00 on four GPUs with n∈{1,2,4}, and
+cpu-torch runs at 10:00 on the Mac.  The findings are in §10 (the n=1
+series), §11 (the n>1 rows) and §12 (cpu-torch, plus the macOS
+scheduling defect it uncovered in the JAX nightly).
 
 The charter is `current_plans.md` item 4.  Two of its sentences set the
 scope: wire the torch writer into the nightly so mbirtorch gets the same
@@ -1306,3 +1307,89 @@ compensating evidence is that the same wrapper has completed four
 supervised end-to-end runs, two of them through the production
 scheduled path.  The first two unattended nights deserve a look at
 `status_torch_nightly.sh` rather than assumed success.
+
+---
+
+## 12. Increment 6: cpu-torch on the Mac (2026-08-08)
+
+The cpu-torch series is live, and installing it uncovered a defect in the
+JAX nightly that had been silently killing its Mac runs for seven weeks.
+The defect is §12.1, because it is the more important finding.  The
+cpu-torch series itself is §12.2.
+
+### 12.1 The macOS nightly could not run at all, and said nothing
+
+The jax launchd agent had failed 51 consecutive times.  Every run ended
+before its first line with one message in a log nobody reads:
+
+```
+/bin/bash: .../mbirjax_metrics/tooling/regression/run_regression.sh: Operation not permitted
+```
+
+The cause is macOS TCC.  The folders `~/Documents`, `~/Desktop` and
+`~/Downloads` are protected, and a launchd agent runs as a bare
+`/bin/bash` holding no Full Disk Access.  So the agent could not READ the
+wrapper, let alone run it.  The metrics checkout lives under
+`~/Documents`, which put the wrapper inside the protected tree.
+
+The failure is invisible from every surface built to watch it.
+`launchctl list` still shows the agent loaded.  `status_nightly.sh` still
+reports the schedule installed and `ENABLED=1`, and prints its cheerful
+verdict that the nightly WILL run.  The dashboard shows no CPU runs, but
+a gap there reads as fire-on-change finding nothing to do.  The exit code
+126 appears only in `launchctl list`'s second column, and the message
+only in the launchd err log.
+
+The tell, once seen, is decisive: every MANUAL run worked and no
+SCHEDULED run ever did.  Terminal holds Full Disk Access, so a run
+started by hand inherits it.  That difference is exactly the ruler
+problem — the harness was verified through a path that does not resemble
+the path it runs on.
+
+The fix gives launchd an entrypoint outside the protected tree.  Each
+enable script now creates and refreshes a small shallow clone —
+`~/.mbirjax/entry` and `~/.mbirtorch/entry` — and points its agent at
+that clone's wrapper.  The clone supplies only phase 1, so the measured
+code still comes from origin every night.  It is deliberately NOT
+`$WORK_DIR/metrics`, because phase 1 updates that clone and re-execs it,
+and bash reads a script incrementally.  Each nightly gets its own entry
+clone, so enabling one cannot rewrite the other's entrypoint mid-run.
+
+Three measurements confirm the repair.  A probe agent ran the identical
+read under launchd against three paths: the `~/Documents` wrapper came
+back BLOCKED, and both entry clones came back READABLE.  The torch agent
+was then fired for real and completed the whole production path — clone
+update, platform detection, fire-on-change, `unchanged — skip` — at exit
+0 with an empty err log.  The jax agent was fired with its kill-switch
+temporarily off, logged `ENABLED=0 — nothing to do` at exit 0, and had
+its kill-switch restored.  So both entrypoints are proven, and the jax
+CPU series resumes at its next 09:00.
+
+**One consequence to state.**  The agent now runs origin's wrapper rather
+than the local checkout's.  A Mac-side wrapper change must be pushed
+before `enable_nightly.sh` picks it up.  This matches the cluster's
+standing-checkout convention and the rule that the production nightly
+runs committed code only.
+
+### 12.2 The cpu-torch series
+
+The series measures 26 cells: parallel and cone at (128, 112, 96),
+(129, 113, 97) and (200, 208, 160) across the four ops, plus the
+denoiser at (128, 144, 160) and (225, 241, 257).  The first run measured
+all 26 with zero failures at mbirtorch `bdb414a7`, on a cold-start gate,
+with clean provenance.
+
+The whole pass takes 10m53s, of which the suite is 2m30s at 364 passed.
+That is small enough that the 09:00 and 10:00 stagger has ample room,
+though the jax CPU sweep's own duration is still unmeasured — its first
+successful run will settle whether the one-hour gap is comfortable.
+
+Two properties the plan asked for are confirmed on real hardware.  Every
+row bound `cpu`, not `mps`: the platform-aware pin holds, so the Mac's
+GPU cannot be measured and filed under a CPU key.  And the shared
+(200, 208, 160) cell is present, which is what activates the
+cross-platform correctness reference between `cpu-torch` and `gpu-torch`.
+
+The env bootstrap ran for the first time here and is no longer
+untested: the harness created `mbirtorch_regression` and installed torch
+and mbirtorch into it in 38 seconds, and the whole smoke pass took 94.

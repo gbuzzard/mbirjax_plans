@@ -234,8 +234,12 @@ failure or ruling.
     `--export`.  Every staged file is scp'd per file and
     md5-verified.  No sync happens into a tree a running job imports
     from, and jobs chain with `--dependency` when they share the env
-    or the tree.  Each row records the GPU health sample; a throttled
-    row is re-run, not annotated.  Any comparison that crosses jobs
+    or the tree.  Each row records the GPU health sample, and the throttle
+    rule follows the nightly's finding (`nightly_plan.md` §10.5): the
+    H100 flags heavy torch kernels at `sw_power_cap` and normal
+    temperature routinely, which is the boost governor, so that flag
+    is recorded and kept; a row flagged with high temperature and a
+    depressed clock is thermal and is re-run.  Any comparison that crosses jobs
     pins the node or carries a shared anchor cell, per the h010
     precedent.  Rows write incrementally to jsonl, and each job runs
     its n=1 reproduction arms first, so a truncated job still yields
@@ -376,6 +380,13 @@ of its arms are eager-plain and no eager-plain composed time has ever
 been measured at the 1024 cells.  The probe runs one eager-plain arm
 at each 1024 cell at n=1, about ten minutes, and the mg3 wall is
 re-derived from it.
+
+mg3 also carries a coverage role the goldens ruling assigned it.  The
+golden archives are now opt-in everywhere and skip in the nightly's
+fresh clones (`nightly_plan.md` §10.4), so the port-fidelity question
+is asked at development time, at releases, and by exactly this
+instrument.  mg3's cross-framework columns at n = 1, 2, 4 are the
+campaign's half of that coverage.
 
 ### mg4 — the crossover ladder (decision 1's data)
 

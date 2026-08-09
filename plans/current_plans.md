@@ -105,10 +105,23 @@ The multi-GPU baseline item 3 starts from is in §11.4: memory shards
 3.55x and 2.86x at the two 1024 cells, while time reaches only 2.02x
 (parallel) and 1.19x (cone) at n=4, and the 512 cells regress at n=4.
 
-Remaining: increment 6 (cpu-torch on the Mac).  Two things to watch.  The
-three-night soak was waived at Greg's direction to give item 3 a
-baseline, so the first unattended nights deserve a `status_torch_nightly.sh`
-look rather than assumed success.  The goldens question (§10.4) is
+Increment 6 landed the same day (§12).  The cpu-torch series is live on
+the Mac at 10:00: 26 cells in a 10m53s pass, every row bound to `cpu`
+rather than MPS, and the shared (200,208,160) cell present, so the
+cross-platform reference between `cpu-torch` and `gpu-torch` activates.
+
+Installing it exposed a defect in the JAX nightly worth reading (§12.1).
+Its macOS agent had failed 51 consecutive nights, because launchd cannot
+read `~/Documents` under macOS TCC, and every watching surface reported
+health — `launchctl list` showed it loaded and `status_nightly.sh`
+reported it would run.  Both agents now run from entry clones outside the
+protected tree, proven by a probe agent and by firing each one; the jax
+CPU series resumes at its next 09:00.
+
+Remaining: nothing structural.  The three-night soak was waived at Greg's
+direction to give item 3 a baseline, so the first unattended nights on
+both platforms deserve a `status_torch_nightly.sh` look rather than
+assumed success.  The goldens question (§10.4) is
 RESOLVED 2026-08-08: goldens are OPT-IN parity instruments headed for
 retirement, not nightly ones.  The archive-consuming tests carry a
 `goldens` pytest marker (79 tests), and pyproject `addopts` deselects

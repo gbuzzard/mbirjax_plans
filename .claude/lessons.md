@@ -305,6 +305,18 @@ overridable per-run via the environment (it was a hard-set '0.98' the env var co
 
 - **Gitignored `results/` does not survive a handoff** — numbers that drive decisions get written
   into committed prose (status/plan/here), or they evaporate with the session.
+- **On macOS, a scheduled job cannot read `~/Documents` — and it fails SILENTLY.**  TCC protects
+  `~/Documents`, `~/Desktop` and `~/Downloads`; a launchd agent runs as a bare `/bin/bash` with no
+  Full Disk Access, so it cannot even open a wrapper stored there (`Operation not permitted`, exit
+  126, before line 1).  Every watching surface lies: `launchctl list` shows the agent loaded,
+  `status_nightly.sh` reports schedule-installed and ENABLED=1, and the missing data reads as
+  fire-on-change idling.  It cost the jax CPU series 51 consecutive nights (found 2026-08-08).
+  **The tell is that every MANUAL run works and no SCHEDULED run ever does** — Terminal holds Full
+  Disk Access and hands it to anything you start by hand, so testing by hand exercises a different
+  permission context than the one that runs in production.  Fix: point the agent at an entrypoint
+  OUTSIDE the protected tree (`tooling/regression/lib_mac_entry.sh` clones one), never at a
+  checkout under `~/Documents`.  Verify with a probe agent doing the identical read from both
+  locations, not by running it from your shell.
 - **A branch that only executes at n>1 cannot be verified at n=1 — and virtual CPU devices are
   the cheap way to reach it.**  The torch nightly's `to_numpy` detached the result of
   `Shards.gather()`, which already returns numpy; every single-device check passed because the
