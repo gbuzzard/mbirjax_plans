@@ -101,8 +101,9 @@ Record: `nightly_plan.md` §10–§12 (plan, trial gates, findings).
 
 ## 6. Additional geometries: translation and multiaxis
 
-**State:** Not started (~3.4k lines in mbirjax; the beyond-gates tail of the
-port plan).
+**State:** Chartered 2026-08-09 to Charlie-side sessions, in parallel with
+item 3 (~3.4k lines in mbirjax).  Working instructions and riders are in
+section B of `plans/torch_port/preprocess_sharding_translation_multiaxis.md`.
 
 - Port TranslationModel and the multiaxis parallel geometry; the jax
   regression harness already carries both, so gate rows have baselines from
@@ -195,10 +196,14 @@ Delivered:
 
 Open:
 
-- **Denoiser scope decision:** `denoise` raises under any non-trivial
-  placement (`.clone()` on `Shards`) and lacks the log arguments the other
-  entry points gained.  Fix both or formally scope the denoiser to one
-  device with a configure-time error.
+- **Multi-device completion checklist (Charlie-side):** preprocess
+  sharding, export acceptance, and the geometry ports proceed in parallel
+  with item 3.  Sequencing, riders, and per-item status live in
+  `plans/torch_port/preprocess_sharding_translation_multiaxis.md`.
+- **Denoiser scope — DECIDED 2026-08-09, full sharding parity.**  The work
+  is chartered as item A4 of the checklist above.  A4 includes both
+  companion gaps: the `.clone()`-on-`Shards` failure and the log arguments
+  the other entry points gained.
 - **Run-logging inherited defects** (faithful ports of mbirjax behavior;
   carry as upstream notes): the per-class logger lets two live models of
   one class stomp each other's logs; the `FileHandler` is never closed, so

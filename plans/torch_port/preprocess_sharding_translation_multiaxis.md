@@ -10,14 +10,15 @@ This file is available at https://github.com/gbuzzard/mbirjax_plans/blob/main/pl
 Please keep it up-to-date and pushed. Mark an item as "STARTED" when you start one of these tasks and "COMPLETED" when you finish.
 Please leave a status report for each item you complete or for blocked/not fully resolved items.  
 If an item is marked as "STARTED" when you're ready to begin a new task, then choose a different task.
+mbirtorch work for these items lands on the `prerelease` branch.
 
 ## Section A, per item
 
-**Go now: A1, A5, A3.**
+**Go now: A1, A5, A3, A4.**
 - **A1 `segment_plastic_metal`** first — it's a real observed blocker (full-res MAR OOM, job 15001292), it's preprocess-side with zero campaign overlap, and the per-shard-Otsu design consumes only the stable Shards surface. It also plausibly gates the Lilly comparison in section C if that run wants full-res MAR, which is another reason to front-load it.
 - **A5 `export_recon_hdf5`** is a trivial additive rider. One recorded gotcha for whoever writes it: `Shards.gather()` already returns numpy — re-detaching it is the exact bug that cost the nightly's first 4-GPU trial its n>1 rows.
 - **A3 pipeline view-sharding** is additive preprocess work on the same stable surface. One design note: its device choice should follow the visible-device list / model placement, not the recon policy — the widening guard now landing is recon-path-only, and preprocess shouldn't consult floors calibrated on vcd.
-- **A4 (denoiser).** The sharded denoiser rides the prior/halo path, not the projector internals that Greg's multi-gpu campaign is tuning.
+- **A4 `QGGMRFDenoiser`** — the sharded denoiser rides the prior/halo path, not the projector internals that Greg's multi-gpu campaign is tuning.  Placing A4 in this list resolves the `current_plans.md` §11 denoiser scope decision in the full-parity direction (Greg, 2026-08-09).  That §11 item bundles two companion gaps, and A4 includes both: the `.clone()`-on-`Shards` failure, and the log arguments the other entry points gained.
 
 **Defer: A2 (`direct_recon` device policy).** Not because it's big — Charlie's "small fix" label is mechanically right — but because it's the same code the guard patch is about to modify, and the semantics question is real: the guard's floors are being calibrated on 3-iteration vcd (the plan says explicitly the guard's subject is out-of-box `recon()`), while a standalone direct recon is one filter plus one back projection with a completely different crossover profile. "Just call `_apply_device_policy`" would consult the wrong ruler. The right semantics — capacity-only, own floors, or guard-exempt — is a guard-design question. This will be done as part of the larger multi-gpu campaign.
 
@@ -25,11 +26,11 @@ If an item is marked as "STARTED" when you're ready to begin a new task, then ch
 
 ## Section B: yes, go in parallel
 
-I verified both mbirjax modules are fully multi-device, so per the checklist's own rule the ports owe the device case too — but that's fine, because new geometries *implement* the settled engine contract (the per-view-batch bodies and view-range seams parallel and cone already define) rather than modifying the shared drivers the campaign is tuning. Collision risk is low, and charter A/B improvements to the shared drivers land underneath the new geometries for free. Four riders:
+Both mbirjax modules are fully multi-device (Fable verified, 2026-08-09), so per the checklist's own rule the ports owe the device case too — but that's fine, because new geometries *implement* the settled engine contract (the per-view-batch bodies and view-range seams parallel and cone already define) rather than modifying the shared drivers the campaign is tuning. Collision risk is low, and charter A/B improvements to the shared drivers land underneath the new geometries for free. Four riders:
 
 1. Build to the existing body contract as-is, including the `plan` slot — no speculative accommodation for the sorted stream; item 13 was designed to arrive compatibly through that slot later.
 2. Translation's back projection at production translation scale wants the pixel batching that charter B/C may restore. Record it as a known scale limit at port time; don't build a workaround the structural remedy will obsolete.
-3. New-geometry parity against mbirjax uses opt-in goldens, per the recorded ruling that porting charters opt in explicitly.
+3. New-geometry parity against mbirjax uses opt-in goldens, per the recorded ruling that porting charters opt in explicitly.  Mark the new tests with the `goldens` pytest marker, following the existing pattern in `tests/`.  Generate any new golden archives from the mbirjax env, and announce each generation or regeneration to Greg.
 4. Merge hygiene: keep the work off `tomography_model.py`, `projectors.py`, `_memory_ledger.py`, and the policy code while charters A/B land. New-module work naturally does.
 
 **Net recommendation:** Charlie proceeds now with A1 → A5 → A3 → A4 and section B in parallel; A2 rides the guard; A6 stays item 15. 
@@ -52,6 +53,7 @@ mbirjax reference implementation.
 - [ ] `tomography_model.py: direct_recon / fdk_recon` — never make the
       use-N-GPUs decision (`_apply_device_policy` runs only in recon).
       A direct FDK call runs on 1 GPU.  Small fix.
+      DEFERRED — rides the multi-gpu campaign's guard change (see A2 above).
 - [ ] `preprocess/pipeline.py` (scan preprocessing) — mbirjax runs it
       view-sharded, one share per device; mbirtorch has no multi-device
       mode at all.
@@ -63,6 +65,7 @@ mbirjax reference implementation.
 - [ ] `utilities.py: generate_3d_shepp_logan_low_dynamic_range` — mbirjax
       can build the phantom slice-sharded across devices; mbirtorch builds
       whole on the host (documented divergence at utilities.py:136).
+      SKIP — assigned as current_plans item 15 (see A6 above).
 
 Found by grepping mbirjax docstrings/comments for "shard" (2026-08-09).
 Worth re-sweeping after the geometries land.
