@@ -58,7 +58,7 @@ mbirjax reference implementation.
       sharded vs unsharded masks identical (tests/test_sharded_segmentation.py);
       suite 368 + goldens 62 pass; single-device behavior unchanged.
       NOT covered (new item A7 below): the downstream beam-hardening fit.
-- [ ] **A7 (found during A1)** `preprocess/mar.py: correct_sino_plastic_metal`
+- [ ] STARTED 2026-08-09 (Charlie's session; Greg approved go-ahead by phone via Charlie) **A7 (found during A1)** `preprocess/mar.py: correct_sino_plastic_metal`
       — everything downstream of segmentation (sinogram maxima and
       normalization, the polynomial H fit, the constraint updates) operates
       on plain tensors and has never run multi-device; mbirjax's version
