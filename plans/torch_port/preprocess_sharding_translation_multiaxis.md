@@ -1,0 +1,82 @@
+# Instructions re the checklist below
+
+
+## Overall
+
+Much of this work can proceed in parallel with the multi-gpu investigation, but the right split is by what each item **touches**, not by section. The stable surface is the Shards/placement API and the public projection funnels; the moving parts are the banded drivers' internals, the memory ledger, the automatic device policy, and the chunk constants. Items that only *consume* the stable surface parallelize cleanly; items that *modify or depend on* the moving parts should wait or ride the campaign. That test sorts section A into three bins rather than one.
+
+In the mbirjax_plans repo, please read /plans/current_plans.md, plans/torch_port/multigpu_plan.md, and .claude/lessons.md for context.  
+
+## Section A, per item
+
+**Go now: A1, A5, A3.**
+- **A1 `segment_plastic_metal`** first — it's a real observed blocker (full-res MAR OOM, job 15001292), it's preprocess-side with zero campaign overlap, and the per-shard-Otsu design consumes only the stable Shards surface. It also plausibly gates the Lilly comparison in section C if that run wants full-res MAR, which is another reason to front-load it.
+- **A5 `export_recon_hdf5`** is a trivial additive rider. One recorded gotcha for whoever writes it: `Shards.gather()` already returns numpy — re-detaching it is the exact bug that cost the nightly's first 4-GPU trial its n>1 rows.
+- **A3 pipeline view-sharding** is additive preprocess work on the same stable surface. One design note: its device choice should follow the visible-device list / model placement, not the recon policy — the widening guard now landing is recon-path-only, and preprocess shouldn't consult floors calibrated on vcd.
+- **A4 (denoiser).** The sharded denoiser rides the prior/halo path, not the projector internals that Greg's multi-gpu campaign is tuning.
+
+**Defer: A2 (`direct_recon` device policy).** Not because it's big — Charlie's "small fix" label is mechanically right — but because it's the same code the guard patch is about to modify, and the semantics question is real: the guard's floors are being calibrated on 3-iteration vcd (the plan says explicitly the guard's subject is out-of-box `recon()`), while a standalone direct recon is one filter plus one back projection with a completely different crossover profile. "Just call `_apply_device_policy`" would consult the wrong ruler. The right semantics — capacity-only, own floors, or guard-exempt — is a guard-design question. This will be done as part of the larger multi-gpu campaign.
+
+**Skip: A6 (sharded phantom).** That's item 15 — on deck after item 3, with the design already recorded (sharded output over the *consuming model's own* placement, identity check, byte-equality gate across counts). Charlie's checklist should mark it covered elsewhere so two sessions don't build it twice.
+
+## Section B: yes, go in parallel
+
+I verified both mbirjax modules are fully multi-device, so per the checklist's own rule the ports owe the device case too — but that's fine, because new geometries *implement* the settled engine contract (the per-view-batch bodies and view-range seams parallel and cone already define) rather than modifying the shared drivers the campaign is tuning. Collision risk is low, and charter A/B improvements to the shared drivers land underneath the new geometries for free. Four riders:
+
+1. Build to the existing body contract as-is, including the `plan` slot — no speculative accommodation for the sorted stream; item 13 was designed to arrive compatibly through that slot later.
+2. Translation's back projection at production translation scale wants the pixel batching that charter B/C may restore. Record it as a known scale limit at port time; don't build a workaround the structural remedy will obsolete.
+3. New-geometry parity against mbirjax uses opt-in goldens, per the recorded ruling that porting charters opt in explicitly.
+4. Merge hygiene: keep the work off `tomography_model.py`, `projectors.py`, `_memory_ledger.py`, and the policy code while charters A/B land. New-module work naturally does.
+
+**Net recommendation:** Charlie proceeds now with A1 → A5 → A3 → A4 and section B in parallel; A2 rides the guard; A6 stays item 15. 
+
+# mbirtorch port — remaining work (updated 2026-08-09)
+
+Read and update this during mbirtorch work.  Rule: a function is not
+fully ported until its multi-device case works.  Every function that
+supports multiple devices in mbirjax must support them in mbirtorch.
+
+## A. Multi-device checklist
+
+Go down this list.  Each entry names the mbirtorch function and the
+mbirjax reference implementation.
+
+- [ ] `preprocess/segmentation.py: segment_plastic_metal` — accepts only a
+      single-device volume.  mbirjax version accepts host, single-device,
+      or sharded (per-shard Otsu histogram, no gather).  Blocks full-res
+      MAR (OOM, job 15001292).
+- [ ] `tomography_model.py: direct_recon / fdk_recon` — never make the
+      use-N-GPUs decision (`_apply_device_policy` runs only in recon).
+      A direct FDK call runs on 1 GPU.  Small fix.
+- [ ] `preprocess/pipeline.py` (scan preprocessing) — mbirjax runs it
+      view-sharded, one share per device; mbirtorch has no multi-device
+      mode at all.
+- [ ] `denoising.py: QGGMRFDenoiser` — single-device only (its docstring
+      says so).  mbirjax slice-shards the image like a reconstruction.
+      Known gap in Greg's plan (denoiser `.clone()` on Shards fails).
+- [ ] `utilities.py: export_recon_hdf5` — mbirjax accepts sharded arrays;
+      mbirtorch accepts only numpy/plain tensors.
+- [ ] `utilities.py: generate_3d_shepp_logan_low_dynamic_range` — mbirjax
+      can build the phantom slice-sharded across devices; mbirtorch builds
+      whole on the host (documented divergence at utilities.py:136).
+
+Found by grepping mbirjax docstrings/comments for "shard" (2026-08-09).
+Worth re-sweeping after the geometries land.
+
+## B. Unported modules
+
+- [ ] `translation_model.py` (+ gen_translation_phantom, the demo-data
+      translation branch, staged doc page)
+- [ ] `multiaxis_parallel.py` (+ staged doc page)
+- `vcd_utils.py` blue-noise partition functions: NOT porting (Charlie,
+  2026-08-09).
+
+## C. Chores / Charlie-side
+
+- [ ] mbirjax comparison run on Lilly (speed + memory); script exists on
+      Gautschi at ~/GitHub/mbirjax_applications/nsi/Lilly_recon.py
+- [x] Gautschi cache cleanup (2026-08-09): ~/.mbirtorch removed, ~/.bashrc
+      points both compile caches at /scratch/gautschi/bouman/torch_cache.
+- [ ] Charlie: plans-fork PR to Greg (cf4882c)
+- [ ] Charlie: tell Greg about split-sino device handling
+      (split-sino-device-handling.md)
