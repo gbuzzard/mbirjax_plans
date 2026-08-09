@@ -81,7 +81,7 @@ mbirjax reference implementation.
       results byte identical (tests/test_sharded_pipeline.py); suite 370 +
       goldens 62 pass.  Caveat: correctness gated on CPU pseudo-devices;
       the concurrency win itself is unmeasured until a Gautschi run.
-- [ ] `denoising.py: QGGMRFDenoiser` — single-device only (its docstring
+- [ ] STARTED 2026-08-09 (Charlie's session) `denoising.py: QGGMRFDenoiser` — single-device only (its docstring
       says so).  mbirjax slice-shards the image like a reconstruction.
       Known gap in Greg's plan (denoiser `.clone()` on Shards fails).
 - [x] COMPLETED 2026-08-09 (Charlie's session, mbirtorch c5b5438)
