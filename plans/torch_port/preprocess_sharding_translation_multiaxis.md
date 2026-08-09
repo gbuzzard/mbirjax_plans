@@ -70,7 +70,7 @@ mbirjax reference implementation.
       use-N-GPUs decision (`_apply_device_policy` runs only in recon).
       A direct FDK call runs on 1 GPU.  Small fix.
       DEFERRED — rides the multi-gpu campaign's guard change (see A2 above).
-- [ ] `preprocess/pipeline.py` (scan preprocessing) — mbirjax runs it
+- [ ] STARTED 2026-08-09 (Charlie's session) `preprocess/pipeline.py` (scan preprocessing) — mbirjax runs it
       view-sharded, one share per device; mbirtorch has no multi-device
       mode at all.
 - [ ] `denoising.py: QGGMRFDenoiser` — single-device only (its docstring
