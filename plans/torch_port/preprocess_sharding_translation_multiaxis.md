@@ -152,9 +152,37 @@ Shards, trace the downstream callees for tensor-only assumptions.
 
 ## B. Unported modules
 
-- [ ] STARTED 2026-08-10 (Charlie's session)
+- [x] COMPLETED 2026-08-10 (Charlie's session, mbirtorch 1a2ced7)
       `translation_model.py` (+ gen_translation_phantom, the demo-data
       translation branch, staged doc page)
+      Status: TranslationModel ported with projection functions that mirror
+      cone's two-fan structure, using translation's own geometry (per-view
+      object translation instead of rotation; the z translation takes the
+      role of cone's helical shift in the vertical fan).  All four riders
+      honored: (1) built to the existing projection-function signatures,
+      including the unused `plan` argument; (2) the back projection's memory
+      cost at production detector sizes is recorded in the module docstring,
+      no workaround built; (3) parity tests use the opt-in `goldens` marker --
+      NOTE: the golden archive was regenerated from the mbirjax env and now
+      includes a translation section (this is the announcement); (4) no edits
+      to tomography_model.py, projectors.py, _memory_ledger.py, or the policy
+      code.  Companion pieces all landed: gen_translation_phantom (dots and
+      text), the generate_demo_data translation branch (staged raise
+      deleted), and the staged doc page promoted into the built docs.
+      Gates: sparse forward/back and FDK match mbirjax at float rounding
+      (4e-7 / 8.5e-7); seeded 3-iteration recon matches at 1.8e-5 with
+      matching per-iteration traces; 2 CPU shards vs 1 device 1.8e-5 (the
+      multi-device case works through the inherited engine).  Full suite 387
+      + goldens 85 pass.
+      TWO FINDINGS for Greg: (a) generate_demo_data(model_type='translation')
+      returns an all-zero phantom in BOTH packages -- translation's thin
+      recon volume (2 rows) breaks the generic phantom builders (cube:
+      rows // 4 == 0; shepp-logan: the 2-row grid samples land at +-1,
+      outside every ellipsoid).  The port reproduces mbirjax faithfully;
+      Charlie wants it fixed in mbirtorch before release.  (b) mbirjax's
+      usr_translation_model.rst still says translation has no direct
+      reconstruction -- outdated since fdk_recon landed; corrected in the
+      mbirtorch copy.
 - [ ] `multiaxis_parallel.py` (+ staged doc page)
 - `vcd_utils.py` blue-noise partition functions: NOT porting (Charlie,
   2026-08-09).
