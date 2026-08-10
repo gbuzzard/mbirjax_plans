@@ -312,7 +312,19 @@ Each increment is small and independently testable.
    and adds the `workflow_dispatch` trigger.  This pull request is
    human-authored, so CI fires on it normally and proves the conversion
    against the unchanged version list.
-3. **The workflow, dry-run.**  The scheduled workflow lands running the
+3. **The workflow, dry-run.**  DONE 2026-08-10 (mbirtorch 7072c5b,
+   Charlie's session): composition and the two-night state joined the
+   checker (11 unit tests); `dependency_watch.yml` carries the
+   schedule, the three grants, and the state cache.  Two GitHub facts
+   surfaced that this plan had not stated, both now handled: GitHub
+   arms schedules and accepts manual dispatches ONLY for workflow
+   files present on the DEFAULT branch, so main was brought up to date
+   with prerelease first (pull request #1 -- also the protection
+   gate's first live pass).  The on-GitHub dry run then executed in
+   15 s: it found the real divergence, reported "first sighting --
+   would wait for tomorrow's confirmation", and printed the composed
+   pull request (add 3.13, 3.14, 3.15) into the run summary.
+   The scheduled workflow lands running the
    checker with `--dry-run`: it prints the branch name, each edited
    file, and the pull-request title and body into the run summary, and
    writes nothing.
