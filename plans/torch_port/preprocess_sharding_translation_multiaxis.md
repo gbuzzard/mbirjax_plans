@@ -183,7 +183,8 @@ Shards, trace the downstream callees for tensor-only assumptions.
       usr_translation_model.rst still says translation has no direct
       reconstruction -- outdated since fdk_recon landed; corrected in the
       mbirtorch copy.
-- [ ] `multiaxis_parallel.py` (+ staged doc page)
+- [ ] STARTED 2026-08-10 (Charlie's session)
+      `multiaxis_parallel.py` (+ staged doc page)
 - `vcd_utils.py` blue-noise partition functions: NOT porting (Charlie,
   2026-08-09).
 
