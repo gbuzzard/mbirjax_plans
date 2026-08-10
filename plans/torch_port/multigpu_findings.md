@@ -1,9 +1,13 @@
 # Multi-GPU performance: the readout and its findings
 
-**Status:** INCREMENT-1 CHECKPOINT (2026-08-09), with the mg4 ladder
-already in hand.  mg1, mg2, and mg4 are complete and validated.  mg3a,
-mg3b, and the mg4b probe addendum are running; their sections below are
-marked OPEN and this page closes when they land.  The plan is
+**Status:** INCREMENT-1 CHECKPOINT (2026-08-09), with both tuning
+charters' probes now in hand.  The gate readout, the ledger
+calibration, the crossover ladder, and the shape probes are complete
+and validated.  The shape probes decided the guard's metric in §3.5.
+Charter A's forward attribution is in §1.5, and it corrects one
+reading in §1.3.  Charter B's back-loop probe is in §2, and it
+confirms that charter's memo.  Only §4 stays OPEN, because the value
+rows are measured and not yet read.  The plan is
 `multigpu_plan.md`; terms and protocols keep its meanings.  The
 checkpoint was RULED AND ENDORSED on 2026-08-09 with one amendment,
 floor_4, folded into §3.1 and §6.1 below.
@@ -120,6 +124,10 @@ share of composed wall reads 22 to 40 percent at n=1, 16 to 46 percent
 at n=2, and 27 to 31 percent at n=4.  These numbers say the forward is
 the single largest attributed term at the 1024 cells at every count.
 
+Both anomalies were carried to the attribution sweep, and §1.5 reports
+what it found.  The cone reading below survives that sweep.  The
+parallel reading does not.
+
 ### 1.4 Costs, for the cadence decision
 
 The full 44-arm readout cost 1:22 on four GPUs, about 5.5 GPU-hours.
@@ -127,6 +135,62 @@ Per-arm subprocess walls run 1 to 2.5 minutes at the 512 cells and 2
 to 5 minutes at the 1024 cells, cold pass included.  These are the
 per-cell costs the nightly's n>1 rows would add; the nightly's own
 trial remains the authoritative per-night number.
+
+### 1.5 The forward attribution, and one corrected reading
+
+This section resolves §1.3's two anomalies.  A sweep varied the
+per-device view chunk over 32, 64, 128, and 256 at both 1024 cells,
+and it ran one arm per cell with the torch forward body bound in place
+of the kernel.  All 27 arms passed every arm check.  The drift arms
+measured the job's ordering bias at 1.000x, so every scaling number
+below is free of that bias.
+
+The chunk constant is not a remedy.  Total reconstruction time barely
+moved across the whole ladder.  Cone at one device ran 62.12, 61.78,
+61.53, and 61.31 s over the four chunks, and parallel ran 40.17,
+40.05, 40.00, and 39.94 s.  The best chunk beats the shipped chunk by
+under one percent at every cell and count.  Device-count scaling did
+not move either, holding at 1.16x for cone at four devices under every
+chunk.
+
+The realized batch does not vary with device count.  Cone's batch is
+capped by the transient budget at 52 views for every chunk at or above
+64.  Parallel's batch equals its chunk.  These results refute the
+hypothesis that the count-divided budget shifts the batch.
+
+The forward's device-side time is flat in device count.  Per-device
+event spans at cone read 32.18, 30.61, and 30.48 s at one, two, and
+four devices.  Parallel reads 28.87 and 28.75 s at one and two.  Each
+device spends the same GPU time on the forward even though its share
+of the views falls fourfold.
+
+The driver explains that flatness.  The banded forward walks the
+reconstruction one slice band at a time, and it broadcasts each band
+to every projecting device.  Summed over the bands, every device
+receives the entire reconstruction, whatever the device count.  Cone
+adds a second invariant term, because each band yields a full-row
+partial sinogram that is then accumulated.  The forward's arithmetic
+falls as one over the device count, and its data movement does not.
+These results indicate that the remedy must reduce or overlap data
+movement, and that no batch constant can substitute.
+
+One reading from §1.3 does not survive.  The parallel forward does not
+rise at two devices.  Its host-side bracket reads 20.83, 12.44, 15.93,
+and 1.99 s across the chunk ladder while total time stays at 40 s.
+That bracket therefore records where synchronization landed, not what
+the forward cost.  The device span is the trustworthy measure, and it
+holds at 28.8 s throughout.  Cone's brackets agree with its device
+spans to within three seconds, so §1.3's cone reading stands
+unchanged.
+
+The corrected measure strengthens the entry gate rather than weakening
+it.  At parallel 1024 the forward's device span is 28.9 s inside a
+40.0 s reconstruction.  The forward therefore occupies about seventy
+percent of the run's GPU time at that cell.
+
+The torch forward body is not an alternative to the kernels.  Its
+device span at cone runs 87.80, 113.04, and 575.65 s as devices are
+added.  The kernels are load-bearing at every count.
 
 ---
 
@@ -150,17 +214,29 @@ weighted cell is the direct-recon back loop, and the band-reduce term
 is charged at 26 to 60 percent of the measured peak.  The over-charge
 concentrates exactly where those two n>1-specific charges are largest.
 
-The over-charge admits two readings, and the distinction decides the
-remedy (Greg's direction, 2026-08-09).  The ledger may be carrying
-the n=1-era three-cylinder back-loop charge into the banded n>1 path,
-whose reduce structure differs; that reading is a phantom charge, and
-its remedy is a charge correction.  Or the loop may genuinely hold an
-avoidable cylinder at n>1, the same residency species as the
-`weighted_fwd` release; that reading is a real cost, and its remedy is
-a code fix that the ledger predicts before any cluster time is spent.
-The charter in §6 attributes first and prefers the code fix wherever
-the residency is real, so the loop itself is addressed rather than
-only its prediction.
+The over-charge admitted two readings, and a sub-phase probe decided
+between them.  The answer is a third reading.  Both sub-steps of the
+back loop are real, and the ledger charges them together although they
+never run at the same time.  The probe measured the workers' peak and
+the reduce's peak separately, on every device.  At parallel 1024 with
+four devices the charge exceeds the larger of the two by 4.2
+cylinders, which is about 3.1 GB per device.  At cone 1024 with four
+devices it exceeds it by 4.1 cylinders.  These results identify the
+phantom sum as the dominant error, and its remedy is a charge
+correction.
+
+The probe also confirmed one real cost that the ledger does not charge
+at all.  Every band pass entered with two extra cylinders live on the
+first device and one on the others, at every arm.  That signature is
+the previous pass's per-device results staying alive through the next
+pass.  The cost is therefore real and avoidable, and its remedy is the
+one-line release described in `backloop_attribution.md`.
+
+One measurement refines the code reading behind that memo.  The live
+block count in the view loop measured 2.49, 0.99, and 1.97 cylinders
+where the reading predicted 3, 2, and 3.  The loop holds about one
+cylinder less than predicted.  The charge correction should therefore
+follow these measurements rather than the reading.
 
 The `hess_weights` question closes.  Unweighted and weighted peaks at
 parallel 1024 differ by -0.06 GB at n=2 and -0.03 GB at n=4, so the
@@ -252,20 +328,40 @@ eleven measured shapes.  The cost of that choice is now a measured
 curve: 13x slower than n=1 at the 128 cell, 7x at 256, 3x at 384, and
 1.3x at parallel 512.  The choice is right only from the 768 cell up.
 
-### 3.5 The pencil probe, and where discrimination now lives
+### 3.5 The shape probes, and the metric verdict
 
 The pencil probe (1152, 336, 96) measured n=1 best, at n=2 0.48x.
 Both candidate metrics agree with that outcome once the measured knee
 is used: its 37M sinogram elements and its 3.1M recon voxels both sit
 below their floors.  The probe therefore records a consistency point
-rather than a discrimination.  The discrimination now rests on mg4b's
-sparse-view probe, where the metrics genuinely disagree: 11M sinogram
-elements say hold n=1, while its 512-class recon says admit n=2.  The
-thin-volume probe tests both metrics' conservatism at once, because
-the view-dominated physics argues widening should pay there while
-both metrics say hold.
+rather than a discrimination.
 
-**OPEN: mg4b (job 15030714) runs after mg3b.**
+The discrimination came from mg4b's sparse-view probe, and it settles
+the metric.  That probe is (64, 448, 384), a shape where the two
+candidates disagree.  Its 11M sinogram elements sit below the measured
+512-cell floor, so the sinogram-element metric holds n=1.  Its 66M
+recon voxels sit in the 512 cell's class, so the recon-voxel metric
+admits n=2.  The measurement is unambiguous: n=1 runs 0.45 s, n=2 runs
+0.84 s, and n=4 runs 2.32 s.  Widening to two devices is therefore a
+1.87x regression at this shape, and widening to four costs 5.1x.
+These results refute the recon-voxel metric and confirm the
+sinogram-element metric.  **The guard indexes its floors on sinogram
+elements.**
+
+The thin-volume probe confirms that the shared conservatism is
+correct.  That probe is (1024, 32, 768), where the view-dominated
+physics argued that widening should pay even though both metrics hold
+n=1.  It measured 1.61 s at n=1, 1.87 s at n=2, and 3.75 s at n=4.
+Widening does not pay there either, so neither metric is too
+conservative at this shape.
+
+Both probes add auto-policy harm at shapes the ladder did not cover.
+The automatic policy took all four devices at both, which cost 2.3x at
+the thin-volume probe and 5.1x at the sparse-view probe.  The eight
+measured arms passed every arm check, no row ran hot, and the warm
+spreads sit at or under 2.7 percent everywhere except the two smallest
+arms, whose spreads are 6.6 and 17.6 percent on sub-second cells.
+Those spreads are far smaller than the differences they separate.
 
 ---
 
@@ -286,7 +382,31 @@ measured 2.5-to-4-hour price, and mg3 runs split as mg3a (job
 and production).  The deferred arms stay one env token away
 (`MG3_DEEP_CLASSES`).
 
-**OPEN: results land this afternoon.**
+mg3b completed and mg3a did not.  mg3b ran its depth-10 tier to
+completion in 39 minutes.  mg3a reached 31 of its 36 measured arms
+within its eight-hour walltime, and slurm killed it during arm 36.
+The five arms it missed are the cone-1024 tail at n>1: one eager arm,
+two production arms, and two jax arms.  The cone-1024 eager arms are
+what consumed the walltime, at 2.6 to 3.4 hours each.
+
+A re-run of that tail would cost far more than five arms suggest.
+Every arm of a cell reads one shared sinogram, and mg3b's cleanup
+deleted the sinograms when it finished.  Only the md5 sidecars
+survive.  A re-run must therefore regenerate the cone-1024 sinogram,
+and its arms could not be compared against mg3a's completed cone-1024
+rows, which read the deleted one.  The comparable scope is the whole
+cone-1024 base tier, which carries three eager arms and costs about
+eleven GPU-hours.  That is the same price the earlier scope ruling
+already declined for the depth-10 eager arms, so the gap stays.
+
+A cheaper partial re-run exists if the gap later matters.  Dropping
+the eager class from that tier leaves the production and jax arms,
+which cost about 2.5 GPU-hours and still measure the partition-order
+and cross-framework terms at cone 1024.  The harness has no knob for
+that today, because its class filter covers only the depth tier.
+
+**OPEN: the 31 completed mg3a arms and the 7 mg3b arms are read into
+this section next.  Cone 1024 at n>1 stays uncovered.**
 
 ---
 
@@ -300,7 +420,7 @@ from this table is §6's first item.
 
 | lever | trigger state | evidence |
 |---|---|---|
-| per-device view chunk | FIRED, via the forward anomalies | the cone forward flat in count; the parallel forward rising at n=2; realized-batch columns recorded per device for the attribution |
+| per-device view chunk | FIRED, then CLOSED by the sweep | the sweep moved total time by under one percent over chunks 32 to 256 at both 1024 cells, and left device-count scaling unchanged (§1.5) |
 | seam: band-reduce restructure | NOT FIRED for time; FIRED for the ledger's model of it | band reduce is at or under 0.04 s per pass everywhere; mg2 charges it at up to 60 percent of the measured peak |
 | streaming: `back_project_slice_band` | NOT FIRED at 1K; fires by arithmetic at 2K | every measured n>1 peak sits far below capacity (worst 14.3 GB of 80); at 2K the flat band-reduce term is 37 GB on the owner and becomes the wall (§6, the memory-scaling charter) |
 | widening margin and ledger terms | FIRED | sixteen over-ceiling readings at n>1, localized to the back-loop and band-reduce charges; the back-loop item addresses the loop's real residency first, not only its charge (§2, §6) |
@@ -333,16 +453,19 @@ crossover against the best smaller ADMITTED count (the floor_4
 amendment).  Parallel admits n=2 at the 512 cell's work size and n=4
 at the conservative end of the 768-to-1024 bracket, because at 768
 n=2 still wins, 1.60x to 1.18x.  Cone admits n=4 at the conservative
-end of its own 512-to-1024 bracket — its comparison count is n=1,
-since cone n=2 is never admitted — and never auto-admits n=2.
+end of its own 512-to-1024 bracket, and never auto-admits n=2.
+Cone's comparison count is n=1, because cone n=2 is never admitted.
 Monotone floors express the mid-size reversal under this crossover
 definition, which closes the plan's §8 preference-rule question.
 Capacity always wins, exactly as planned.  The floors carry §3.3's
 staleness rule: a fifteen-minute knee refresh re-measures them after
-any forward-path change.  The metric that indexes the floors
-waits one job.  mg4b's sparse-view probe is the point where the
-candidate metrics disagree, and the metric choice survives forward
-changes even though the knee values do not.
+any forward-path change.
+
+The metric that indexes the floors is now decided.  mg4b's
+sparse-view probe refuted recon voxels and confirmed sinogram
+elements, as §3.5 reports.  The guard therefore has everything it
+needs, and it implements next.  The metric choice also survives
+forward changes, even though the knee values do not.
 
 ### 6.2 Charter A: attribute the forward at n>1
 
@@ -351,12 +474,21 @@ before any constant moves.  The flat cone forward and the parallel
 n=2 rise are the terms costing torch its n>1 scaling, and both point
 at a per-device regime change the sweep can isolate.
 
-The sweep runs at the two anomalous coordinates, cone 1024 at all
-counts and parallel 1024 at n=2.  It varies the per-device view chunk
-and reads the realized batches, which mg1 already records per device.
-Its output is an attribution, and the attribution decides whether a
-chunk constant, a driver change, or item 13's sorted stream is the
-remedy.
+The sweep has run, and §1.5 reports it.  The attribution rules out a
+chunk constant, because the whole ladder moves total time by under one
+percent.  It rules out the realized batch, because that batch does not
+vary with device count.  It attributes the flatness to data movement
+that is invariant in device count, namely the broadcast of every
+reconstruction band to every device and, for cone, the accumulation of
+full-row partial sinograms.
+
+The remedy is therefore a driver change or the sorted-stream work, and
+this charter's next step is to choose between them.  Two follow-ups
+belong to that step.  The cone back projection also rises at two
+devices, from 25.3 to 30.8 s, and this sweep varied only the forward
+chunk, so the back needs its own variant.  The parallel remainder
+cannot be read from host-side brackets, for the reason §1.5 gives, so
+any remainder study must use device spans.
 
 ### 6.3 Charter B: the direct-recon back loop — attribute, then fix
 
@@ -364,12 +496,17 @@ The back loop itself gets addressed, not just its ledger charge.
 Attribution comes first, and the remedy menu has a shallow and a
 structural option.
 
-Step one attributes the n>1 residency: does the banded back path
-actually hold the three cylinders the ledger charges, read from the
-code and one phase-probe run.  Step two fixes what is real before
-re-deriving what is not.  The shallow remedy is the `weighted_fwd`
-treatment for an avoidable co-live cylinder: a small code change
-whose effect the ledger predicts and one calibration run confirms.
+Step one is complete, and §2 reports it.  The probe confirmed the real
+residency and the phantom sum, so the shallow remedy proceeds.  That
+remedy is the one-line release of the previous pass's partials, and it
+lands paired with the ledger's sub-phase split in one change.  The
+split must use the probe's measured block counts rather than the code
+reading, which ran about one cylinder high.  The optional rider stays
+optional, and the measured block counts suggest its gain is smaller
+than the memo estimated.
+
+The structural remedy remains the second option, and nothing about it
+has changed.
 The structural remedy is pixel batching inside the view batch, which
 mbirjax's own back projection already implements and the port
 simplified away; it bounds the full-index transient at a chunk-sized
@@ -455,6 +592,14 @@ bookkeeping a future reader will want beside the tables.
 The funnel refactor's neutrality is measured, not asserted: the
 2026-08-09 nightly gated the funnel commit against the `ae9bb6f9` n>1
 seed and read no changes at any cell or count.
+
+One harness defect is recorded so that it is not mistaken for a
+library defect.  The back-loop probe's single-device ruler arm failed
+with a `padded_shard_ranges` error.  The failing frame is in the probe
+itself, and the reconstruction it was measuring completed normally.
+Single-device reconstruction is exercised by the whole test suite and
+by the n=1 arms of four other campaign jobs, all of which pass.  The
+ruler arm returns whenever the probe's n=1 path is fixed.
 
 The probe economics held the campaign to budget.  Pre-tuning spend
 through mg4 is about 7 GPU-hours against the plan's 20-to-34

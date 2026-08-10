@@ -132,7 +132,28 @@ hold 3 — worth 2.17 GB/device there.  That is §6.5's declined seam
 restructure and §6.4's 2K reduce leg, arriving as the wall one scale
 earlier than expected.
 
-## 3. The confirming probe
+## 3. The confirming probe — RAN, AND IT CONFIRMS
+
+The probe ran as job 15034661 and took six minutes.  It confirms both
+claims of this memo.  Every band pass entered with two extra cylinders
+live on the first device and one on the others, which is the
+stale-partials signature.  The charge exceeds the larger of the two
+sub-step peaks by 4.2 cylinders at parallel 1024 with four devices and
+by 4.1 at cone 1024 with four devices, which is the phantom sum.  The
+widened cone-1024 arm therefore resolves in the safe direction, since
+the phase charge sits above the live peak there rather than below it.
+
+One measurement refines §1.  The live block count read 2.49, 0.99, and
+1.97 cylinders where this memo predicted 3, 2, and 3.  The loop holds
+about one cylinder less than the code reading implies.  The sub-phase
+split must therefore be calibrated on these numbers, and the optional
+rider of the header note gains less than estimated.
+
+The single-device ruler arm failed inside the probe's own code, and
+the reconstruction it was measuring completed normally.  That arm
+priced nothing and blocks nothing.
+
+The original design of the probe follows.
 
 `mg6_backloop_probe.py`, submitted as job 15034661 (chained after mg5).
 It brackets the region, the filter, and — the new resolution — each band
