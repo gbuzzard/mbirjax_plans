@@ -10,6 +10,13 @@ summary that closes a chain of work — the message that explains what was found
 after a long tool or analysis sequence.  Intermediate narration during such a
 chain does not need this level of care; short status lines are fine there.
 
+**Write plan entries and status reports in plain English.**
+Technical terms are fine when they are
+broadly understood by the community or defined where they are first
+used.  Do not use invented or undefined jargon (for example, "merge
+hygiene" — say instead "do not edit these files while Greg's changes
+are landing").  The same rule applies to code comments.
+
 ## Structure
 
 * Order sections and paragraphs as a conceptual narrative: the big idea
