@@ -361,9 +361,14 @@ green CI run IS the proof of support.  Drop an old Python version only
 when torch drops it, updating `requires-python` in `pyproject.toml` in
 the same commit.  This makes the yearly increment a single edit with no
 judgment call: torch's support list is the trigger, and CI is the test.
-The check takes one minute a year: at each release, compare the
-`python-version` list in ci.yml against the Python versions listed on
-torch's PyPI page for our pinned floor.
+
+ACCEPTED by Greg (2026-08-10), with one amendment: the check is not a
+manual step at release time -- it runs in the NIGHTLY in mbirjax_metrics,
+alongside the other dependency-update checks.  The nightly compares the
+`python-version` list in ci.yml against the Python versions torch
+publishes wheels for at our pinned floor, and flags a divergence in its
+report; the one-line ci.yml edit then follows as an ordinary reviewed
+change.
 
 **Should the wheel be tested after publication?**  mbirjax's maintenance page
 includes a step that installs from PyPI and runs the tests.  Automating it means a
