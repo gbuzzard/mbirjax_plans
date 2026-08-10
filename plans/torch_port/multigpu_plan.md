@@ -1,11 +1,69 @@
 # Multi-GPU performance: the n=1/2/4 readout and tuning — plan
 
-**Status:** EXECUTED through increment 1 and RULED.  The plan passed
-its review STOP (three-reviewer panel 2026-08-08, Fable revision),
-mg1–mg4 ran under it, and the increment-1 checkpoint was endorsed on
-2026-08-09 with the floor_4 amendment.  mg3a/b, mg4b, mg5, and mg6
-are in the queue.  `multigpu_findings.md` is the live record; this
-plan remains the contract for terms, protocols, and triggers.
+**Status:** MEASUREMENT COMPLETE, implementation in progress.  The
+plan passed its review STOP (three-reviewer panel 2026-08-08, Fable
+revision), every instrument it defines has run, and the increment-1
+checkpoint was endorsed on 2026-08-09 with the floor_4 amendment.
+§0 below maps what is done onto what remains.  `multigpu_findings.md`
+is the live record of results; this plan remains the contract for
+terms, protocols, and triggers.
+
+## 0. Where the campaign stands (2026-08-09)
+
+This section is the campaign's dashboard, added at the second
+checkpoint.  Everything the plan defines as measurement is complete.
+What remains is implementation and close-out, plus one cheap probe
+that the attribution surfaced.
+
+**Complete.**  The completed work, in plan order: increment 0's
+staging and local shard check; increment 1's gate readout and ledger
+calibration, with the checkpoint ruled and endorsed; increment 2's
+value comparison and crossover ladder, plus the two-probe shape
+addendum; and increment 3's attribution sweeps for both charters.
+The guard's design questions are all answered: the metric is sinogram
+elements by measurement, the floors are per count under the floor_4
+crossover rule, and no preference rule is needed.  The cadence
+decision is made.  The forward's flatness is attributed to
+count-invariant data movement in the banded driver.  The back loop's
+over-charge is attributed to a phantom sum, and its one real avoidable
+residency is confirmed.  One gap is accepted rather than open: cone
+1024 above one device has no value rows, priced at eleven GPU-hours
+in findings §4.
+
+**Remaining.**  Seven steps, in implementation order:
+
+1. **The guard, with its refresh mechanism.**  Floors per geometry
+   and count, in sinogram elements, on the automatic branch only.
+   The mechanism that keeps it maintainable ships with it: a
+   committed refresh script whose cell list includes probe cells for
+   every entry with no finite floor, provenance beside each floor
+   (date, commit, largest size tested), and a test that hashes the
+   projection-cost code and fails with the exact re-measure command
+   when that code changes.
+2. **The cone small-cell batch probe.**  The transient budget scales
+   down with the device count while cone's per-view cost does not, so
+   cone's realized batch should fall with the count at cells where
+   the budget cap is not binding.  One short job at the cone 384 and
+   512 cells confirms or refutes this reading.  If confirmed, the
+   budget's proportionality becomes a reviewed knob question, and the
+   cone floors are re-measured after the answer.
+3. **The back-loop pair.**  The stale-partials release and the
+   ledger's sub-phase split land as one reviewed change, with the
+   split calibrated on the probe's measured block counts rather than
+   the code reading.  The charge re-derivation follows.
+4. **The value-row read.**  The measured rows land in findings §4
+   against the registered expectations, under the amended value-ruler
+   floor.  This closes the last OPEN section.
+5. **Charter A, step two.**  Choose between a driver change and item
+   13's sorted stream for the count-invariant data movement.  The
+   cone back's own rise at two devices needs its variant here, and
+   any remainder study must use device spans, not host brackets.
+6. **The 2K design work.**  Charter C's capacity table computes from
+   the corrected charges, and the table picks the first tiling leg.
+7. **Close-out.**  The item-13 entry gate is recorded as satisfied,
+   the `usr_multi_gpu.rst` timing table refreshes from the gate
+   table, `current_plans.md` item 3 updates, and the knee refresh
+   runs once end to end to prove the mechanism.
 
 The charter is `current_plans.md` item 3, and it sets four goals: the
 full n=1/2/4 gate readout with the repaired kernels; the attribution
@@ -258,6 +316,11 @@ failure or ruling.
 
 ### mg1 — the gate readout (goals 1 and 4)
 
+*Ran as job 15011662; valid on every arm check; findings §1.  One
+correction landed later: the parallel forward's host bracket records
+synchronization placement, not cost, so forward readings use device
+spans (findings §1.5).*
+
 The readout is one sbatch job on four H100s that measures the full
 matrix: both frameworks, both geometries, both gate cells, n = 1, 2,
 4, warm seeded 3-iteration vcd, one subprocess per arm.  The torch
@@ -332,6 +395,9 @@ count).
 
 ### mg2 — the ledger at n>1
 
+*Ran as job 15011663; findings §2.  The over-charge it found was
+attributed by charter B and confirmed by the sub-phase probe.*
+
 The widening rule trusts the ledger at exactly the counts where the
 ledger is unmeasured.  mg2 closes that gap with the dp2 calibration
 harness extended to counts: modeled versus measured per-device peaks
@@ -348,6 +414,11 @@ the increment with a gap instead of a term.  mg2 chains after mg1 on
 the same allocation class and the same staged tree.
 
 ### mg3 — the value comparison (goal 3)
+
+*Ran split as jobs 15029600 and 15029601 after a pricing probe
+re-derived its wall; 38 of 43 measured arms completed, and the
+cone-1024 tail above one device timed out; findings §4.  The rows are
+measured and not yet read.*
 
 The comparison separates the residual terms by construction.  At each
 (geometry, cell, count), three arms reconstruct from one shared
@@ -393,6 +464,9 @@ campaign's half of that coverage.
 
 ### mg4 — the crossover ladder (decision 1's data)
 
+*Ran as jobs 15026979 and 15030714, the latter the two-probe shape
+addendum; findings §3.  The sparse-view probe decided the metric.*
+
 The ladder measures where each count stops paying.  Parallel-family
 cells scale the 512 gate cell's proportions exactly: (128, 112, 96),
 (192, 168, 144), (256, 224, 192), (384, 336, 288), (512, 448, 384),
@@ -435,6 +509,15 @@ guard's conservatism as the stated time policy.
 
 ### mg5 — tuning arms, only where the data points
 
+*The menu is resolved; findings §5 carries the trigger table and §6
+the ruling.  The chunk lever fired and then closed, because the sweep
+(job 15034136) moved total time by under one percent.  The seam lever
+fired for the ledger's model and became charter B's sub-phase split
+(job 15034661 confirmed it).  Streaming and orchestration are
+recorded charters at 2K and beyond.  The margin lever is superseded:
+the over-charge is a phantom sum, so the split corrects it, not the
+margin knob.*
+
 Tuning is contingent on attribution, so mg5 is a menu with triggers.
 The mg1 three-region attribution and the realized-batch column exist
 precisely so every trigger below is decidable at the checkpoint.
@@ -453,6 +536,11 @@ gate against the readout's numbers, and it lands only through review.
 ---
 
 ## 5. Increments and their gates
+
+*Increments 0 through 2 are complete, and increment 3's attribution
+sweeps are complete with no tuning constant changed.  Increment 4 is
+in progress: the guard and the back-loop pair are its library
+changes, and §0 lists its close-out steps.*
 
 **Increment 0 — staging.**  Write mg1 and mg2, and sync them per file
 with md5 verification.  The conventions are standing ones: scripts in
@@ -507,6 +595,12 @@ harnesses.
 
 ### Decision 1: the widening speed guard
 
+*Decided and amended.  The floors follow the floor_4 crossover rule,
+the metric is sinogram elements by the sparse-view probe's
+measurement, and the implementation is §0's step 1, refresh mechanism
+included.  The design below stands except where the amendment moved
+the parallel four-device floor.*
+
 The automatic path is capacity-only today, so it widens small
 problems onto counts that run slower.  The phase-4 prior says the
 harm is real and also says its shape: at the 512 cell, n=4 ran about
@@ -544,6 +638,9 @@ recommendation, with the curves behind it, goes to Fable before any
 implementation.
 
 ### Decision 2: the nightly n>1 cadence
+
+*Decided (Greg, 2026-08-09): full nightly cadence through the tuning
+window, no wiring changes, revisit at campaign close.*
 
 The nightly plan priced its n>1 increment at about 2.7 GPU-hours per
 changed-branch night in its §3(c) estimate.  The nightly's own trial
@@ -600,7 +697,11 @@ times bands) against per-call work, and the partition granularity
 sequence is not a function of size alone, so two cells with equal
 sinogram elements can sit on opposite sides of a knee.  The
 recommendation is to accept a simple metric with these caveats
-recorded, and let the probe say which simple metric.
+recorded, and let the probe say which simple metric.  CLOSED
+(2026-08-09): the sparse-view probe measured widening as a 1.87x
+regression at a shape where recon voxels would have admitted it, so
+sinogram elements is the metric (findings §3.5).  The orchestration
+caveat stays recorded beside the floors.
 
 **Whether the guard needs a count-preference rule above the floors.**
 The current loop prefers the largest fitting count.  The ladder will
@@ -619,7 +720,9 @@ is needed.
 is parallel 1024, and §4 scopes the depth-10 tier to it.  Cone's
 three-iteration residuals are already inside the envelope at n=1.
 The recommendation is to keep the tier as scoped and add cone depth
-only if its depth-3 readings surprise.
+only if its depth-3 readings surprise.  OPEN pending §0's step 4,
+the value-row read, which is where cone's depth-3 readings are
+judged.
 
 **Whether the readout should carry back-only arms.**  The kb3
 five-arm structure prices the forward and back kernels separately at
@@ -633,7 +736,11 @@ exists, so the residual cannot be reproduced as a diff.  Its tell
 can: the flag closes if mg1 shows n=4 at parallel 1024 scaling
 consistently with n=2 at the same cell, and becomes an mg5 trigger if
 the anomaly pattern (n=4 off while n=2 is clean) reappears in the
-current tree.
+current tree.  CLOSED (2026-08-09): the pattern did not reappear.
+At parallel 1024 the four-device arm scales at 1.71x while the
+two-device arm is the outlier at 1.02x, and the attribution explains
+both through one mechanism, the count-invariant data movement of
+findings §1.5.
 
 **Coordination with the nightly's first nights.**  The campaign's
 jobs and the torch nightly share the account, the queue, and the
