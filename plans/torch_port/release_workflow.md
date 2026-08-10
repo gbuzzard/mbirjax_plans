@@ -352,6 +352,19 @@ of 2.13.
 Greg:  We'll need some way of adding increments every year or 
 so.  We'll need advice about how to manage that in a reliable way.
 
+Proposed policy (Claude, 2026-08-10, for Greg's and Charlie's review):
+**follow torch.**  Torch is the package's foundation, so its supported
+Python list is the binding constraint no matter what we decide.  The
+rule: when torch publishes wheels for a new Python version, add that
+version to the `matrix` list in `ci.yml` -- a one-line change -- and a
+green CI run IS the proof of support.  Drop an old Python version only
+when torch drops it, updating `requires-python` in `pyproject.toml` in
+the same commit.  This makes the yearly increment a single edit with no
+judgment call: torch's support list is the trigger, and CI is the test.
+The check takes one minute a year: at each release, compare the
+`python-version` list in ci.yml against the Python versions listed on
+torch's PyPI page for our pinned floor.
+
 **Should the wheel be tested after publication?**  mbirjax's maintenance page
 includes a step that installs from PyPI and runs the tests.  Automating it means a
 second workflow triggered after publication, which is straightforward but adds a
