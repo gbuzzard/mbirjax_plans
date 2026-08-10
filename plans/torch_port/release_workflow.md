@@ -1,19 +1,32 @@
 # Automated release workflow — proposal
 
-**Setup progress (2026-08-10, Charlie's session).**  Of the eight manual
-setup steps in this plan: steps 1 and 2 (main rename, prerelease branch)
-were done earlier during the docs work, and step 5 is now DONE — Trusted
-Publishing "pending publishers" for project `mbirtorch` are registered on
-BOTH registries (repository `cabouman/mbirtorch`, workflow `release.yml`,
-environment `testpypi` on TestPyPI and `pypi` on PyPI).  This also
-resolved a years-old blocker: Charlie's TestPyPI web login was broken
-(stale password + the TestPyPI authenticator secret living in Duo under
-the same "PyPI" label as the real-PyPI secret in MS Authenticator);
-fixed, with recovery codes generated.  Remaining setup: branch
-protection (3), version single-sourcing (4), the GitHub `pypi`/`testpypi`
-environments with the approval rule (6), Read the Docs default-version
-setting (7, partially done), and the RTD token (8).  The five open
-decisions below are still open.
+**Setup progress (2026-08-10, Charlie's session).**  Setup steps 1-6 are
+DONE; Greg's answers to the five open decisions (recorded below) are
+incorporated.
+- Steps 1-2: main rename + prerelease branch (done earlier, docs work).
+- Step 3, AMENDED by Charlie: protection on `main` ONLY -- pull request
+  required, the three CI checks required, force pushes and deletion
+  blocked.  `prerelease` stays unprotected so two-person development
+  keeps direct pushes; revisit when students join.
+- Step 4: version single-sourced from `mbirtorch.__version__`
+  (mbirtorch 0ed4f71, sdist build verified); the source URL fixed to
+  cabouman/mbirtorch in the same commit (decision 5).
+- Step 5: Trusted Publishing pending publishers registered on BOTH
+  registries (repo `cabouman/mbirtorch`, workflow `release.yml`,
+  environments `testpypi` / `pypi`).  This also resolved a years-old
+  blocker: Charlie's TestPyPI web login (stale password + the TestPyPI
+  authenticator secret living in Duo under the same "PyPI" label as the
+  real-PyPI secret in MS Authenticator); fixed, recovery codes generated.
+- Step 6: GitHub environments `testpypi` and `pypi` created; `pypi`
+  requires cabouman's manual approval -- Greg's "Are you sure?" gate.
+- ALSO DONE (from the implementation list): `ci.yml` is live
+  (mbirtorch 9127b5d) and its first run is GREEN -- docs 1m12s,
+  tests 10m23s (3.11) / 11m25s (3.12) -- and `main` was fast-forwarded
+  to prerelease first, so the protected branch starts current.
+- Remaining: steps 7-8 (Read the Docs stable default + RTD_TOKEN --
+  both only matter at the first tagged release), `release.yml` and the
+  optional docs preview, the wheel-check dev script (decision 4), and a
+  written Python-version increment policy (decision 3).
 
 **Status:** PROPOSAL, workflow files not yet implemented.  This page proposes a release
 automation for mbirtorch and lists the manual setup it needs.  Neither mbirtorch
