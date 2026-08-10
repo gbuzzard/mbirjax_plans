@@ -6,8 +6,9 @@ calibration, the crossover ladder, and the shape probes are complete
 and validated.  The shape probes decided the guard's metric in §3.5.
 Charter A's forward attribution is in §1.5, and it corrects one
 reading in §1.3.  Charter B's back-loop probe is in §2, and it
-confirms that charter's memo.  Only §4 stays OPEN, because the value
-rows are measured and not yet read.  The plan is
+confirms that charter's memo.  Every section is closed: §4's
+value rows are read and goal 3 is ruled met, so the campaign's
+remaining work is implementation, mapped in the plan's §0.  The plan is
 `multigpu_plan.md`; terms and protocols keep its meanings.  The
 checkpoint was RULED AND ENDORSED on 2026-08-09 with one amendment,
 floor_4, folded into §3.1 and §6.1 below.
@@ -24,7 +25,15 @@ benefit, one arm complete), mg4 is 15026979 (0:36).  Rows are
 `mg2_ledger_calib_h011_20260809_062252.jsonl`,
 `mg3_probe_h004_20260809_063824.jsonl`, and
 `mg4_ladder_h001_20260809_073857.jsonl`, all in
-`/scratch/gautschi/buzzard/torch_p3/results/`.
+`/scratch/gautschi/buzzard/torch_p3/results/`.  The later jobs: mg3a
+is 15029600 and mg3b is 15029601 (rows
+`mg3_value_h001_20260809_081542.jsonl` and
+`mg3_value_h001_20260809_161639.jsonl`), mg4b is 15030714
+(`mg4_ladder_h001_20260809_165602.jsonl`), mg5 is 15034136
+(`mg5_fwd_attrib_h005_20260809_195819.jsonl`), mg6 is 15034661
+(`mg6_backloop_h005_20260809_223535.jsonl`), and mg7 is 15078246
+(`mg7_conebatch_h004_20260810_041607.jsonl`).  Copies of every row
+file are archived in `plans/experiments/torch_port/rows/`.
 
 ---
 
@@ -192,6 +201,44 @@ The torch forward body is not an alternative to the kernels.  Its
 device span at cone runs 87.80, 113.04, and 575.65 s as devices are
 added.  The kernels are load-bearing at every count.
 
+### 1.6 The batch at small cells (the cone batch probe)
+
+This section closes the one question §1.5 left open: whether the
+count-scaled transient budget moves the realized batch at cells where
+the budget is not clamped at its ceiling.  A nine-arm probe measured
+the realized forward batch per device at the cone 384, cone 512, and
+parallel 512 cells at every count, against predictions computed from
+the live cost functions and registered before the run.
+
+The predictions held to the digit.  Cone's batch reads 128, 128, and
+85 at the 384 cell and 128, 128, and 113 at the 512 cell across one,
+two, and four devices.  Parallel's holds 128 at every count.  These
+results confirm the mechanism: the budget falls with the count,
+cone's per-view cost does not, and the batch drops where the falling
+cap crosses the chunk.  The shipped chunk of 128 floors the effect.
+The drop therefore appears at four devices only, and only on the
+full-pixel forward, whose calls sit as a second batch population
+beside the subset forwards' 128.
+
+The confirmed effect is marginal in cost.  Cone's summed launches at
+four devices read 1376 against parallel's 1360, a 1.2 percent
+difference.  These results close the budget-proportionality question
+at these cells.  The proportionality is real, its measured cost is
+percent-scale, and no knob change is warranted now.  The question
+returns only if a tiling change moves the per-view cost.
+
+The probe's larger yield is the call-count growth.  Per-device
+view-range calls per reconstruction read 85, 340, and 1360 at one,
+two, and four devices, at both geometries and at fixed total work.
+Per-device launches double with each count doubling, from 255 or 340
+at one device to 680 at two and about 1370 at four.  The banded walk
+explains the shape: every device projects in every owner's band pass,
+and each band streams in sub-bands, so per-device calls grow with the
+count while each call's work shrinks.  These numbers quantify the
+fan-out-and-glue limiter that §3.3 names below the 384 cell, and they
+are input to charter A's step two, because the growth is
+driver-structural.
+
 ---
 
 ## 2. The ledger at n>1 (mg2)
@@ -232,6 +279,12 @@ the previous pass's per-device results staying alive through the next
 pass.  The cost is therefore real and avoidable, and its remedy is the
 one-line release described in `backloop_attribution.md`.
 
+One term stays undecided here.  The back batch charge is real in
+kind and conservative in magnitude, and the probe's worker-transient
+readout that prices it sits in the mg6 rows.  The charge
+re-derivation consumes that readout, and the margin ruling waits on
+the same re-derivation.
+
 One measurement refines the code reading behind that memo.  The live
 block count in the view loop measured 2.49, 0.99, and 1.97 cylinders
 where the reading predicted 3, 2, and 3.  The loop holds about one
@@ -255,7 +308,8 @@ today's capacity-only automatic choice.
 
 ### 3.1 The parallel family
 
-Speedup over n=1, warm medians, spreads 0.0 to 2.5 percent:
+Speedup over n=1, warm medians, spreads 0.0 to 5.4 percent (the 5.4
+is the 384-class n=1 arm; the next largest is 4.3):
 
 | cell (sino elements) | n=2 | n=4 |
 |---|---|---|
@@ -365,7 +419,7 @@ Those spreads are far smaller than the differences they separate.
 
 ---
 
-## 4. The value comparison (mg3) — OPEN
+## 4. The value comparison (mg3)
 
 This section carries goal 3: separating the value residual into its
 partition-order and compile-latitude terms by construction, from one
@@ -405,8 +459,210 @@ which cost about 2.5 GPU-hours and still measure the partition-order
 and cross-framework terms at cone 1024.  The harness has no knob for
 that today, because its class filter covers only the depth tier.
 
-**OPEN: the 31 completed mg3a arms and the 7 mg3b arms are read into
-this section next.  Cone 1024 at n>1 stays uncovered.**
+### 4.1 Validity, and how the columns were obtained
+
+The readout is valid.  All 37 completed arms pass every arm check.  No
+row ran hot, and no throttle reason was active on any GPU in any
+sample.  Warm spreads sit at or under 3 percent on 35 of the 37 arms.
+The two exceptions read 6.0 percent at the parallel 1024 jax n=4 arm
+and 5.1 percent at the cone 512 eager-plain n=4 arm.
+
+One provenance note is recorded.  The harness computes its value
+columns only after every planned arm finishes, so the killed mg3a job
+wrote none.  Its 31 per-arm sample volumes survived the kill, because
+the cleanup step never ran.  The base-tier columns below were
+recomputed from those samples through the harness's own comparison
+function.  The depth-10 columns are the harness's own, written by the
+completed mg3b job.
+
+One rule was applied at analysis time.  mg3 carries no tolerance of its
+own, and its expectation constants are annotations on each value row
+rather than gates.  Ratios were therefore judged against the amended
+benign-tiny rule, which holds that a ratio of two divergences both
+below 1e-4 is meaningless.  That rule's floor is mg1's
+`VALUE_RULER_FLOOR`.  The increment-1 checkpoint raised that floor to
+1e-4.  The rule decides the device-count trends at parallel 1024 and
+every trend in the compile-latitude column.
+
+Base tier, three iterations, max-relative on the gathered volumes, one
+shared sinogram per cell.  The partition-order entry is the worst of
+the three same-framework columns at that coordinate.
+
+| cell | n | partition order | its floor | compile latitude | cross framework |
+|---|---|---|---|---|---|
+| parallel 512 | 1 | — | — | 5.15e-6 | 5.40e-4 |
+| parallel 512 | 2 | 8.75e-5 | 4.47e-4 | 2.84e-6 | 5.47e-4 |
+| parallel 512 | 4 | 3.03e-4 | 9.49e-4 | 2.23e-6 | 5.43e-4 |
+| parallel 1024 | 1 | — | — | 1.22e-5 | 6.11e-3 |
+| parallel 1024 | 2 | 1.05e-5 | 4.47e-4 | 7.75e-6 | 6.11e-3 |
+| parallel 1024 | 4 | 2.22e-5 | 9.49e-4 | 5.83e-6 | 6.08e-3 |
+| cone 512 | 1 | — | — | 5.68e-6 | 8.43e-5 |
+| cone 512 | 2 | 2.40e-4 | 4.57e-4 | 6.08e-6 | 8.45e-5 |
+| cone 512 | 4 | 2.40e-4 | 4.95e-4 | 6.13e-6 | 8.44e-5 |
+| cone 1024 | 1 | — | — | 9.25e-6 | 2.96e-4 |
+| cone 1024 | 2 | 1.62e-5 | 4.57e-4 | absent | absent |
+| cone 1024 | 4 | absent | 4.95e-4 | absent | absent |
+
+### 4.2 The partition-order term
+
+The partition-order term sits under its engine floor at every
+coordinate measured.  The term is the divergence between one
+framework's n-device reconstruction and its own single-device
+reconstruction, at fixed values and one shared sinogram.  Its largest
+reading is 3.03e-4, at parallel 512 with four devices, against a
+registered floor of 9.49e-4 there.  Its closest approach to a floor is
+at cone 512 with two devices, where 2.40e-4 sits at 0.53 of the 4.57e-4
+floor.  These results indicate that partitioning costs less value than
+the recorded engine floors allow.
+
+The term belongs to the partition and not to the engine.  Torch
+eager-plain, jax and torch production read the same number at every
+cell.  At parallel 512 with four devices the three read 3.034e-4,
+3.028e-4 and 3.034e-4.  At cone 512 with two devices they read
+2.397e-4, 2.397e-4 and 2.399e-4.  These results indicate that neither
+the framework nor the kernel-and-compiler choice moves the term, which
+is what the by-construction separation predicted.
+
+The term grows mildly with device count.  At parallel 512 it grows 3.5x
+from two devices to four devices.  The floor class itself grows 2.1x
+over that same step.  At cone 512 the term is flat, at 1.00x.  At
+parallel 1024 both endpoints sit below 1e-4, so their ratio is not
+interpretable and only the absolute floor applies there.  These results
+indicate mild growth, because the steepest slope still leaves the term
+a factor of three under its floor at four devices.
+
+One slope is recorded rather than dismissed.  The parallel 512 slope
+runs 1.6x steeper than the floor class's own slope over the same step.
+The registration named strong growth with n a finding, and this is the only
+cell where an interpretable slope exceeds the floor's.
+
+This column also cross-checks against mg1.  mg1's gate table reports
+own-count divergences at parallel 512 of 8.72e-5 and 8.70e-5 at two
+devices, and 3.03e-4 twice at four devices.  mg3 reads 8.723e-5 and
+8.692e-5, then 3.034e-4 and 3.028e-4, on a different node in a
+different job from a different sinogram.  These results indicate that
+the term is reproducible across instruments to three significant
+figures.
+
+### 4.3 The compile-latitude term
+
+The compile-latitude term came in two to three decades below its
+registered class.  The term is the divergence between the production
+engine and eager-plain at equal coordinates.  Its largest reading is
+1.22e-5, at parallel 1024 with one device, against a registered
+parallel class of 5e-3.  Its largest cone reading is 9.25e-6, at cone
+1024 with one device, against a registered cone class of 5e-4.  Every
+reading of the column sits between 2.2e-6 and 1.2e-5.  These results
+indicate that the production engine and the plain torch engine reach
+the same answer at every cell and every count.
+
+The registered class needs re-registering.  The registration imported it from the
+composed kernel-versus-body columns at n=1, which sit in the low e-3
+class for parallel and the e-4 class for cone.  Those columns do not
+predict this one.  The ceiling this instrument measured is e-5.
+
+The term does not grow with device count.  Every endpoint of every
+ratio in this column sits below 1e-4, so every trend in it is
+benign-tiny.  The raw ratios fall with device count at both parallel
+cells and rise 8 percent at cone 512.  The registration named growth with n a finding, and no growth
+appears even before the rule is applied.
+
+The registered decay with depth is untested.  The depth tier ran jax
+and production only, under the probe ruling that deferred its three
+eager arms.  The production-versus-eager column therefore has no
+partner at ten iterations, and the harness wrote it null at all three
+counts.  Testing that decay needs the deferred arms, at their recorded
+price of 2.5 to 4 GPU-hours.
+
+### 4.4 The cross-framework column
+
+The cross-framework column reproduced both documented classes exactly.
+The column is production torch against jax, from one shared sinogram,
+at equal coordinates.  At parallel 1024 and three iterations it reads
+6.112e-3, 6.111e-3 and 6.084e-3 at one, two and four devices.  The
+documented value there is 6.1e-3.  At ten iterations the same
+coordinates read 8.768e-4, 8.770e-4 and 8.733e-4, against a documented
+8.8e-4.
+
+The other cells sit in the documented e-4 class.  Parallel 512 reads
+5.4e-4 at all three counts, and cone 1024 reads 2.96e-4 at one device.
+Cone 512 reads 8.4e-5, one notch below the e-4 class the expectation
+named.  That departure runs downward.
+
+The documented sevenfold decay holds at every device count.
+
+| n | 3 iterations | 10 iterations | decay |
+|---|---|---|---|
+| 1 | 6.112e-3 | 8.768e-4 | 6.97x |
+| 2 | 6.111e-3 | 8.770e-4 | 6.97x |
+| 4 | 6.084e-3 | 8.733e-4 | 6.97x |
+
+The documented pair implies 6.93x.  These results indicate that the
+decay is a property of the iteration and not of the partition, which is
+the question the depth tier was built to answer.
+
+The whole-field measure decays further than the worst voxel.  The
+norm-relative column falls from 8.03e-4 to 4.11e-5 over the same depth
+step, a 19.5x decay, at every count.
+
+The eager arms make the production column interpretable.  Eager-plain
+against jax and production against jax agree to within 0.71 percent at
+every coordinate, and to within 0.02 percent at parallel 1024.  These
+results indicate that a user's cross-framework residual is the
+framework difference, and not the torch engine's own kernel and
+compiler choices.
+
+Cone's depth-3 readings do not surprise, so the question of cone
+depth-10 arms does not reopen.  Cone's cross-framework column reads
+8.4e-5 at 512 and 2.96e-4 at 1024, its compile-latitude column reads
+9.25e-6 at worst, and its partition-order column reads 2.40e-4 against
+a 4.57e-4 floor.
+
+### 4.5 What exceeded expectations, and what is missing
+
+Nothing exceeded its registered expectation.  Every measured value sits
+at or below the class registered for it, in every column and at every
+coordinate.  Two departures run downward and are recorded above.  Those
+two are the compile-latitude class of §4.3 and cone 512's
+cross-framework reading of §4.4.
+
+One unregistered observation is recorded without interpretation.  The
+partition-order term is larger at the 512 cells than at the 1024 cells
+in both geometries.  Parallel reads 8.75e-5 at 512 against 1.05e-5 at
+1024 at two devices, and cone reads 2.40e-4 against 1.62e-5 at the same
+count.  Nothing in the campaign registered a cell dependence for this
+term.
+
+The optional ordering tier never ran, and its absence is a harness
+finding.  Its arms are gated on the depth cell in both scheduling
+phases.  mg3a set `MG3_SKIP_DEEP`, which leaves no depth cell.  mg3b
+set `MG3_ONLY_DEEP`, which sets the tier's own skip flag.  The split
+therefore lost the tier by two different branches, and no warning was
+printed.  The plan's claim that the production-versus-eager bundle reads
+the compiler to leading order consequently has no check.  That claim also
+matters less than it did, because the bundle itself measures 1.2e-5 at
+worst.
+
+Two smaller gaps are recorded.  Registered expectation 1 is stated over
+torch production against its own single-device run.  The harness
+computes that column for eager-plain and jax only.  That column was
+recomputed here, and it tracks the eager column to within 1 percent.
+
+The two tiers also read different artifacts at parallel 1024.  mg3b
+regenerated the sinogram rather than reusing mg3a's, and the two
+checksums differ by 2.2e-9 in relative terms.  That difference sits five
+decades below the residual the depth comparison resolves, so the
+comparison stands.
+
+**Goal 3 is met (ruled 2026-08-10).**  The partition-order and
+compile-latitude terms are separated by construction at every cell
+that completed, and the cross-framework column reproduces both
+documented classes at every device count.  Three readings stay
+uncovered: cone 1024 above one device, the compile-latitude decay
+with depth, and the compiler-versus-kernel ordering check.  The read
+makes none of them look load-bearing, so the provisional acceptance
+of the cone 1024 tail is confirmed and no partial re-run is
+scheduled.
 
 ---
 
@@ -420,7 +676,7 @@ from this table is §6's first item.
 
 | lever | trigger state | evidence |
 |---|---|---|
-| per-device view chunk | FIRED, then CLOSED by the sweep | the sweep moved total time by under one percent over chunks 32 to 256 at both 1024 cells, and left device-count scaling unchanged (§1.5) |
+| per-device view chunk | FIRED, then CLOSED by the sweep | the sweep left the shipped chunk within one percent of the best over chunks 32 to 256 at both 1024 cells, and left device-count scaling unchanged (§1.5) |
 | seam: band-reduce restructure | NOT FIRED for time; FIRED for the ledger's model of it | band reduce is at or under 0.04 s per pass everywhere; mg2 charges it at up to 60 percent of the measured peak |
 | streaming: `back_project_slice_band` | NOT FIRED at 1K; fires by arithmetic at 2K | every measured n>1 peak sits far below capacity (worst 14.3 GB of 80); at 2K the flat band-reduce term is 37 GB on the owner and becomes the wall (§6, the memory-scaling charter) |
 | widening margin and ledger terms | FIRED | sixteen over-ceiling readings at n>1, localized to the back-loop and band-reduce charges; the back-loop item addresses the loop's real residency first, not only its charge (§2, §6) |
@@ -578,8 +834,9 @@ table picks charter C's first leg.  Last, the knee refresh of §3.3
 runs after charter A's remedy (or item 13) changes the forward path,
 and the floors update from it.  At close-out the `usr_multi_gpu.rst`
 timing table refreshes from mg1's gate table, and the item-13 entry
-gate is formally recorded as satisfied from §1.3's forward shares.
-The cadence call (6.6) is decided and recorded there.
+gate is formally recorded as satisfied from §1.5's device-span share,
+which supersedes §1.3's parallel host-bracket shares.  The cadence
+call (6.6) is decided and recorded there.
 
 ---
 
