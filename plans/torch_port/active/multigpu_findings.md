@@ -301,7 +301,12 @@ each launch's band narrows with the count.  The memo's rule for this
 outcome selects the per-launch remedy, option A4, gated on its 2K
 residency pricing.  For cone the code-visible per-launch term is the
 kernel grid's full-detector-rows axis, so a grid sized to the band's
-detector-row span is the kernel-level variant to price beside A4.
+detector-row span is the kernel-level variant to price beside A4.  That
+cone variant was superseded the same evening, when a reading of
+mbirjax's cone path led the remedy memo's §8 to replace it with a
+pixel-batched full-height cylinder gather.  That same reading also
+dissolved A4's 2K residency gate, because the gathered form never
+assembles a whole cylinder (memo §8.4).
 
 The third conclusion is new: parallel is flat only from one device to
 two.  At four devices the span halves, with busy time 28.19, 28.24,
@@ -919,7 +924,10 @@ percent.  It rules out the realized batch, because that batch does not
 vary with device count.  It attributes the flatness to data movement
 that is invariant in device count, namely the broadcast of every
 reconstruction band to every device and, for cone, the accumulation of
-full-row partial sinograms.
+full-row partial sinograms.  (Superseded 2026-08-10: the mg9 instrument
+measured that attribution directly and refuted it, placing the flat
+term inside the kernel launches; §1.7 carries the measurement and the
+remedy memo's §8 carries the revised remedy.)
 
 The remedy is therefore a driver change or the sorted-stream work, and
 this charter's next step is to choose between them.  Two follow-ups

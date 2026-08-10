@@ -1,3 +1,38 @@
+# Summary as of 08-10-2026, 4:08PM, revised the same evening after the mbirjax source reading:
+Here's the full picture as it stands tonight.
+
+## The bottleneck
+
+Adding GPUs doesn't make the forward projection faster, and the forward is the largest term in the reconstruction. Its per-device time is flat in the device count: cone 1024 holds at 32.2 / 30.6 / 30.5 s across one, two, four devices; parallel 1024 holds at 28.9 / 28.8 s from one to two. On the same node, jax scales these cells 1.45–2.43x. This is why torch's composed reconstruction scaled only 1.02x at parallel-1024 two-device while jax scaled 1.80x. Yesterday's mg9 added one big qualification: parallel *does* halve at four devices (14.9 s, composed scaling 1.70x), so parallel's pathology is specifically the one-to-two leg, while cone is flat at every count.
+
+## What was proposed and ruled out
+
+**Broadcast bytes** (the original §1.5 attribution — every device receives every reconstruction band, and that count-invariant data movement was blamed for the flat span). Refuted in two stages: first by arithmetic (the bytes could only explain the span at an implied 0.44 GB/s, absurdly slow for an H100 node) and by an ablation (the torch-body arm runs the identical driver and broadcast yet scales 1.59x); then definitively by mg9's direct measurement — the broadcast moves at 197–257 GB/s and costs 48–189 *milliseconds* per reconstruction against a 15–31 *second* span.
+
+**Waiting/serialization** (devices idle while copies are issued serially from the loop thread). Refuted by mg9's central measurement: busy time — event pairs around every individual kernel call — is 97–98% of the bracket at every count, and the bracket-minus-busy gap not only stays under a second, it *shrinks* as devices are added. The devices compute essentially the whole time.
+
+Those two refutations killed remedies **A2** and **A3** (move copy issue onto worker threads; overlap next band's broadcast with current compute) — their entire target is under one second. **A1** (broadcast only to devices that need it) was ruled out structurally from the start: forward projection of a view needs every voxel, so every view-owner needs every band. **A5** (project locally, exchange sinogram rows) was excluded because it breaks the documented adjoint pairing between the broadcast and the reduce, and because for cone it needs the cross-device sinogram reduce you held to 2K.
+
+## What's confirmed, and the proposed solution
+
+The cost lives **inside the kernel launches**: per-device launches hold at exactly 680 in every parallel arm while each launch's slice band narrows with the count — you pay full-launch prices for fractional-launch work. For cone this is visible in the code: the launch grid's middle axis is the full detector row count regardless of how narrow a band it was handed.
+
+That mechanism ruling stands. What changed the same evening is the **shape** of the remedy. A source reading of mbirjax, the reference implementation, showed how it solved this same problem, and it solved it differently in each geometry with measured evidence for both. Two shapes now replace the single A4 proposal.
+
+**Parallel: keep the banded walk, and pin the band at a fixed measured knee.** mbirjax bands parallel as we do, and it sizes the band by a constant rather than by the shard. The constant is at `parallel_beam.py:116`: `_FWD_SLICE_BAND_GPU = 256  # the measured knee; whole-shard bands are WORSE at scale`. Per-device dispatches are then about slices/256, which is constant in the device count. Adding devices shrinks each call along the view axis instead. Our port sizes the band to the shard, 504 slices wide at two devices, and mg9 measured that width inside the flat regime. mg9's per-launch times put our own knee in the same region. They are flat at 41.5 ms for the 1008-slice and the 504-slice bands and fall to 21.4 ms at 252, so our knee sits between 252 and 504. The remedy is to keep the walk and to fix the band at a knee swept on **our** Triton kernel.
+
+**Cone: don't band at all, and gather pixel-batched full-height cylinders.** mbirjax's cone path is the opposite structure, and its docstring gives the reason (`tomography_model.py:1654-1660`): "A slice can project to a RANGE of detector rows (cone), so every view-owner needs ALL slices to produce its own views' rows -- it cannot stream slice-bands." Each view-owner gathers a narrow column of pixels at full height and projects it in one call, with `fwd_pixel_batch` at 4096 for 768 slices and above. mbirjax measured the two forms against each other: the full-cylinder form "increased transient memory for the projector by about 10% but decreased time by about 2x" over the per-band form (`dev_sharding_overview.rst:119-124`).
+
+**That dissolves A4's 2K objection, and it retires the grid variant.** The cone shape is A4's coalescing done with pixel tiling, so nothing ever assembles a whole cylinder. The transient is 4096 pixel columns by the slice count by 4 bytes, which is about **34 MB at 2048³** and independent of the device count, rather than 24.9 GB. The same shape moots mg9's cone grid-narrowing variant, because a full-height column genuinely needs the full detector-row range, so that grid axis is no longer wasted work. The **cone value gate survives**. Cone today accumulates per-band partials, which is n host-side adds, and projecting each full-height column in one call changes the vertical accumulation order. Parallel's fixed-knee band needs no value gate, because it is the same walk with a different band size and it moves no accumulation. One point of port history belongs here: the banded cone walk was the *port's* unification of cone onto the parallel shape, and mbirjax's comment plus its measured comparison are direct evidence of what that unification cost. Writing that design note and taking it to a checkpoint ruling is still the next step, and the plan's step 5 carries the charge.
+
+## Sorted stream: yes, still on the table
+
+Item 13 is scheduled, not declined — its entry gate is satisfied and recorded (the forward is ~72% of GPU time at parallel 1024). It's sequenced *after* the driver remedy for a priced reason: the two attack **different failures**. The driver remedy addresses *why the cost doesn't fall when you add devices* (the scaling failure). Sorted stream addresses *how large the cost is at any one count* (the level failure: parallel runs 40.0 s at one device against jax's 25.8, with 14.4 s attributed to the forward kernel and flat across every batch size — atomic throughput, which batching can't touch). They're complements, and ordering A first matters twice over: A moves the baseline B's feasibility probe would price against, and if A restores scaling, B's kernel win is realized at every device count instead of mostly at one.
+
+**Why parallel-only — measured need, and that alone.** This paragraph used to give two reasons, one measured and one structural, and the mbirjax reading showed the structural one was wrong. mbirjax sorts cone too. The sorted form lives in the shared projector helpers behind a flag (`projectors.py:83-114`), and mbirjax enables that flag for cone as well as for parallel (`parallel_beam.py:143`, `cone_beam.py:449`). mbirjax's own campaign record adds the policy behind that flag. All four geometries carry the sorted branch, and three of them enable it by policy: parallel, cone, and multiaxis (the mbirjax campaign record, `plans/projector_kernels/fwd_back_findings.md`). The selection rule is numeric rather than geometric. The guards are MIN_COLS=48, MAX_COLS=1280, and MIN_COLLISION_RATIO=4 (`projectors.py:66-81`), and the variable they gate is the mean channel-collision count, `psf_width * num_pixels / num_det_channels`. Every win that record carries sits at a collision ratio of 6 or more. The fourth geometry, translation, declines the form deliberately, and it declines on a measured result: "at its real detector shapes the sorted form measured 4.5--6.5x slower". Translation's real shapes average about 2 collisions per channel, so sorting cannot recover its own cost there. So the scope is measured need alone. Cone has no level gap to close, at 0.98x of jax at one device, while parallel runs 14.4 s above jax. Cone's entire deficit is scaling, which sorted stream does nothing for, because it changes what happens inside one projector call and not how calls scale. One note applies to the re-gate. mbirjax's shipped win is a *per-call* in-kernel sort (`lax.sort_key_val` + `segment_sum`) rather than the cached pre-sorted streams of our K5 design. It caches nothing because "its per-call setup is ~free", so the light per-call form deserves the first probe.
+
+One more piece deserves its place in the picture: **cone's back projection is the other half of cone's problem** — it *rises* at two devices (23.6 → 30.3 s, reproduced exactly in mg9) and now co-dominates with cone's forward. No forward option touches it; it's flagged for its own remedy choice. So even a perfect A4 leaves cone-1024-n2 around 53 s against jax's 43.4 (findings §1.2), and closing that last gap runs through the back loop, not the forward.
+
 # Decision memo: the remedy for the multi-GPU forward
 
 **Status.** Draft for the session lead's review, then the repo owner's ruling.
@@ -444,3 +479,223 @@ parallel 1024 already scales 1.70x at four devices.  The A4 sizing in
 for parallel and against every leg for cone.  Item 13's re-gate after
 a remedy lands is unchanged, and the cone back rise reproduced at
 30.33 s of device span, so its separate variant stands.
+
+---
+
+## 8. The remedy, revised against mbirjax's source (2026-08-10, evening)
+
+§7's mechanism ruling stands, and §7's choice of remedy shape does not.
+On the evening of the mg9 read the repo owner asked three questions
+about mbirjax, the reference implementation this port follows.  The
+questions were how mbirjax dispatches a projection to several devices,
+what each device holds resident during a sharded forward, and what
+bounds per-device memory at the 2K design point.  A source reading
+answered all three from the mbirjax checkout at
+`/Users/gbuzzard/Documents/PyCharm Projects/Research/mbirjax`, and its
+file-and-line record is the basis of everything below, and that record
+is archived as `reviews/mbirjax_source_reading_2026-08-10.md`.  The
+answers matter because mbirjax met the same problem this memo is about.  It
+solved that problem differently in each geometry, and it recorded
+measured evidence for each of the two solutions.
+
+### 8.1 Parallel: the band is pinned to a measured knee
+
+mbirjax bands the parallel forward as this port does, and it sizes the
+band by a constant rather than by the shard.  The constant is in
+`parallel_beam.py` line 116: `_FWD_SLICE_BAND_GPU = 256  # the measured
+knee; whole-shard bands are WORSE at scale`.  The band length used is
+`min(256, slices_per_dev)`, at `parallel_beam.py` lines 186 to 192.
+
+The dispatch arithmetic follows from that constant.  Per-device calls
+are the device count times `ceil(slices_per_dev / 256)`, which is about
+`num_slices / 256` and therefore constant in the device count.  At 1024
+slices the per-device count is four at one device, four at two, and
+four at four.  Adding devices shrinks each call along the view axis,
+because each call carries only the calling device's view range.  This
+arithmetic was derived by the source reader from the code rather than
+read from a comment, and it is flagged as an inference in the reading.
+
+Our port sizes the band to the shard instead.  Its per-device
+view-range calls therefore grow with the device count, at 85n per
+reconstruction by §2.2, where mbirjax's hold constant.  At two devices
+our band is 504 slices, and mg9 measured that width inside the flat
+regime.  mg9's per-launch times agree with mbirjax's constant to within
+the granularity of the measurement.  They are 41.5 ms at the full
+1008-slice band, 41.5 ms at the 504-slice band, and 21.4 ms at the
+252-slice band (findings §1.7).  A knee between 252 and 504 is
+consistent with both readings.
+
+The parallel remedy is therefore to keep the band walk and to fix the
+band length at a knee swept on our own kernel.  mbirjax's 256 is the
+knee of mbirjax's kernel, and it is not automatically the knee of our
+Triton kernel.
+
+This shape is not A4's coalescing.  A4 assembles the bands a device
+receives into one call spanning every slice.  The comment at
+`parallel_beam.py` line 116 records the opposite measured result, that
+whole-shard bands are worse at scale, and A4's assembled band is wider
+than a whole shard.
+
+### 8.2 Cone: no banding at all, and full-height column batches
+
+mbirjax does not band the cone forward, and its own docstring gives the
+reason.  `tomography_model.py` lines 1654 to 1660 state it: "A slice can
+project to a RANGE of detector rows (cone), so every view-owner needs
+ALL slices to produce its own views' rows -- it cannot stream
+slice-bands."
+
+Each cone view-owner instead gathers full-height cylinders one pixel
+batch at a time.  The loop is at `tomography_model.py` lines 1695 to
+1709.  For each batch of pixel columns the view-owner concatenates that
+column range from every slice-owner into one full-height cylinder, then
+makes a single projector call on it.  The batch size is
+`fwd_pixel_batch`, which is 4096 at 768 slices and above, at
+`cone_beam.py` lines 415 to 416 and 436 to 437.  The cross-device
+transient is therefore 4096 pixel columns by the slice count by 4
+bytes, which is about 34 MB at 2048³.  That size does not grow with the
+device count.
+
+mbirjax measured the two forms against each other, and the record is in
+`docs/source/dev_sharding_overview.rst` lines 119 to 124.  The
+whole-cylinder form "increased transient memory for the projector by
+about 10% but decreased time by about 2x" over the per-band form.
+These results indicate that a banded cone walk costs about a factor of
+two in the reference implementation, at a transient-memory saving of
+about ten percent.
+
+One point of port history belongs in this record.  The banded cone walk
+in this port was the port's own unification of cone onto the parallel
+shape.  mbirjax's cone path is the opposite structure, so the comment
+quoted above and the measured comparison beside it are direct evidence
+of what that unification cost.
+
+Both constants the two shapes rest on also appear in a record this
+repository already carries.  The mbirjax campaign record at
+`plans/projector_kernels/fwd_back_findings.md` states the measured
+tiling as "slice band 256, pixel batch 8192; cone gets pixel batch 4096
+above 768 slices", which corroborates the source reading from an
+independent document.
+
+### 8.3 Three further observations from the reading
+
+Three points support the two shapes above without deciding anything.
+
+mbirjax keeps every loop that moves no data between devices inside one
+compiled program.  Its pixel batches run as `jax.lax.scan` and its view
+batches as `jax.lax.map`, both inside a single `jax.jit`, at
+`projectors.py` lines 710, 816, and 896 to 898.  Only the loop that
+actually copies between devices is written in Python.
+
+mbirjax carries an explicit floor on the work in one dispatch.
+`_BACK_PROJECT_MIN_BAND_WORK = 4_000_000` elements exists because bands
+of about 0.8M elements "added dispatch overhead with no memory benefit"
+while bands of about 50M "scaled fine and even sped up", at
+`tomography_model.py` lines 2218 to 2225.  A band knee therefore has a
+floor beneath it as well as a ceiling above it.
+
+mbirjax probes device-to-device copies for correctness before trusting
+them.  `transfer.py` lines 36 to 58 record that a direct `device_put` on
+L40S "silently produces zeros on the destination — no error is raised",
+and the code falls back to a host bounce when the probe fails.  This
+port's `dev2dev_safe` flag covers the same hazard.
+
+### 8.4 What this supersedes in §6 and §7
+
+Two items in the earlier record are superseded, and each for a
+different reason.
+
+A4's open 2K-residency question is dissolved rather than answered.  §3's
+A4 entry charges a whole assembled cylinder, which is 3.11 GB per device
+at the 1024 cell and 24.9 GB at 2K.  Findings §6.4 already rules
+whole-cylinder residency impossible at 2K.  mbirjax's pixel tiling never
+assembles a whole cylinder.  It assembles one column batch at a time, so
+the residency question A4 raised does not arise in the tiled form.  The
+number that replaces 24.9 GB is about 34 MB at 2048³.
+
+§7's cone grid variant is withdrawn as moot.  That variant proposed
+sizing the cone launch grid to the band's detector-row span instead of
+to the full detector.  It was worth pricing only while cone was banded
+by slices, because a narrow slice band reaches only part of the
+detector.  A full-height column of voxels reaches the whole detector-row
+range, so under the column-gather shape the grid's full-detector axis is
+not wasted work.  §2.3's reading of that grid term stands as a reading
+of the code, and the remedy built on it does not.
+
+### 8.5 What survives, and one argument that does not
+
+Four earlier rulings are unaffected by this revision.
+
+The mechanism ruling stands.  The flat span is kernel-busy time, at 97
+to 98 percent of the per-device bracket at every count (§7, findings
+§1.7).
+
+A2 and A3 stay declined.  Their target is the bracket-minus-busy gap,
+which measures 0.3 to 1.0 s against a 29 s span.
+
+The cone value gate stands.  Cone today accumulates n host-side partial
+sums, one per band, at `partial_shards[i].add_(partials[i])` on line 527
+of the driver.  The column-gather form projects each full-height column
+in one call, so the order of the vertical accumulation changes.
+Parallel's fixed-knee band needs no such gate, because it is the same
+walk with a different band length and it moves no summation.
+
+Item 13 keeps its position, with one addition.  It stays scheduled after
+the driver remedy, for §5's reasons, and it stays scoped to parallel.
+The addition concerns its form.  mbirjax's shipped sorted-channel reduce
+is a per-call sort inside the compiled kernel, `jax.lax.sort_key_val`
+followed by `jax.ops.segment_sum`, at `projectors.py` lines 125 to 143.
+It caches nothing, because "its per-call setup is ~free"
+(`parallel_beam.py` lines 136 to 137).  Our K5 design instead builds
+cached pre-sorted streams.  The light per-call form should therefore be
+the first probe when item 13 re-gates.
+
+One argument for the parallel-only scope does not survive the reading.
+That scope has been argued on two grounds, one measured and one
+structural.  The structural ground was that cone offers no static
+structure against which a sort could be cached.  mbirjax selects the
+sorted form through a flag in the shared projector helpers
+(`projectors.py` lines 83 to 114), and it enables that flag for cone as
+well as for parallel (`parallel_beam.py` line 143, `cone_beam.py` line
+449).  mbirjax's own campaign record for these kernels states the
+policy behind that flag.  All four geometries carry the sorted branch,
+and three of them enable it by policy: parallel, cone, and multiaxis
+(the mbirjax campaign record,
+`plans/projector_kernels/fwd_back_findings.md`).
+
+The selection rule is numeric rather than geometric.  The guards are
+`SORTED_CHANNEL_REDUCE_MIN_COLS = 48`, `MAX_COLS = 1280`, and
+`MIN_COLLISION_RATIO = 4`, at `projectors.py` lines 66 to 81.  The
+variable those guards gate is the mean channel-collision count,
+`psf_width * num_pixels / num_det_channels`, and every win the campaign
+record carries sits at a collision ratio of 6 or more.  Translation is
+the fourth geometry, and it declines the form deliberately on a
+measured result: "at its real detector shapes the sorted form measured
+4.5--6.5x slower" (`dev_projector_kernels.rst` lines 46 to 48).
+Translation's real detector shapes average about 2 collisions per
+channel, so sorting cannot recover its own cost there (the mbirjax
+campaign record).  A cone sorted form is therefore not structurally
+barred.  It stays unscheduled on measured need alone, because cone runs
+at 0.98x of jax at one device while parallel runs 14.4 s above jax.
+The summary block at the top of this memo is corrected accordingly.
+
+### 8.6 What the design note must still establish
+
+The reading transfers a shape, not a number.  Three things must be
+established on our own kernels, and the design note owes all three.
+
+The first is the parallel band knee.  Sweep the band length on our
+Triton parallel forward at a fixed device count, and read the per-launch
+time against the band length.  mg9 supplies two points already, 41.5 ms
+at 504 slices and 21.4 ms at 252, so the sweep needs the interval
+between them and the region below 252.  §8.3's dispatch floor is the
+reason to sweep downward as well as upward.
+
+The second is the cone column-batch size.  Sweep the analogue of
+`fwd_pixel_batch` on our cone kernel, and read both the time and the
+transient against it.  mbirjax's 4096 is a knee on its own kernel and
+its own tiling, and our kernel batches pixels differently.
+
+The third is the value gate protocol for cone's order change.  The
+column-gather form changes the vertical accumulation order, so the note
+must name the gate it will run and the tolerance it will hold before any
+code moves.

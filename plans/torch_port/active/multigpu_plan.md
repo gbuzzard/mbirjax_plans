@@ -31,9 +31,10 @@ The guard's design questions are all answered.  The metric is
 sinogram elements, by measurement.  The floors are per geometry and
 per count, under the floor_4 crossover rule.  No preference rule is
 needed.  The cadence decision is made.  The forward's flatness is
-attributed to count-invariant data movement in the banded driver.
-The back loop's over-charge is attributed to a phantom sum, and its
-one real avoidable residency is confirmed.
+attributed to kernel-busy time by the mg9 instrument, and the
+earlier attribution to count-invariant data movement is refuted
+(findings §1.7).  The back loop's over-charge is attributed to a
+phantom sum, and its one real avoidable residency is confirmed.
 
 One gap is provisionally accepted rather than open.  Cone 1024 above
 one device stays uncovered in the value comparison.  Findings §4
@@ -107,22 +108,31 @@ follows.  The seven steps are these:
    the per-device bracket at every count, while the band broadcast
    moves at 197 to 257 GB/s and costs under 0.2 s.  The serialization
    remedies A2 and A3 are declined, because their entire target is
-   under one second.  The per-launch remedy A4 is selected, gated on
-   the 2K residency pricing the memo requires.  One new fact came
-   with the reading: parallel at four devices already halves the span
-   and scales the reconstruction 1.70x, so parallel's flatness is
-   confined to the one-to-two leg, while cone stays flat at every
-   count.  Findings §1.7 and the memo's §7 carry the read.
+   under one second.  The per-launch remedy A4 is selected.  Its 2K
+   residency gate was later dissolved by the revision recorded below.
+   One new fact came with the reading: parallel at four devices
+   already halves the span and scales the reconstruction 1.70x, so
+   parallel's flatness is confined to the one-to-two leg, while cone
+   stays flat at every count.  Findings §1.7 and the memo's §7 carry
+   the read.
 
-   The remaining work follows.  Write the A4 design note with its 2K
-   pricing, and price cone's band-sized launch grid beside it as the
-   kernel-level variant.  Take the choice to a checkpoint ruling.
-   Re-gate item 13 on post-remedy numbers.  The item-13 entry gate is
-   recorded from §1.5's device-span share, 28.9 s of the 40.0 s
-   reconstruction at parallel 1024; §1.3's parallel host-bracket
-   shares are superseded for gate purposes, and cone's stand.  The
-   cone back's rise at two devices reproduced at 30.33 s of device
-   span and keeps its own variant of the choice.
+   The remaining work follows.  A source reading of mbirjax on the
+   evening of 2026-08-10 revised the remedy's shape, and the memo's
+   §8 records it.  Write the design note proposing the two shapes
+   that reading supports: for parallel, keep the band walk and fix
+   the band length at a knee swept on our own kernel; for cone, drop
+   the band walk and gather pixel-batched full-height cylinders, with
+   a sweep of the column-batch size.  Carry the cone value gate,
+   because the column-gather form changes the vertical accumulation
+   order.  Cite the memo's §8 for the evidence behind both shapes.
+   Take the choice to a checkpoint ruling.  Then re-gate item 13 on
+   post-remedy numbers, with mbirjax's light per-call sorted form as
+   the first probe.  The item-13 entry gate is recorded from §1.5's
+   device-span share, 28.9 s of the 40.0 s reconstruction at parallel
+   1024; §1.3's parallel host-bracket shares are superseded for gate
+   purposes, and cone's stand.  The cone back's rise at two devices
+   reproduced at 30.33 s of device span and keeps its own variant of
+   the choice.
 6. **The 2K design work.**  NOT STARTED, and it now waits on nothing,
    because step 3's charge re-derivation is done.  Charter C's
    capacity table computes from the corrected charges, and the table
