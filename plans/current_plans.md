@@ -113,8 +113,15 @@ Record: `nightly_plan.md` §10–§12 (plan, trial gates, findings).
 - Remaining: the three held pages (install and maintenance ride item 7;
   the dashboard page stays held at Greg's request), the two geometry pages
   (ride item 6), and the timing-table refresh (rides item 3).
+- There are also unresolved warnings in the Sphinx build that should be addressed:
+```
+/Users/gbuzzard/Documents/PyCharm Projects/Research/mbirtorch/docs/source/index.rst:56: WARNING: unknown document: 'install' [ref.doc]
+/Users/gbuzzard/Documents/PyCharm Projects/Research/mbirtorch/docs/source/index.rst:62: WARNING: unknown document: 'dev_performance_dashboard' [ref.doc]
+/Users/gbuzzard/Documents/PyCharm Projects/Research/mbirtorch/docs/source/overview.rst:34: WARNING: undefined label: 'installationdocs' [ref.ref]
+/Users/gbuzzard/Documents/PyCharm Projects/Research/mbirtorch/docs/source/quick_start.rst:21: WARNING: undefined label: 'installationdocs' [ref.ref]
+```
 
-## 6. Additional geometries: translation and multiaxis
+## 6. Additional geometries: translation and multiaxis — COMPLETE (2026-08-10).
 
 **State (2026-08-10, evening):** both ports landed and were reviewed
 (verdicts LAND NOW; reviews archived in `plans/torch_port/reviews/`), and all
@@ -143,22 +150,14 @@ Original charter: section B of
 - Kernel treatment decided by measurement; the Phase 5 protocol applies if
   the torch bodies do not suffice.
 
-## 7. Release workflow
+## 7. Release workflow — COMPLETE (2026-08-10).
 
-**State:** A complete proposal exists at
-`plans/torch_port/active/release_workflow.md`; nothing implemented.
+**State:**   The full proposal as implemented is at
+`plans/torch_port/active/release_workflow.md`.
 
 - GitHub-Release-driven publishing: main/prerelease branch model, CI on
   pull requests, PyPI via Trusted Publishing, Read the Docs on
   `stable`/`latest`.
-- Five open decisions to settle first: CI GPU coverage, TestPyPI cadence,
-  the Python matrix, post-publish wheel testing, and the release home repo.
-- From the 2026-08-08 goldens ruling: the release gate opts in to the full
-  suite (`-m "goldens or not goldens"`) in a provisioned dev environment,
-  and goldens retire at the first intentional non-backward-compatible
-  change rather than being regenerated against a frozen mbirjax.
-- Then implement: the eight setup steps, the three workflow files, and the
-  `dev_maintenance.rst` rewrite.
 
 ## 8. Remaining utility API surface — LARGELY COMPLETE
 
