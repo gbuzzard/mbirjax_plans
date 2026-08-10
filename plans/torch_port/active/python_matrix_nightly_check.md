@@ -328,7 +328,14 @@ Each increment is small and independently testable.
    checker with `--dry-run`: it prints the branch name, each edited
    file, and the pull-request title and body into the run summary, and
    writes nothing.
-4. **The live trial.**  A forced divergence is made by removing 3.12
+4. **The live trial.**  SKIPPED, by Charlie's ruling (2026-08-10): the
+   watch cannot do anything worse than open a pull request, so the
+   staged trial is not worth its ceremony -- the FIRST REAL pull
+   request (adding Python 3.13, 3.14, 3.15) serves as the trial.  If
+   its email or checks misbehave, that is visible on a harmless pull
+   request and gets fixed there.
+   (The original trial design is kept below for the record.)
+   A forced divergence is made by removing 3.12
    from the version file on `prerelease`.  The workflow is dispatched
    by hand.  The trial must confirm six behaviors: the pull request
    appears, authored by `github-actions[bot]`; both maintainers receive
@@ -337,9 +344,14 @@ Each increment is small and independently testable.
    change again; the watchdog line reports the standing "no" the next
    night; and deleting the branch withdraws it.  The trial pull request
    is then closed, its branch deleted, and the version file reverted.
-5. **Enable.**  The `--dry-run` flag comes off the scheduled run, and
-   the watchdog line is enabled in the gautschi nightly.  The first
-   quiet week's watchdog lines are read once.
+5. **Enable.**  DONE 2026-08-10 (mbirtorch 9af6d87, merged to main as
+   pull request #2): the acting mode landed and the schedule is armed.
+   Expected behavior: the watch opens its first real pull request
+   within two nights (the two-night confirmation), proposing 3.13,
+   3.14, 3.15.  Charlie also answered the open question: torch floor
+   advances are MERGED ON ARRIVAL, not batched.  Still Greg's:
+   the watchdog line in the gautschi nightly.
+   The first quiet week's watchdog lines are read once.
 
 ## 6. Greg's rulings, and what stays open
 
