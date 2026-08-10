@@ -42,7 +42,7 @@ Both mbirjax modules are fully multi-device (Fable verified, 2026-08-09), so per
 3. New-geometry parity against mbirjax uses opt-in goldens, per the recorded ruling that porting charters opt in explicitly.  Mark the new tests with the `goldens` pytest marker, following the existing pattern in `tests/`.  Generate any new golden archives from the mbirjax env, and announce each generation or regeneration to Greg.
 4. Merge hygiene: keep the work off `tomography_model.py`, `projectors.py`, `_memory_ledger.py`, and the policy code while charters A/B land. New-module work naturally does.
 
-**Net state (2026-08-09, later):** A1, A5, A3, A7 complete; A4 in flight; section B is the open front.  A2 rides the guard; A6 stays item 15.  Section A's close-out gate is the Gautschi rerun of job 15001292's configuration, and it can run now (the init-gather workaround is correct; see A7).
+**Net state (2026-08-10):** Sections A and B are BOTH complete (A1, A3, A4, A5, A7; translation and multiaxis).  A2 rides the guard; A6 stays item 15.  The one open gate is the full-resolution MAR run on Gautschi, blocked on A2 (see the Update note below).
 
 **Update (2026-08-10): the Gautschi rerun ran and failed, blocked on A2.**
 Job 15047383 (full-resolution Lilly MAR, 4 H100s, mbirtorch prerelease
@@ -183,8 +183,33 @@ Shards, trace the downstream callees for tensor-only assumptions.
       usr_translation_model.rst still says translation has no direct
       reconstruction -- outdated since fdk_recon landed; corrected in the
       mbirtorch copy.
-- [ ] STARTED 2026-08-10 (Charlie's session)
+- [x] COMPLETED 2026-08-10 (Charlie's session, mbirtorch 16ff97c)
       `multiaxis_parallel.py` (+ staged doc page)
+      Status: MultiAxisParallelModel ported with the two-fan structure of
+      cone/translation.  One structural carry-over from mbirjax: the forward
+      vertical fan iterates over input slices and adds each into its detector
+      row (a scatter), rather than iterating over rows and pulling from
+      slices (a gather), because a 90-degree tilt maps every slice onto one
+      row -- a gather there would need one tap per slice, so its loop is not
+      bounded.  The fan weights are per-view scalars.  All riders honored as
+      for translation: `plan` argument kept; `goldens` marker; NO edits to
+      the four campaign files.  ANNOUNCEMENT: the golden archive was
+      regenerated again from the mbirjax env and now includes a multiaxis
+      section.  Save/load resolves the class by name; the
+      MultiAxisParallelBeamModel alias is kept; staged doc page promoted
+      (the _pending directory is now empty).
+      Gates: forward/back/FBP match mbirjax at float rounding (1.6e-6 /
+      6.3e-7 / 2.2e-6); exactly adjoint; zero elevation matches
+      ParallelBeamModel directly.  Seeded 3-iteration recon: traces match at
+      3e-6, final volume 1.2e-3 -- measured to DECAY to 4.2e-4 by 10
+      iterations, so it is float noise along the trajectory (the recorded
+      parallel-1024 pattern), and per the measured-per-cell tolerance rule
+      the volume gates for this geometry are set at 5e-3 with the
+      measurement documented in tests/test_multiaxis.py.  2 shards vs 1
+      device 1.2e-3, same class.  Full suite 394 + goldens 91 pass.
+      FOR THE FUTURE (Charlie): investigate scatter-vs-gather loop
+      organization across all geometries (hypothesis: gather vertical,
+      scatter horizontal); testable one axis at a time against the goldens.
 - `vcd_utils.py` blue-noise partition functions: NOT porting (Charlie,
   2026-08-09).
 
