@@ -14,8 +14,7 @@ chain does not need this level of care; short status lines are fine there.
 Technical terms are fine when they are
 broadly understood by the community or defined where they are first
 used.  Do not use invented or undefined jargon (for example, "merge
-hygiene" — say instead "do not edit these files while Greg's changes
-are landing").  The same rule applies to code comments.
+hygiene") or any plan notation.  The same rule applies to code comments.
 
 ## Structure
 

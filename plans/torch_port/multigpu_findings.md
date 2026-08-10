@@ -295,6 +295,37 @@ The `hess_weights` question closes.  Unweighted and weighted peaks at
 parallel 1024 differ by -0.06 GB at n=2 and -0.03 GB at n=4, so the
 declined release stays declined with n>1 evidence behind it.
 
+**The release is verified, and this section closes (2026-08-10).**  The
+verification ran on the code of the merged tip and returned four green
+signatures.  The standing 2-GPU kernel gate passed 12 of 12.  The
+mg2-style re-calibration measured post-release peaks at all ten cells,
+and no per-device reading fell under 1.00.  The minimum was 1.103, with
+the pre-release pad still in place.  Each release saving matched its
+registration.  Cone 1024 at four devices fell 10.5 percent, exactly as
+registered.  Parallel 1024 at four devices did not move, also exactly
+as predicted, because its peak is a reduce and no release touches a
+reduce.  Parallel 1024 at two devices fell 11 to 16 percent, down to
+its next phase floor, and the 512 cells were essentially unmoved.  The
+mg6-style re-probe then read the registered residency signature
+exactly.  Band-pass entry steps are +1 cylinder on device 0 and 0 on
+the other devices, at every arm.  The stale partial is therefore
+eliminated, and the surviving +1 cylinder is the finished own band,
+which is the pass's output.  Live block counts sit at the rider's
+min(2, nb) ceiling, and cone 1024 at four devices dropped a full
+cylinder to 0.97.
+
+The pre-release pad is retired, and the ledger now carries no fitted
+constant.  The `forward margin (pre-release)` placeholder is replaced
+by two closed-form terms.  The forward block spans the detector rows on
+a two-fan geometry, which is the whole cone correction.  The view-range
+loop's second live block is charged as min(2, batches) - 1.  Against
+the post-release rows, zero of thirty readings sit under 1.00 and the
+minimum is 1.004.  The count above the 1.30 ceiling falls from 12 to 6.
+The 1.004 minimum is a back phase, the hessian's band reduce, and that
+phase is bit-identical across the release.  That reading is therefore
+the genuine peak instant at its cell, not a term the release masked.
+The ledger question this section opened is CLOSED.
+
 ---
 
 ## 3. The crossover ladder (mg4)
@@ -723,6 +754,23 @@ elements, as §3.5 reports.  The guard therefore has everything it
 needs, and it implements next.  The metric choice also survives
 forward changes, even though the knee values do not.
 
+**Refresh addendum (2026-08-10).**  The refresh script had its first
+real run, 31 minutes on four GPUs, and it re-measured the floors on the
+post-release code.  The cone n=2 sentinel tripped, exactly as its
+registered condition specified.  Cone n=2 now wins at the 512-class
+cell by 1.02x against a 0.52 percent spread, which is the same nominal
+win that sat inside its own noise before the releases.  That entry is
+therefore the table's first finite cone n=2 floor, and its note marks
+it marginal.  The other floors kept their values, and cone n=4's
+bracket tightened from 512-to-1024 down to 768-to-1024.  The
+stale-hash debt the back-loop pair stamped is cleared, so `STALE_SINCE`
+is None again.  One numerical coincidence is recorded without
+interpretation.  The cone and parallel floor tables are now numerically
+identical.  Their brackets, spreads, and comparison counts still
+differ.  The refresh's dry planning output already pairs cone n=4
+against n=2, which is what the crossover rule prescribes for the next
+refresh now that cone n=2 is admitted.
+
 ### 6.2 Charter A: attribute the forward at n>1
 
 One probe sweep attributes the campaign's two performance anomalies
@@ -807,6 +855,17 @@ the seam restructure costs nothing in time (0.04 s per pass); the
 orchestration levers are real but sit where the guard already holds
 n=1.  The first two return as charter C's legs at 2K.
 
+**Addendum (2026-08-10): the seam's memory premise is now met at 1K.**
+The seam restructure was declined here because it cost nothing in time,
+and it returned at 2K as charter C's reduce leg.  The memory side of
+that return condition is now met at 1K by direct measurement.  With the
+releases in, the binding sub-step is the band reduce at three of the
+four re-probe arms, namely both parallel 1024 counts and cone 1024 at
+four devices.  This measurement updates the ruling's premise.  It does
+not re-rule the decision.  The seam is therefore a candidate to pull
+forward from charter C, and the decision is Greg's.  §6.7 carries that
+pending decision in the sequencing.
+
 ### 6.6 The cadence numbers
 
 The per-cell costs for the nightly's n>1 cadence are in §1.4, and
@@ -837,6 +896,11 @@ timing table refreshes from mg1's gate table, and the item-13 entry
 gate is formally recorded as satisfied from §1.5's device-span share,
 which supersedes §1.3's parallel host-bracket shares.  The cadence
 call (6.6) is decided and recorded there.
+
+One sequencing question is now open, and it is Greg's.  The seam
+restructure's memory premise is met at 1K, as §6.5's addendum reports.
+Its reduce leg is therefore either pulled forward from charter C now or
+held to 2K.
 
 ---
 
