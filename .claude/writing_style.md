@@ -16,6 +16,10 @@ broadly understood by the community or defined where they are first
 used.  Do not use invented or undefined jargon (for example, "merge
 hygiene") or any plan notation.  The same rule applies to code comments.
 
+**No metaphors or idioms in technical statements — state the literal
+fact.**  (Charlie, 2026-08-10.  Example of the failure: describing a
+helper function in the same repository as "sitting next door.")
+
 ## Structure
 
 * Order sections and paragraphs as a conceptual narrative: the big idea
