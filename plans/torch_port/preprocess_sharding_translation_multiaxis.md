@@ -12,6 +12,13 @@ Please leave a status report for each item you complete or for blocked/not fully
 If an item is marked as "STARTED" when you're ready to begin a new task, then choose a different task.
 mbirtorch work for these items lands on the `prerelease` branch.
 
+**Writing rule (Charlie, 2026-08-10).** Write plan entries and status
+reports in plain English.  Technical terms are fine when they are
+broadly understood by the community or defined where they are first
+used.  Do not use invented or undefined jargon (for example, "merge
+hygiene" — say instead "do not edit these files while Greg's changes
+are landing").  The same rule applies to code comments.
+
 ## Section A, per item
 
 **Go: A4 is in flight; section B is the open front.  (A1, A5, A3, A7
@@ -36,6 +43,20 @@ Both mbirjax modules are fully multi-device (Fable verified, 2026-08-09), so per
 4. Merge hygiene: keep the work off `tomography_model.py`, `projectors.py`, `_memory_ledger.py`, and the policy code while charters A/B land. New-module work naturally does.
 
 **Net state (2026-08-09, later):** A1, A5, A3, A7 complete; A4 in flight; section B is the open front.  A2 rides the guard; A6 stays item 15.  Section A's close-out gate is the Gautschi rerun of job 15001292's configuration, and it can run now (the init-gather workaround is correct; see A7).
+
+**Update (2026-08-10): the Gautschi rerun ran and failed, blocked on A2.**
+Job 15047383 (full-resolution Lilly MAR, 4 H100s, mbirtorch prerelease
+944aec2) ran out of GPU memory 2m40s in, at the segmentation step of the
+first beam-hardening pass.  Cause: the initial FDK reconstruction never
+makes the automatic choice to use all the GPUs (that choice is made only
+inside the iterative solver), so FDK built the full 18 GB volume on GPU 0
+alone.  Segmentation then received an ordinary tensor on GPU 0, took its
+single-device path, and could not allocate the 18 GB it needed for a
+class mask.  All of the sharded code from A1/A7 is in place and was never
+reached.  So the final real-hardware test of section A waits on the A2
+fix (deferred to the multi-gpu campaign, see above).  Decision (Charlie,
+2026-08-10): do not work around it by setting the device list in the
+application script; rerun the job after A2 lands.
 
 # mbirtorch port — remaining work (updated 2026-08-09)
 
@@ -82,6 +103,8 @@ mbirjax reference implementation.
       use-N-GPUs decision (`_apply_device_policy` runs only in recon).
       A direct FDK call runs on 1 GPU.  Small fix.
       DEFERRED — rides the multi-gpu campaign's guard change (see A2 above).
+      Now the one blocker for the full-res MAR hardware test: job 15047383
+      (2026-08-10) failed on exactly this (see the Update note above).
 - [x] COMPLETED 2026-08-09 (Charlie's session, mbirtorch 712c523)
       `preprocess/pipeline.py` (scan preprocessing).
       Status: map_view_batches spreads the views over a device list --
