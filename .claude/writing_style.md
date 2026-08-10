@@ -20,6 +20,13 @@ hygiene") or any plan notation.  The same rule applies to code comments.
 fact.**  (Charlie, 2026-08-10.  Example of the failure: describing a
 helper function in the same repository as "sitting next door.")
 
+**Do not use a word without fully understanding its precise meaning.**
+(Charlie, 2026-08-10.  Example of the failure: a "fresh" thread pool.
+"Fresh" applies to things whose quality degrades with time, so "stale
+information" is legitimate and "fresh pool" is not.  Say the literal
+fact: a new ThreadPoolExecutor is constructed, used once, and
+destroyed.)
+
 ## Structure
 
 * Order sections and paragraphs as a conceptual narrative: the big idea
