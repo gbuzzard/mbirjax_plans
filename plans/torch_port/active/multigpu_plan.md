@@ -100,22 +100,29 @@ follows.  The seven steps are these:
    question in the negative.  Neither the partial re-run nor the
    deferred deep-class arms are therefore scheduled.  Findings §4
    carries it.
-5. **Charter A, step two.**  NOT STARTED.  This step chooses between
-   a driver change and item 13's sorted stream.  Four measured inputs
-   are now in hand for that choice: the item-13 entry gate re-based
-   on the device-span share, the count-invariant data movement the
-   forward attribution found, mg7's call-count growth of fourfold per
-   count doubling, and the corrected ledger's finding that the
-   forward is now the dominant modeled phase at nine of ten cells.
+5. **Charter A, step two.**  MEASURED; THE REMEDY IS CHOSEN AND NOT
+   YET IMPLEMENTED.  The remedy memo's validating instrument ran on
+   2026-08-10 (mg9) and answered the open mechanism question: the
+   forward's flat span is kernel-busy time, at 97 to 98 percent of
+   the per-device bracket at every count, while the band broadcast
+   moves at 197 to 257 GB/s and costs under 0.2 s.  The serialization
+   remedies A2 and A3 are declined, because their entire target is
+   under one second.  The per-launch remedy A4 is selected, gated on
+   the 2K residency pricing the memo requires.  One new fact came
+   with the reading: parallel at four devices already halves the span
+   and scales the reconstruction 1.70x, so parallel's flatness is
+   confined to the one-to-two leg, while cone stays flat at every
+   count.  Findings §1.7 and the memo's §7 carry the read.
 
-   The step's execution detail follows.  The item-13 entry gate is
-   recorded first, from §1.5's device-span share, 28.9 s of the 40.0 s
+   The remaining work follows.  Write the A4 design note with its 2K
+   pricing, and price cone's band-sized launch grid beside it as the
+   kernel-level variant.  Take the choice to a checkpoint ruling.
+   Re-gate item 13 on post-remedy numbers.  The item-13 entry gate is
+   recorded from §1.5's device-span share, 28.9 s of the 40.0 s
    reconstruction at parallel 1024; §1.3's parallel host-bracket
-   shares are superseded for gate purposes, and cone's stand.  Choose
-   between a driver change and item 13's sorted stream for the
-   count-invariant data movement.  The cone back's own rise at two
-   devices needs its own variant of that choice.  Any remainder study
-   must use device spans, not host brackets.
+   shares are superseded for gate purposes, and cone's stand.  The
+   cone back's rise at two devices reproduced at 30.33 s of device
+   span and keeps its own variant of the choice.
 6. **The 2K design work.**  NOT STARTED, and it now waits on nothing,
    because step 3's charge re-derivation is done.  Charter C's
    capacity table computes from the corrected charges, and the table

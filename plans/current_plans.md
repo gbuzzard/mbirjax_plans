@@ -116,11 +116,17 @@ Record: `nightly_plan.md` §10–§12 (plan, trial gates, findings).
 
 ## 6. Additional geometries: translation and multiaxis
 
-**State (2026-08-10):** both ports landed on prerelease and were reviewed
-(verdicts LAND NOW; reviews archived in `plans/torch_port/reviews/`), and they sit
-in the resolved merge now staged on greg_dev.  Follow-ups are queued:
-widening `copy_ct_model`/`get_ct_model`, generating the twelve new parity
-goldens, and one memory-calibration run for the two new geometries.
+**State (2026-08-10, evening):** both ports landed and were reviewed
+(verdicts LAND NOW; reviews archived in `plans/torch_port/reviews/`), and all
+three queued follow-ups are done: `copy_ct_model`/`get_ct_model` are widened,
+the twelve parity goldens pass, and the memory calibration ran and its
+correction is implemented.  The calibration (mg8) found the torch-body
+per-view proxy short on every projection-dominated arm, and the ledger now
+charges a measured closed form; findings §2.1 in
+`plans/torch_port/active/multigpu_findings.md` carries the read, and the
+corrected ledger with its tests is staged in mbirtorch.  One consequence for
+users: the preflight now refuses torch-body reconstructions that previously
+started doomed, and multiaxis 1024 sits at an H100's edge on one device.
 Original charter: section B of
 `plans/torch_port/active/preprocess_sharding_translation_multiaxis.md`.
 

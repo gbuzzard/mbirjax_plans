@@ -409,3 +409,38 @@ not move.  Cone should not move at all.
 reason §2.2 gives.  The per-device series is 85, 170, 340.  The mg7 arm check
 `fwd_batch_uniform_across_devices` should also be marked as not established,
 because the collapsed key leaves only one device's readings in the row.
+
+---
+
+## 7. The measurement's answer (2026-08-10)
+
+The §6 instrument ran the same day as mg9, job 15152345 on h018, on
+the merged tip f985a6e.  Findings §1.7 carries the full table and the
+validity checks.  The answer in one sentence: the flat span is
+kernel-busy time, not copying and not waiting.
+
+Three numbers make the ruling.  Busy time is 97 to 98 percent of the
+bracket at every count.  The broadcast costs 48 to 189 ms per
+reconstruction and moves at 197 to 257 GB/s, against the 0.44 GB/s
+that §1.5's byte inference required.  The bracket-minus-busy gap is
+0.3 to 1.0 s and shrinks as devices are added.
+
+The order §6 asked the measurement to select is therefore this.  A2
+and A3 are declined, because their entire target is under one second.
+A4 goes forward, gated on the 2K residency pricing §3 requires.  For
+cone, one variant must be priced beside A4 before either is
+implemented: sizing the cone kernel's launch grid to the band's
+detector-row span instead of the full detector, the grid term §2.3
+named.  The variant changes only the launch shape, keeps the per-band
+accumulation order, and adds no residency; whether it recovers what
+A4 recovers is not yet measured.
+
+One §6 gap is now filled, and it amends a prediction.  mg5 never
+measured parallel at four devices; mg9 did, and the span is 14.88 s,
+half of the one- and two-device 28.8 s.  Parallel's flatness is
+confined to the one-to-two leg, and the composed reconstruction at
+parallel 1024 already scales 1.70x at four devices.  The A4 sizing in
+§3 should therefore be priced primarily against the one-to-two leg
+for parallel and against every leg for cone.  Item 13's re-gate after
+a remedy lands is unchanged, and the cone back rise reproduced at
+30.33 s of device span, so its separate variant stands.

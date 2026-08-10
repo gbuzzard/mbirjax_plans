@@ -245,6 +245,79 @@ per-device CALLS, linearly, from the banded walk visiting every
 owner's band.  The instrument defect is recorded for the harness
 lineage, and the corrected numbers are charter A's input.
 
+### 1.7 The validating instrument (mg9): the flat span is kernel-busy time
+
+Measured 2026-08-10, job 15152345 on h018, on the merged tip f985a6e.
+The rows are
+`plans/experiments/torch_port/rows/mg9_fwd_instrument_h018_20260810_152514.jsonl`.
+
+The forward-remedy memo asked for one measurement before either remedy
+was chosen: record copy time separately from kernel time inside the
+forward call, and record each device's busy time separately from its
+bracket, so waiting is distinguished from computing.  The instrument
+added two readings to §1.5's per-device bracket.  The first is a CUDA
+event pair around every individual projection body call, summed per
+device (the busy time), with a call counter.  The second is the band
+broadcast's host wall plus a device-side event pair around every copy,
+bracketed on the source device's stream because that is the stream
+torch runs a cross-device copy on.  Four arms ran: parallel 1024 at
+one, two, and four devices, and cone 1024 at two.  The four-device
+parallel arm closes the gap §1.5 recorded as never measured.
+
+The reading is valid on five checks.  Every arm's built-in checks
+passed, and no arm tripped the copy-stream warning.  The brackets
+reproduce mg5's anchors to within 0.15 percent (28.90 against 28.87,
+28.77 against 28.75, 30.65 against 30.61).  The reconstruction walls
+match §1.2's within noise.  The view batches read as shipped, 128 at
+parallel and 52 at cone.  The per-device wrappers carry the device
+index by position, and the rows witness the §1.6 collapsed-key
+situation directly (`fwd_bodies_distinct_objects` reads false at more
+than one device), so the defect that corrupted mg7's counts cannot
+recur here.
+
+The table.  Each row is the largest reading over that arm's devices,
+because the reconstruction waits for its slowest device.
+
+| geometry | devices | bracket s | busy s | busy/bracket | gap s | broadcast device s | broadcast GB/s |
+|---|---|---|---|---|---|---|---|
+| parallel | 1 | 28.90 | 28.19 | 0.98 | 0.72 | 0.00 | — |
+| parallel | 2 | 28.77 | 28.24 | 0.98 | 0.53 | 0.05 | 257 |
+| parallel | 4 | 14.88 | 14.55 | 0.98 | 0.33 | 0.19 | 197 |
+| cone | 2 | 30.65 | 29.70 | 0.97 | 0.95 | 0.06 | 197 |
+
+The first conclusion is that copying and waiting are refuted as the
+flat term.  The broadcast moves 12.4 GB per reconstruction at two
+devices in 48 ms, which is 257 GB/s.  §1.5's data-movement inference
+implied 0.44 GB/s, so the measured copy path is about 580 times
+faster than the inference required.  The bracket-minus-busy gap is
+0.3 to 1.0 s and it shrinks as devices are added.  The remedy memo's
+serialization options, A2 and A3, could recover at most about one
+second of a 29 s span, and they are declined.
+
+The second conclusion is that the cost sits inside the kernel
+launches.  Busy time is 97 to 98 percent of the bracket at every
+count.  Per-device launches hold at 680 in every parallel arm while
+each launch's band narrows with the count.  The memo's rule for this
+outcome selects the per-launch remedy, option A4, gated on its 2K
+residency pricing.  For cone the code-visible per-launch term is the
+kernel grid's full-detector-rows axis, so a grid sized to the band's
+detector-row span is the kernel-level variant to price beside A4.
+
+The third conclusion is new: parallel is flat only from one device to
+two.  At four devices the span halves, with busy time 28.19, 28.24,
+and 14.55 s at one, two, and four devices over the same 680 launches.
+The per-launch time is 41.5 ms at the full and the half band and
+21.4 ms at the quarter band.  The composed reconstruction at parallel
+1024 scales 1.70x at four devices (39.96 s to 23.48 s), against the
+1.02x that §1.2 measured at two.  These results indicate that
+parallel's pathology is confined to the one-to-two leg, while cone
+stays flat through four (§1.5).
+
+One reproduction is worth its own sentence.  Cone at two devices
+shows a back-projection device span of 30.33 s beside the forward's
+30.65 s, which confirms §6.2's recorded rise and keeps the cone back
+remedy a separate decision that no forward option addresses.
+
 ---
 
 ## 2. The ledger at n>1 (mg2)
@@ -331,6 +404,62 @@ The 1.004 minimum is a back phase, the hessian's band reduce, and that
 phase is bit-identical across the release.  That reading is therefore
 the genuine peak instant at its cell, not a term the release masked.
 The ledger question this section opened is CLOSED.
+
+### 2.1 The torch-body charge (mg8)
+
+Measured 2026-08-10, job 15149052 on h014, on the verified 1a2deb0
+tree.  The rows are
+`plans/experiments/torch_port/rows/mg8_geom_calib_h014_20260810_142004.jsonl`,
+and the correction they produced is staged in mbirtorch the same day.
+
+The two geometries with no hand-written kernels, TranslationModel and
+MultiAxisParallelModel, run their projections as general torch code,
+which the ledger calls a torch body.  The ledger priced a torch body's
+view batch at one nominal slab.  A single-body measurement during the
+port review put the real transient at about ten times that slab, so
+mg8 measured the composed reconstructions: two shapes per geometry at
+one, two, and four devices, twelve arms, with the calibration mode
+owning the peak counter.  Twenty-seven of twenty-eight device-readings
+sat below the 1.00 floor, and zero rows were invalid.  The worst
+readings were 0.264 on multiaxis 512 and 0.136 on the half-scale
+translation shape.
+
+The corrected charge is closed-form, derived jointly from the rows and
+the bodies' source.  Every array in a torch body's interpolation loop
+has the shape (view batch, pixels, width), where the width is the
+detector rows or the call's slice band, whichever axis that body
+sweeps.  The per-view charge is therefore a slab count times pixels
+times the wider of the detector rows and the call's slice band, times
+four bytes.  The slab count is 14, a measured multiplier set eight
+percent above the tightest constraining reading; the rows cannot
+resolve it into named arrays, and the ledger comment says so plainly.
+A second premise fell with the first: a torch body's output plane is
+not covered by any declared per-view cost, so torch bodies now pay
+both live blocks where kernel bodies pay one.
+
+Under the corrected charge all twenty-eight device-readings sit at or
+above the floor.  The floor reading is 1.057, and the worst over-charge
+is 5.74x.  Most of that ceiling is irreducible from shapes: two
+two-device runs peaked about 2.1x apart on identical shards, and a
+model that sees only shapes must cover the higher device.  The
+torch-body band is recorded as (1.00, 5.80) beside the kernel path's
+(1.00, 1.30), and the kernel path is numerically untouched.  The suite
+verifies both statements, 488 passing with 19 new tests pinning the
+measured arms.
+
+Two consequences deserve their own sentences.  Sharding barely shrinks
+a torch-body geometry's per-device peak, and the measurement agrees
+with the corrected model: the half-scale translation shape's measured
+peak GREW from 8.2 to 27.2 GB between one and four devices.  The
+automatic count search will therefore widen less often for these
+geometries, and the preflight will refuse outright where a doomed run
+previously started and died inside the allocator; multiaxis 1024 now
+models at 68 GB on one device, which sits at an H100's edge once the
+margin is applied.  One cheap follow-up is recorded: the translation 1K
+two-device arm needs 3.9 slabs where its four-device arm needs 12.6
+from identical shapes, a run-to-run spread the rows do not explain, and
+one repeat of the two-device arms is the cheapest way to shrink the
+5.74x ceiling.
 
 ---
 
