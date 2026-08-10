@@ -152,7 +152,8 @@ Shards, trace the downstream callees for tensor-only assumptions.
 
 ## B. Unported modules
 
-- [ ] `translation_model.py` (+ gen_translation_phantom, the demo-data
+- [ ] STARTED 2026-08-10 (Charlie's session)
+      `translation_model.py` (+ gen_translation_phantom, the demo-data
       translation branch, staged doc page)
 - [ ] `multiaxis_parallel.py` (+ staged doc page)
 - `vcd_utils.py` blue-noise partition functions: NOT porting (Charlie,
