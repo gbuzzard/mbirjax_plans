@@ -366,9 +366,17 @@ ACCEPTED by Greg (2026-08-10), with one amendment: the check is not a
 manual step at release time -- it runs in the NIGHTLY in mbirjax_metrics,
 alongside the other dependency-update checks.  The nightly compares the
 `python-version` list in ci.yml against the Python versions torch
-publishes wheels for at our pinned floor, and flags a divergence in its
-report; the one-line ci.yml edit then follows as an ordinary reviewed
-change.
+publishes wheels for at our pinned floor.
+
+Delivery mechanism (settled 2026-08-10 after Greg asked whether a human
+is needed in the loop, and Charlie said a report line will never be
+noticed -- the alert must "hit him over the head" and state exactly what
+to do): on divergence the nightly OPENS A READY-MADE PULL REQUEST in
+mbirtorch containing the one-line ci.yml change.  GitHub emails both
+maintainers automatically; CI runs on the pull request and proves the
+new Python version passes the suite; a maintainer clicks Merge.  So
+detection and the written fix are automatic, and the only human act is
+the one-click merge behind green checks -- the dependabot pattern.
 
 **Should the wheel be tested after publication?**  mbirjax's maintenance page
 includes a step that installs from PyPI and runs the tests.  Automating it means a
