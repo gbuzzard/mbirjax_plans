@@ -103,23 +103,24 @@ Record: `nightly_plan.md` §10–§12 (plan, trial gates, findings).
 - Watch item: the three-night soak was waived to give item 3 its baseline,
   so the first unattended nights deserve a `status_torch_nightly.sh` look.
 
-## 5. Remaining Sphinx documentation pages — LARGELY COMPLETE
+## 5. Remaining Sphinx documentation pages — COMPLETE except two riders
 
 - DONE (2026-08-08): the docs.md work list — the section-8 restores with
   the `__all__` rule, the multi-GPU rewrite, the demos and data-generation
   halves, and the kernel and geometry developer pages — plus the panel
-  review's doc fixes, applied in the post-merge fix pass.  The build is
-  clean except the held-page warnings.
-- Remaining: the three held pages (install and maintenance ride item 7;
-  the dashboard page stays held at Greg's request), the two geometry pages
-  (ride item 6), and the timing-table refresh (rides item 3).
-- There are also unresolved warnings in the Sphinx build that should be addressed:
-```
-/Users/gbuzzard/Documents/PyCharm Projects/Research/mbirtorch/docs/source/index.rst:56: WARNING: unknown document: 'install' [ref.doc]
-/Users/gbuzzard/Documents/PyCharm Projects/Research/mbirtorch/docs/source/index.rst:62: WARNING: unknown document: 'dev_performance_dashboard' [ref.doc]
-/Users/gbuzzard/Documents/PyCharm Projects/Research/mbirtorch/docs/source/overview.rst:34: WARNING: undefined label: 'installationdocs' [ref.ref]
-/Users/gbuzzard/Documents/PyCharm Projects/Research/mbirtorch/docs/source/quick_start.rst:21: WARNING: undefined label: 'installationdocs' [ref.ref]
-```
+  review's doc fixes, applied in the post-merge fix pass.
+- DONE (2026-08-10, Charlie's session): the four Sphinx warnings Greg
+  listed here.  install.rst is written (mbirtorch b27be6a), which
+  resolves both InstallationDocs label warnings; the two references to
+  the held dashboard page are repaired with PENDING markers.  The two
+  geometry pages landed with the item-6 ports.  dev_maintenance.rst is
+  written (mbirtorch 921e5a5) around the release routine, reviewed and
+  tightened by Charlie.  The build now has ZERO warnings, and the CI
+  docs job runs with -W, so a new broken reference fails its pull
+  request.
+- Remaining: the dashboard page (stays held at Greg's request; the
+  PENDING markers in index.rst say where it reconnects), and the
+  timing-table refresh (rides item 3).
 
 ## 6. Additional geometries: translation and multiaxis — COMPLETE (2026-08-10).
 
