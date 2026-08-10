@@ -51,22 +51,37 @@ Records: `plans/torch_port/device_policy_design.md` (rulings) and
 - The flip gate exposed the forward-kernel sharding defect; item 14 repaired
   it and retired the interim.
 
-## 3. Multi-GPU performance investigation — IN PROGRESS
+## 3. Multi-GPU performance investigation — MEASUREMENT COMPLETE; implementation in progress
 
-**State:** Campaign session underway (2026-08-09); the plan is
-`plans/torch_port/multigpu_plan.md`.  Baselines: item 1's n=1 table and the
-nightly's n=4 readout (`nightly_plan.md` §11.4 — memory shards 3.55x/2.86x
-at the 1024 cells, but time reaches only 2.02x parallel / 1.19x cone, and
-the 512 cells regress).
+**State (2026-08-10):** every instrument has run and every result is read;
+`plans/torch_port/multigpu_findings.md` is the results record, and
+`multigpu_plan.md` §0 is the live dashboard of what remains.  Landed in
+mbirtorch: the widening speed guard with measured per-geometry floors and
+a refresh script (`mbirtorch/_widening_floors.py`); corrected memory
+charges (the back-loop over-charge removed, two forward under-charges
+found and fixed, no fitted constants); two stale-residency releases worth
+8 to 16 percent of peak memory at the large sizes; and automatic
+staleness detection, so the library and the test suite both keep working
+when the floors age.
 
-**Goals:**
-1. The full n=1/2/4 gate readout, both geometries, kernels on, at the live
-   default; the stale `usr_multi_gpu.rst` timing table refreshes from it.
-2. Attribute and tune what the data indicates (per-device view chunks,
-   seams, widening parameters), and deliver the two owed decisions: the
-   widening speed-guard recommendation and the nightly n>1 cadence numbers.
-3. The deferred jax-vs-torch value comparison across device counts.
-4. The forward-attribution arm — item 13's entry gate.
+**The four goals:** 1. DONE — the full gate readout is complete and
+valid; the `usr_multi_gpu.rst` timing-table refresh is a close-out item.
+2. DONE in substance — the guard shipped; the cadence decision is made
+(full n>1 cadence through the tuning window); the forward's poor scaling
+is attributed to data movement that does not fall with the device count,
+and choosing its remedy is the next design step.  3. DONE — the value
+comparison is read and goal 3 is ruled met.  4. DONE — by device-span
+measurement the forward is about 70 percent of GPU time at the large
+parallel size, so item 13's entry gate is SATISFIED.
+
+**Remaining (dashboard steps 5 through 9):** the forward-remedy choice
+(driver change versus item 13's sorted stream); the seam decision, whose
+memory premise is now met at the 1K sizes and which is Greg's call; the
+2K capacity table on the corrected charges; close-out; moving the floors
+refresh into the nightly; and a simplification of the floors for
+robustness.  One ruling spans the public surface: every entry point that
+starts sharding takes the same device policy, with a systematic entry
+list and recorded design questions ahead of implementation.
 
 ## 4. mbirtorch in the nightly — COMPLETE (2026-08-08)
 
@@ -101,9 +116,13 @@ Record: `nightly_plan.md` §10–§12 (plan, trial gates, findings).
 
 ## 6. Additional geometries: translation and multiaxis
 
-**State:** Chartered 2026-08-09 to Charlie-side sessions, in parallel with
-item 3 (~3.4k lines in mbirjax).  Working instructions and riders are in
-section B of `plans/torch_port/preprocess_sharding_translation_multiaxis.md`.
+**State (2026-08-10):** both ports landed on prerelease and were reviewed
+(verdicts LAND NOW; reviews archived in `plans/torch_port/`), and they sit
+in the resolved merge now staged on greg_dev.  Follow-ups are queued:
+widening `copy_ct_model`/`get_ct_model`, generating the twelve new parity
+goldens, and one memory-calibration run for the two new geometries.
+Original charter: section B of
+`plans/torch_port/preprocess_sharding_translation_multiaxis.md`.
 
 - Port TranslationModel and the multiaxis parallel geometry; the jax
   regression harness already carries both, so gate rows have baselines from

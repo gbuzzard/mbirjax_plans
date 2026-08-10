@@ -323,20 +323,34 @@ Five decisions are needed before implementation.
 every kernel and CUDA sharding test.  A release could pass CI with a broken Triton
 path.  A self-hosted GPU runner would close it, at the cost of maintaining one.
 
+Greg:  No, we'll rely on the nightly runs on Gautschi.  
+
 **Should `prerelease` publish to TestPyPI on every merge?**  The proposal says no,
 and requires an explicit pre-release tag.  Publishing on every merge would consume
 version numbers quickly, since TestPyPI also refuses reuse.
 
+Greg:  No, this should be a trigger that mimics the trigger used for PyPI 
+release. The true PyPI release trigger should have an interactive "Are you sure?" verification.
+
 **Which Python versions?**  The proposal tests 3.11 and 3.12.  `requires-python`
 is `>=3.11`.  Adding 3.13 depends on torch wheel availability at the pinned floor
 of 2.13.
+
+Greg:  We'll need some way of adding increments every year or 
+so.  We'll need advice about how to manage that in a reliable way.
 
 **Should the wheel be tested after publication?**  mbirjax's maintenance page
 includes a step that installs from PyPI and runs the tests.  Automating it means a
 second workflow triggered after publication, which is straightforward but adds a
 moving part.
 
+Greg:  I think it should be tested locally.  Charlie typically
+does that by hand (and enjoys the immediate feedback), but perhaps
+there could be a single dev_scripts script to do that with a single run.
+
 **Is `cabouman/mbirtorch` the release home?**  `pyproject.toml` currently lists
 `source = "https://github.com/cabouman/mbirjax"` under `[project.urls]`, which
 points at the wrong repository.  That needs fixing regardless, and Trusted
 Publishing needs the owning repository named exactly.
+
+Greg: Yes, `cabouman/mbirtorch`.

@@ -173,15 +173,20 @@ four devices.  Parallel reads 28.87 and 28.75 s at one and two.  Each
 device spends the same GPU time on the forward even though its share
 of the views falls fourfold.
 
-The driver explains that flatness.  The banded forward walks the
-reconstruction one slice band at a time, and it broadcasts each band
-to every projecting device.  Summed over the bands, every device
-receives the entire reconstruction, whatever the device count.  Cone
-adds a second invariant term, because each band yields a full-row
-partial sinogram that is then accumulated.  The forward's arithmetic
-falls as one over the device count, and its data movement does not.
-These results indicate that the remedy must reduce or overlap data
-movement, and that no batch constant can substitute.
+The driver offered a candidate mechanism, and it did not survive
+verification (correction, 2026-08-10).  The banded forward walks the
+reconstruction one slice band at a time and broadcasts each band to
+every projecting device, so every device receives the entire
+reconstruction whatever the count.  Two checks refute the bytes moved
+as the cost.  The implied bandwidth is about 0.44 GB per second at
+parallel 1024 with two devices, far below any transfer path on the
+node.  And the torch-body arm runs the identical driver and identical
+broadcast, yet its forward span falls 1.59x from one device to two
+(39.69 to 24.96 s) while the kernel arm stays flat; an invariant
+broadcast cost would appear in both.  The flatness is solidly
+measured; its mechanism is UNATTRIBUTED, sits inside the kernel arm
+specifically, and needs one cheap instrument arm that separates the
+broadcast and per-device busy time inside the forward region.
 
 One reading from §1.3 does not survive.  The parallel forward does not
 rise at two devices.  Its host-side bracket reads 20.83, 12.44, 15.93,
@@ -227,17 +232,18 @@ at these cells.  The proportionality is real, its measured cost is
 percent-scale, and no knob change is warranted now.  The question
 returns only if a tiling change moves the per-view cost.
 
-The probe's larger yield is the call-count growth.  Per-device
-view-range calls per reconstruction read 85, 340, and 1360 at one,
-two, and four devices, at both geometries and at fixed total work.
-Per-device launches double with each count doubling, from 255 or 340
-at one device to 680 at two and about 1370 at four.  The banded walk
-explains the shape: every device projects in every owner's band pass,
-and each band streams in sub-bands, so per-device calls grow with the
-count while each call's work shrinks.  These numbers quantify the
-fan-out-and-glue limiter that §3.3 names below the 384 cell, and they
-are input to charter A's step two, because the growth is
-driver-structural.
+The probe also read the call counts, and a correction applies
+(2026-08-10): the recorded series are TOTALS over all devices, not
+per-device counts.  The observer keys calls by the projection body
+object, and the kernel bodies are one shared object across devices,
+so all devices collapse into one key; the rows show exactly one
+forward key per arm, carrying the last device's label.  Corrected,
+per-device view-range calls read 85, 170, and 340 at one, two, and
+four devices — the funnel's 85 entries times the band count — and
+per-device kernel launches are FLAT in the count.  What grows is
+per-device CALLS, linearly, from the banded walk visiting every
+owner's band.  The instrument defect is recorded for the harness
+lineage, and the corrected numbers are charter A's input.
 
 ---
 
@@ -897,10 +903,9 @@ gate is formally recorded as satisfied from §1.5's device-span share,
 which supersedes §1.3's parallel host-bracket shares.  The cadence
 call (6.6) is decided and recorded there.
 
-One sequencing question is now open, and it is Greg's.  The seam
-restructure's memory premise is met at 1K, as §6.5's addendum reports.
-Its reduce leg is therefore either pulled forward from charter C now or
-held to 2K.
+The seam sequencing question is closed.  Greg ruled on 2026-08-10 to
+hold the reduce leg to 2K, where charter C's design work owns it;
+§6.5's addendum carries the measured premise that informed the call.
 
 ---
 
