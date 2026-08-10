@@ -1,6 +1,21 @@
 # Automated release workflow — proposal
 
-**Status:** PROPOSAL, nothing implemented.  This page proposes a release
+**Setup progress (2026-08-10, Charlie's session).**  Of the eight manual
+setup steps in this plan: steps 1 and 2 (main rename, prerelease branch)
+were done earlier during the docs work, and step 5 is now DONE — Trusted
+Publishing "pending publishers" for project `mbirtorch` are registered on
+BOTH registries (repository `cabouman/mbirtorch`, workflow `release.yml`,
+environment `testpypi` on TestPyPI and `pypi` on PyPI).  This also
+resolved a years-old blocker: Charlie's TestPyPI web login was broken
+(stale password + the TestPyPI authenticator secret living in Duo under
+the same "PyPI" label as the real-PyPI secret in MS Authenticator);
+fixed, with recovery codes generated.  Remaining setup: branch
+protection (3), version single-sourcing (4), the GitHub `pypi`/`testpypi`
+environments with the approval rule (6), Read the Docs default-version
+setting (7, partially done), and the RTD token (8).  The five open
+decisions below are still open.
+
+**Status:** PROPOSAL, workflow files not yet implemented.  This page proposes a release
 automation for mbirtorch and lists the manual setup it needs.  Neither mbirtorch
 nor mbirjax has a `.github/` directory today, so there is no existing workflow to
 extend and no house style to match.  Every decision below is therefore open.
