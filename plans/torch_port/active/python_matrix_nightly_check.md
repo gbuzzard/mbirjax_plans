@@ -289,11 +289,25 @@ live.
 
 Each increment is small and independently testable.
 
-1. **The pure checker.**  Detection only: read the CPU index, the
+1. **The pure checker.**  DONE 2026-08-10 (mbirtorch 3e929f4,
+   Charlie's session): `ci/dependency_watch.py` + 7 unit tests on saved
+   inputs (the cp314t tag, a non-wheel, a pre-release, a yanked file,
+   non-Linux wheels, the multi-version and below-floor cases, a torch
+   floor advance).  Its first live reading: torch 2.13.0 publishes CPU
+   wheels for Python 3.10-3.15, 3.10 is below the floor, and the
+   day-one divergence is additions 3.13, 3.14, 3.15 -- the pull request
+   the watch will open at increment 5.
+   Detection only: read the CPU index, the
    version file, and `pyproject.toml`; print the divergence or "none".
    Unit tests run on saved copies of the inputs.  No credential and no
    writes.  This is also the code the watchdog line runs on gautschi.
-2. **The one-time `ci.yml` conversion.**  A human pull request adds the
+2. **The one-time `ci.yml` conversion.**  DONE 2026-08-10 (mbirtorch
+   3571da7, Charlie's session): `.github/python-versions.json` created;
+   ci.yml reads the matrix and the docs Python from it through a small
+   first job; `workflow_dispatch` added; the ci/ tests joined the CI
+   test command.  The proving CI run reproduced the three protected
+   check names from the file-driven matrix.
+   A human pull request adds the
    version file, converts the matrix and the docs job to read from it,
    and adds the `workflow_dispatch` trigger.  This pull request is
    human-authored, so CI fires on it normally and proves the conversion
