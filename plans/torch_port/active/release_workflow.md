@@ -378,6 +378,25 @@ new Python version passes the suite; a maintainer clicks Merge.  So
 detection and the written fix are automatic, and the only human act is
 the one-click merge behind green checks -- the dependabot pattern.
 
+Revised the same day, after Greg reviewed the delivery plan.  The
+pull-request pattern stands, and the actor moves.  The watch is a
+scheduled GitHub Actions workflow inside mbirtorch, running on the
+built-in per-run token, so no machine account exists and no credential
+is stored anywhere.  The check no longer runs in the metrics nightly
+and does not run on the Macs.  The gautschi nightly keeps one
+independent watchdog line: it re-runs the detection and alarms when a
+divergence has no open or merged pull request.  The scope widens to
+torch, by Greg's ruling: the same watch proposes torch floor advances
+as the same kind of ready-made pull request, whose green checks prove
+the CPU suite while the cluster nightly proves the Triton and CUDA
+paths after merge.  Two GitHub rules shape the implementation, and both
+are designed around rather than fought: events caused by the built-in
+token start no workflow runs, so the watch explicitly dispatches CI
+onto its branch; and the built-in token cannot edit workflow files, so
+the tested-version list moves out of ci.yml into a data file the matrix
+reads at run time.  The full design is
+`python_matrix_nightly_check.md`, revised the same day.
+
 **Should the wheel be tested after publication?**  mbirjax's maintenance page
 includes a step that installs from PyPI and runs the tests.  Automating it means a
 second workflow triggered after publication, which is straightforward but adds a
