@@ -9,6 +9,9 @@ and its memory peaks are lower (12.76 to 12.81 against 14.31 GB at two
 devices; 7.21 to 7.31 against 8.03 to 8.13 at four).  The measured e-6
 distance class is registered as the expectation beside the floor, so drift
 toward the e-4 class surfaces even though it would still pass the floor.
+The registered class is not a second threshold (Greg, same evening): a
+reading beyond it calls for a judgment on the tradeoffs, and only the parity
+floor fails a gate.
 Question 6 records the ruling; the increments in §9 are now the work plan,
 with the default flip (increment 7) gated on the standing suites as §7.2
 states.  The earlier history stands below: the mg10 sweep landed on
@@ -920,7 +923,9 @@ RULED (Greg, 2026-08-10, evening): the shipped parity floor governs, on the
 stated condition that the column gather is faster with comparable or better
 memory, and both conditions hold in the rows (the status header carries the
 numbers).  The measured e-6 class is registered as the expectation beside the
-floor.
+floor.  The class is not a hard threshold, by the same ruling: a reading
+beyond it is a tradeoff judgment for the maintainers, and only the floor
+fails a gate.
 
 **7. Is the write slab's L2 residency the variable behind the sweep's one
 anomaly?**  The walked-63 arm was the parallel sweep's only winner.  Its
