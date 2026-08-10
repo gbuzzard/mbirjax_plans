@@ -116,18 +116,19 @@ follows.  The seven steps are these:
    stays flat at every count.  Findings §1.7 and the memo's §7 carry
    the read.
 
-   The remaining work follows.  A source reading of mbirjax on the
-   evening of 2026-08-10 revised the remedy's shape, and the memo's
-   §8 records it.  Write the design note proposing the two shapes
-   that reading supports: for parallel, keep the band walk and fix
-   the band length at a knee swept on our own kernel; for cone, drop
-   the band walk and gather pixel-batched full-height cylinders, with
-   a sweep of the column-batch size.  Carry the cone value gate,
-   because the column-gather form changes the vertical accumulation
-   order.  Cite the memo's §8 for the evidence behind both shapes.
-   Take the choice to a checkpoint ruling.  Then re-gate item 13 on
-   post-remedy numbers, with mbirjax's light per-call sorted form as
-   the first probe.  The item-13 entry gate is recorded from §1.5's
+   The remaining work follows.  The design note was written, the mg10
+   sweep measured both shapes the same night, and the checkpoint RULED
+   (Greg, 2026-08-10, evening): the cone column gather is adopted, the
+   parallel fixed band is declined as a time remedy and kept as an
+   undefaulted memory knob, and the value bar is the shipped parity
+   floor with the measured e-6 class registered as the expectation.
+   `forward_remedy_design.md` carries the design, the rulings, and
+   the increments, which are now the step's work plan: the flag-gated
+   cone column gather with its ledger terms and tests, the batch
+   sweep above 8192 on the real implementation, gather overlap, the
+   value gates, the default flip behind them, and the floors refresh
+   the change trips.  Then re-gate item 13 on post-remedy numbers,
+   with mbirjax's light per-call sorted form as the first probe.  The item-13 entry gate is recorded from §1.5's
    device-span share, 28.9 s of the 40.0 s reconstruction at parallel
    1024; §1.3's parallel host-bracket shares are superseded for gate
    purposes, and cone's stand.  The cone back's rise at two devices

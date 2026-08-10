@@ -323,6 +323,130 @@ shows a back-projection device span of 30.33 s beside the forward's
 30.65 s, which confirms §6.2's recorded rise and keeps the cone back
 remedy a separate decision that no forward option addresses.
 
+### 1.8 The shape sweep (mg10): one remedy declined, one adopted
+
+Measured 2026-08-10, job 15158216 on h004, on the merged tip f985a6e,
+in 1:07:01 of wall.  The rows are
+`plans/experiments/torch_port/rows/mg10_shape_sweep_h004_20260810_174925.jsonl`.
+
+The forward-remedy memo's §8 named two shapes and left three things
+to be established on our own kernels: the parallel band knee, the cone
+column-batch size, and the value gate for cone's order change.  mg10
+measured all three.  It swept the parallel slice band at a fixed device
+count, which is the single-variable arm §1.7 could not supply, and it
+ran a column-gather prototype for cone over three pixel batches.  The
+design note that consumes this reading is
+`active/forward_remedy_design.md`.
+
+The reading is valid on four checks.  All eighteen arms passed their
+built-in checks, and no arm needed a thermal re-run.  All four anchors
+from mg9 and mg5 reproduced within 0.5 percent.  Two arms are
+noise-floor pairs by construction, and both are labelled as such.  The
+asked-384 parallel arm collapses onto the asked-256 walk, because a
+504-slice shard tiles the same way for both.  The asked-256 arm at four
+devices is the control exactly, because a 252-slice shard caps the
+request.  The value comparisons carry their own repeat arms, so every
+distance is read against a measured floor rather than against an assumed
+one.
+
+The parallel sweep, at the 1024 cell with two devices, against a control
+of 28.23 s of per-device busy time.
+
+| asked band | realized walk | busy s | against control | per launch ms | per slice ms |
+|---|---|---|---|---|---|
+| control | 1 x 504 | 28.23 | 1.000x | 41.51 | 0.082 |
+| 64 | 8 x 63 | 25.55 | 0.905x | 4.70 | 0.075 |
+| 128 | 4 x 126 | 29.89 | 1.059x | 10.99 | 0.087 |
+| 192 | 3 x 168 | 34.70 | 1.229x | 17.01 | 0.101 |
+| 256 | 2 x 252 | 28.85 | 1.022x | 21.21 | 0.084 |
+
+The cone batch sweep, at the 1024 cell, against the banded control's
+per-device busy time.
+
+| pixel batch | n=2 busy s | against control | n=4 busy s | against control |
+|---|---|---|---|---|
+| banded control | 29.69 | 1.000x | 29.32 | 1.000x |
+| 2048 | 24.57 | 0.828x | 20.61 | 0.703x |
+| 4096 | 20.65 | 0.696x | 15.60 | 0.532x |
+| 8192 | 19.40 | 0.654x | 15.27 | 0.521x |
+
+The first conclusion is that the parallel fixed-band shape is declined
+as a time remedy.  Per-launch time is linear in the band within a device
+count, so a narrower band raises the launch count by the factor it
+lowers the per-launch cost.  Three of the four swept bands are slower
+than the control, by 2, 6, and 23 percent.  The 9.5 percent win at the
+63-slice walk is real and clean, at a value distance of 7.80e-10 against
+its own repeat floor of 7.22e-10, and it is non-monotonic and
+unexplained.  It is recorded and not built on.  The shape survives as
+the memory knob mbirjax's own record uses it for.  Per-device peaks fall
+from 12.48 GB to 11.84, 11.88, 11.91, and 11.97 GB across the four
+walks, and the copied bytes are unchanged at 12.44 GB per
+reconstruction.  The knob already exists as
+`forward_project_slice_band`, so no library default change is proposed.
+
+The band knob moves no value.  Every swept band sits at or within 8
+percent of its own repeat floor on both distance metrics.  The checksum
+distances run 9.24e-11 to 7.80e-10 against floors of 3.26e-10 to
+7.44e-10.  The sample distances run 1.72e-07 to 2.38e-07 against floors
+of 1.74e-07 to 2.31e-07.
+
+The second conclusion is that the cone column gather breaks cone's
+flatness and is adopted; the checkpoint ruled the same evening, and the
+design note's status header carries the ruling with its two verified
+conditions.  The banded control
+moves from 29.69 to 29.32 s between two and four devices, and the column
+gather at batch 8192 moves from 19.40 to 15.27 s over the same step.
+Cone's forward falls when devices are added for the first time in this
+campaign.  Three further readings support adoption.  Busy time was still
+falling at the largest batch measured, so the knee sits at or above 8192
+and the library increment must sweep higher.  Per-device peaks read
+12.76 to 12.81 GB against the banded control's 14.31 GB, so the gathered
+form is cheaper in peak as well as faster.  The composed walls fall with
+the busy times, to 58.45 s at two devices and 39.13 s at four, against
+banded controls of 67.16 s and 52.96 s and a one-device anchor of
+61.54 s.  Cone's two-device leg therefore stops being a regression.
+
+The value gate is the one place the prototype does not clear the bar the
+memo set, and the design note carries the ruling request.  The rule was
+that the column gather's distance to the one-device anchor may not
+exceed the banded walk's.  On the checksum metric at two devices the
+column gather reads 2.47e-10, 2.58e-11, and 7.09e-11 against that
+anchor, below the banded walk's 1.01e-09.  At four devices it reads
+4.13e-11, 1.59e-10, and 9.25e-11, where the banded walk reads 7.20e-11.
+All four four-device readings sit below their own repeat floors of
+6.59e-10 to 1.13e-09, so that metric cannot resolve the ordering there.
+The sample metric is the more sensitive of the two.  On it the column
+gather reads 1.47e-06 to 1.54e-06 from the anchor, at every batch and
+both counts.  The banded walk reads 2.83e-07 at two devices and
+5.41e-07 at four, at its own pass-to-pass floor.  The excess is expected rather than
+anomalous, because the column gather changes the summation structure
+twice where the banded walk changes it not at all.  Its size is small
+against the bar the library ships: 1.5e-06 sits three orders of
+magnitude inside the standing parity suite's 5e-3 relative floor.
+Which bar governs is `active/forward_remedy_design.md` §12's sixth
+question.
+
+One qualification belongs with the time numbers.  The prototype issues
+its gathers serially, so its brackets carry unoverlapped stalls of 1.4
+to 9.4 s.  Busy time is therefore the target a real implementation aims
+at, while the bracket is a conservative floor.
+
+The third conclusion is that the parallel mystery has moved rather than
+closed.  Per-slice time at two devices runs 0.075 to 0.101 ms over bands
+from 63 slices to 504, with no trend in the width, and it is 0.041 ms at
+one device at width 1008 (§1.7).  The factor of two therefore sits
+between one device and more than one device, and not between one band
+width and another, which is the opposite of what §1.7's three points
+suggested.  One device is also the only place a 1008-slice band was ever
+measured, so the two readings stay confounded.  The discriminating arm
+has not been run and is cheap: parallel at one device with the band knob
+set to 504.  A per-slice reading near 0.041 ms would make the factor of
+two a multi-device effect.  A reading near 0.082 ms would make it a
+kernel width effect spanning 504 to 1008, because 0.082 ms is what two
+devices read at that same width.  Neither adopted decision depends on
+the answer, and the answer decides whether the column-gather shape is
+also the right remedy for parallel.
+
 ---
 
 ## 2. The ledger at n>1 (mg2)
