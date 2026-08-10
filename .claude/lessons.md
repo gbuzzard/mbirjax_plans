@@ -243,7 +243,7 @@ as suspect — and note small phantoms can never reproduce these (size-dependent
   require whole-run vs max-over-phases to agree within the model's band (the residual check that
   makes coverage a measurement instead of a claim); and re-examine every dominated-therefore-zero
   term whenever the dominant terms change, because a fix elsewhere can promote it.  Full record:
-  `plans/torch_port/device_policy_findings.md` (the third-term section).
+  `plans/torch_port/closed/device_policy_findings.md` (the third-term section).
 
 ## 6. Performance expectations
 
@@ -326,7 +326,7 @@ overridable per-run via the environment (it was a hard-set '0.98' the env var co
   included (measured cross-count agreement 0 to 8.6e-9 against 1e-5 tolerances).  Rule: before
   any cluster multi-device submission, run the CPU-virtual-device equivalent; a GPU queue is a
   slow, expensive place to learn that a host-side type assumption was wrong.  Worked example:
-  `plans/experiments/torch_port/nt2_local_shard_check.py`.
+  `plans/experiments/torch_port/archive/nt_nightly/nt2_local_shard_check.py`.
 - **uPlot's log-axis auto-tick generator can freeze on tight non-power-of-10 bounds** — pass explicit
   splits (`logTicks` in the shared `linePlot` wrapper); see the `dashboard-verify-gotchas` memory for
   the full diagnosis pattern (rAF-throttle, probe synchronously).

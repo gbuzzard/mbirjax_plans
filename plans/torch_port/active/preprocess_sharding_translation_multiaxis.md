@@ -5,8 +5,8 @@
 
 Much of this work can proceed in parallel with the multi-gpu investigation, but the right split is by what each item **touches**, not by section. The stable surface is the Shards/placement API and the public projection funnels; the moving parts are the banded drivers' internals, the memory ledger, the automatic device policy, and the chunk constants. Items that only *consume* the stable surface parallelize cleanly; items that *modify or depend on* the moving parts should wait or ride the campaign. That test sorts section A into three bins rather than one.
 
-In the mbirjax_plans repo, please read /plans/current_plans.md, plans/torch_port/multigpu_plan.md, and .claude/lessons.md for context.  
-This file is available at https://github.com/gbuzzard/mbirjax_plans/blob/main/plans/torch_port/preprocess_sharding_translation_multiaxis.md.
+In the mbirjax_plans repo, please read /plans/current_plans.md, plans/torch_port/active/multigpu_plan.md, and .claude/lessons.md for context.  
+This file is available at https://github.com/gbuzzard/mbirjax_plans/blob/main/plans/torch_port/active/preprocess_sharding_translation_multiaxis.md.
 Please keep it up-to-date and pushed. Mark an item as "STARTED" when you start one of these tasks and "COMPLETED" when you finish.
 Please leave a status report for each item you complete or for blocked/not fully resolved items.  
 If an item is marked as "STARTED" when you're ready to begin a new task, then choose a different task.

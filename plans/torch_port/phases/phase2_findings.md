@@ -3,7 +3,7 @@
 **Status:** local (CPU + MPS) cells measured 2026-08-04; the CUDA cells run in
 gautschi job 14833737 and are recorded in their own section.
 **Plan:** `port_plan.md` section 5 (Phase 2) and section 4 (the gates).
-**Scripts:** `plans/experiments/torch_port/p2_gate_readout.py` and
+**Scripts:** `plans/experiments/torch_port/archive/p_phase0_4/p2_gate_readout.py` and
 `p2_gautschi.sbatch`.
 
 ## Summary

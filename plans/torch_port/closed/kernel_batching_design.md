@@ -333,5 +333,5 @@ parallel-1024 result is the number the sorted-stream go/no-go
 ---
 
 **Checkpoint-1 staged files:**
-`plans/torch_port/kernel_batching_design.md` (this document, in
+`plans/torch_port/closed/kernel_batching_design.md` (this document, in
 mbirjax_plans).

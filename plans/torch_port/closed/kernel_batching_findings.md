@@ -220,15 +220,15 @@ Checkpoint-2 files, mbirtorch:
 `tests/test_triton_cone.py`.
 
 Checkpoint-2 files, mbirjax_plans:
-`plans/torch_port/kernel_batching_design.md` (checkpoint-1 notes folded
-in), `plans/torch_port/kernel_batching_findings.md` (this document),
-`plans/experiments/torch_port/kb1_gautschi.sbatch`,
-`plans/experiments/torch_port/kb2_vbsweep.py`,
-`plans/experiments/torch_port/kb2_gautschi.sbatch`,
-`plans/experiments/torch_port/kb3_gate.py`,
-`plans/experiments/torch_port/kb3_gautschi.sbatch`,
-`plans/experiments/torch_port/kb4_value_attrib.py`,
-`plans/experiments/torch_port/kb4_gautschi.sbatch`.
+`plans/torch_port/closed/kernel_batching_design.md` (checkpoint-1 notes folded
+in), `plans/torch_port/closed/kernel_batching_findings.md` (this document),
+`plans/experiments/torch_port/archive/kb_batching/kb1_gautschi.sbatch`,
+`plans/experiments/torch_port/archive/kb_batching/kb2_vbsweep.py`,
+`plans/experiments/torch_port/archive/kb_batching/kb2_gautschi.sbatch`,
+`plans/experiments/torch_port/archive/kb_batching/kb3_gate.py`,
+`plans/experiments/torch_port/archive/kb_batching/kb3_gautschi.sbatch`,
+`plans/experiments/torch_port/archive/kb_batching/kb4_value_attrib.py`,
+`plans/experiments/torch_port/archive/kb_batching/kb4_gautschi.sbatch`.
 
 Raw rows stay on scratch per convention:
 `/scratch/gautschi/buzzard/torch_p3/results/kb2_vbsweep_h003_20260807_135908.jsonl`,

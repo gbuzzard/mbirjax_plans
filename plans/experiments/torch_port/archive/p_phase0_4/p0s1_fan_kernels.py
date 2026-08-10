@@ -23,7 +23,8 @@ centers to an .npz that the torch workers then load and compare against.
 Run (no CLI arguments; edit the CONFIG block below):
     <mbirtorch-env python> p0s1_fan_kernels.py
 Results: results/p0s1_<label>.json plus a printed table.  Copy numbers that
-drive decisions into plans/torch_port/phase0_findings.md (results/ is scratch).
+drive decisions into plans/torch_port/phases/phase0_findings.md (results/ is
+scratch).
 """
 
 import json

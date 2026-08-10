@@ -2,7 +2,7 @@ We're continuing the mbirtorch port (the `mbirtorch` repo, parallel checkout
 to `mbirjax`; mbirjax is READ-ONLY reference).  This session's task:
 `current_plans.md` item 3 — the multi-GPU performance investigation and
 tuning.  This is a measurement campaign: PLAN FIRST (write
-`plans/torch_port/multigpu_plan.md`, stage it, STOP for Fable review via
+`plans/torch_port/active/multigpu_plan.md`, stage it, STOP for Fable review via
 Greg before cluster campaigns), then execute in gated increments.
 
 **IMPORTANT — workflow reminders:** stage only (`git add` by explicit file
@@ -15,16 +15,16 @@ regeneration if you touch `tests/goldens/`.
 Read for orientation (code and measured results over recollection):
 1. `.claude/claude_prompt.md`, `.claude/lessons.md` (§5, §6),
    `.claude/cluster_use.md`.
-2. `plans/torch_port/kernel_batching_findings.md` — the n=1 composed
+2. `plans/torch_port/closed/kernel_batching_findings.md` — the n=1 composed
    baselines (parallel 1.13x/1.56x of jax, cone 0.88x/1.00x) and the gate
    discipline (arm checks, measured floors).
-3. `plans/torch_port/device_policy_findings.md` and the closing rulings in
+3. `plans/torch_port/closed/device_policy_findings.md` and the closing rulings in
    `device_policy_design.md` — the live widening rule, the ledger, the
    forward-kernel defect story and its repair, and the permanent
    kernel-times-sharding gate (its harness is reusable here).
-4. `plans/torch_port/kernel_sharding_findings.md` — the repair record; the
+4. `plans/torch_port/closed/kernel_sharding_findings.md` — the repair record; the
    restored forward kernels are what this campaign measures.
-5. `plans/torch_port/phase5_findings.md` — the shared-sinogram value
+5. `plans/torch_port/phases/phase5_findings.md` — the shared-sinogram value
    protocol and the composed-gate patterns.
 
 ## The four goals (from current_plans item 3)
@@ -87,6 +87,6 @@ measurements use your own gated harnesses.
   md5 verify of every changed file.  Slurm `--export` splits on commas —
   pass env via the submission shell.
 - Scripts to `plans/experiments/torch_port/` (suggested prefix `mg*_`);
-  findings to `plans/torch_port/`.
+  findings to `plans/torch_port/active/`.
 - Concurrent sessions may be active (Charlie's, on the utility API and
   docs).  Terminology: "variants" (never arms/cells for variant sets).

@@ -4,7 +4,8 @@
 the 2-H100 discriminator (gautschi job 14870898) fills the decision section.
 The substrate decision goes to Greg with those numbers before implementation.
 **Plan:** port_plan.md section 5, Phase 4.  **Spike scripts:**
-`plans/experiments/torch_port/p4s1_collectives_gloo.py`, `p4s2_dual_gpu.py`.
+`plans/experiments/torch_port/archive/p_phase0_4/p4s1_collectives_gloo.py`,
+`plans/experiments/torch_port/archive/p_phase0_4/p4s2_dual_gpu.py`.
 
 ## Goal and gates
 

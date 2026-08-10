@@ -400,7 +400,7 @@ mock subset updater with the real per-granularity shapes, built from the
 spike-1 kernels; eager versus graph replay at the 200-class and 512-class
 sizes; measure wall time and host occupancy.
 
-The Phase 0 deliverable is `plans/torch_port/phase0_findings.md`: the numbers
+The Phase 0 deliverable is `plans/torch_port/phases/phase0_findings.md`: the numbers
 table for all three spikes against the frozen jax baselines, plus a go/no-go
 recommendation against the §4 gates.
 

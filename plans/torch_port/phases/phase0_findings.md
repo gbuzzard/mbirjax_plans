@@ -3,7 +3,8 @@
 **Status:** COMPLETE 2026-08-04.  Local (Mac) cells and the gautschi CUDA
 cells (job 14831556, one H100, 5 min) are both measured.
 **Plan:** `port_plan.md` section 6 defines the spikes.  Scripts:
-`plans/experiments/torch_port/p0s{1,2,3}_*.py` plus `p0_gautschi.sbatch`.
+`plans/experiments/torch_port/archive/p_phase0_4/p0s{1,2,3}_*.py` plus
+`plans/experiments/torch_port/archive/p_phase0_4/p0_gautschi.sbatch`.
 
 ## Summary
 

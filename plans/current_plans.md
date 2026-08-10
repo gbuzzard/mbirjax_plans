@@ -30,7 +30,7 @@ Items 1–8 are the agreed top priorities (2026-08-07), in rough order.
 
 ## 1. Kernel-aware view batching — COMPLETE (2026-08-07)
 
-Record: `plans/torch_port/kernel_batching_findings.md` (Fable-reviewed).
+Record: `plans/torch_port/closed/kernel_batching_findings.md` (Fable-reviewed).
 
 - The driver batches each projector body by the body's own cost model.
 - Composed gates improved at every cell: parallel 1.13x/1.56x of jax, cone
@@ -40,7 +40,7 @@ Record: `plans/torch_port/kernel_batching_findings.md` (Fable-reviewed).
 
 ## 2. Device policy — COMPLETE (2026-08-08)
 
-Records: `plans/torch_port/device_policy_design.md` (rulings) and
+Records: `plans/torch_port/closed/device_policy_design.md` (rulings) and
 `device_policy_findings.md` (measurements); three Fable-reviewed checkpoints.
 
 - The memory-ledger preflight is live: calibrated 1.001–1.10 against measured
@@ -54,7 +54,7 @@ Records: `plans/torch_port/device_policy_design.md` (rulings) and
 ## 3. Multi-GPU performance investigation — MEASUREMENT COMPLETE; implementation in progress
 
 **State (2026-08-10):** every instrument has run and every result is read;
-`plans/torch_port/multigpu_findings.md` is the results record, and
+`plans/torch_port/active/multigpu_findings.md` is the results record, and
 `multigpu_plan.md` §0 is the live dashboard of what remains.  Landed in
 mbirtorch: the widening speed guard with measured per-geometry floors and
 a refresh script (`mbirtorch/_widening_floors.py`); corrected memory
@@ -117,12 +117,12 @@ Record: `nightly_plan.md` §10–§12 (plan, trial gates, findings).
 ## 6. Additional geometries: translation and multiaxis
 
 **State (2026-08-10):** both ports landed on prerelease and were reviewed
-(verdicts LAND NOW; reviews archived in `plans/torch_port/`), and they sit
+(verdicts LAND NOW; reviews archived in `plans/torch_port/reviews/`), and they sit
 in the resolved merge now staged on greg_dev.  Follow-ups are queued:
 widening `copy_ct_model`/`get_ct_model`, generating the twelve new parity
 goldens, and one memory-calibration run for the two new geometries.
 Original charter: section B of
-`plans/torch_port/preprocess_sharding_translation_multiaxis.md`.
+`plans/torch_port/active/preprocess_sharding_translation_multiaxis.md`.
 
 - Port TranslationModel and the multiaxis parallel geometry; the jax
   regression harness already carries both, so gate rows have baselines from
@@ -140,7 +140,7 @@ Original charter: section B of
 ## 7. Release workflow
 
 **State:** A complete proposal exists at
-`plans/torch_port/release_workflow.md`; nothing implemented.
+`plans/torch_port/active/release_workflow.md`; nothing implemented.
 
 - GitHub-Release-driven publishing: main/prerelease branch model, CI on
   pull requests, PyPI via Trusted Publishing, Read the Docs on
@@ -156,8 +156,8 @@ Original charter: section B of
 
 ## 8. Remaining utility API surface — LARGELY COMPLETE
 
-Work list and protocols: `plans/torch_port/preprocessing.md` and the census
-in `plans/torch_port/docs.md` §5.
+Work list and protocols: `plans/torch_port/active/preprocessing.md` and the census
+in `plans/torch_port/active/docs.md` §5.
 
 - DONE: the preprocess package, MAR, the coupled functions, the download
   utilities, the HDF5 save/load family, and the hsnt and vcls modules
@@ -218,7 +218,7 @@ Open:
 - **Multi-device completion checklist (Charlie-side):** preprocess
   sharding, export acceptance, and the geometry ports proceed in parallel
   with item 3.  Sequencing, riders, and per-item status live in
-  `plans/torch_port/preprocess_sharding_translation_multiaxis.md`.
+  `plans/torch_port/active/preprocess_sharding_translation_multiaxis.md`.
 - **Denoiser scope — DECIDED 2026-08-09, full sharding parity.**  The work
   is chartered as item A4 of the checklist above.  A4 includes both
   companion gaps: the `.clone()`-on-`Shards` failure and the log arguments
@@ -286,7 +286,7 @@ auto-regularization, loose stopping on coarse levels).
 
 **State:** Chartered 2026-08-07 (Greg).  The entry gate is item 3's
 forward-attribution arm; the decision record that declined this work, with
-its revisit triggers, is in `plans/torch_port/kernel_batching_findings.md`.
+its revisit triggers, is in `plans/torch_port/closed/kernel_batching_findings.md`.
 
 - The target: the parallel forward's remaining measured gap (14.4 s over
   jax at the 1024 cell, atomic-bound and flat across batch sizes), where
@@ -302,7 +302,7 @@ its revisit triggers, is in `plans/torch_port/kernel_batching_findings.md`.
 
 ## 14. Forward-kernel repair under sharding — COMPLETE (2026-08-08)
 
-Record: `plans/torch_port/kernel_sharding_findings.md`.
+Record: `plans/torch_port/closed/kernel_sharding_findings.md`.
 
 - The defect was the LAUNCH, not the kernels: a Triton launch targets the
   launching thread's current CUDA device, and the banded drivers launch
@@ -349,7 +349,7 @@ remedy question moves to truncation handling in the model
 in `findings.html` and `phase_b_results.html`); the **mbirtorch Phase 5 Triton
 kernel campaign** — all four projector kernels default-on, the replacement rule
 passing at every gate cell of both geometries
-(→ `plans/torch_port/phase5_findings.md`); the **mbirtorch slice viewer port**
+(→ `plans/torch_port/phases/phase5_findings.md`); the **mbirtorch slice viewer port**
 — the package-independent greenfield viewer plus the tensor-aware wrapper,
 field-tested through four review rounds; the **Pallas projector-kernel campaign**
 — the full custom-kernel path for both projectors and geometries, shipped and

@@ -265,9 +265,9 @@ Item 13 replaces the parallel forward kernel's per-tap atomic scatter with a
 two-phase sorted-stream walk.  The streams are built from the existing
 horizontal-fan contract, and they are cached through the `plan` slot that
 `Projectors.sparse_forward_project_view_range` already accepts and today
-ignores.  The design is recorded in `plans/torch_port/phase5_kernel_design.md`
+ignores.  The design is recorded in `plans/torch_port/phases/phase5_kernel_design.md`
 as K5, and the decision that declined it, with its revisit triggers, is in
-`plans/torch_port/kernel_batching_findings.md`.
+`plans/torch_port/closed/kernel_batching_findings.md`.
 
 **Which mechanism it attacks.** It attacks the forward kernel's atomic
 throughput at a fixed device count.  The target is the measured 14.4 s by which

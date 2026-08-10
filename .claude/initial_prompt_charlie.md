@@ -15,10 +15,10 @@ suite baseline.  Durable notes in the plans repo follow
 `.claude/writing_style.md`.
 
 Read for orientation:
-1. `plans/torch_port/preprocessing.md` — your original plan; its porting
+1. `plans/torch_port/active/preprocessing.md` — your original plan; its porting
    rules, golden protocol (SHARED INPUTS, measured tolerances,
    batch-invariance tests), and coordination rules all still apply.
-2. `plans/torch_port/docs.md` — THE work list for item 5: sections 1–10
+2. `plans/torch_port/active/docs.md` — THE work list for item 5: sections 1–10
    are instructions, several already partially applied; section 8 (restore
    landed PENDING blocks plus the `__all__` rule), section 9 (the census
    update), and section 10 (the kill switch, for the kernel developer

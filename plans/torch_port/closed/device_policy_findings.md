@@ -639,7 +639,7 @@ Checkpoint 3 and the interim, in mbirtorch:
 and the twenty test files the constructor amendment migrated.
 
 Checkpoint 3 and the interim, in mbirjax_plans:
-`plans/experiments/torch_port/dp4_flip_gate.py`,
+`plans/experiments/torch_port/archive/dp_devicepolicy/dp4_flip_gate.py`,
 `dp4_gautschi.sbatch`, `dp5_kernel_shard_probe.py`, `dp5_gautschi.sbatch`,
 `dp6_sharded_kernels.sbatch`, the eight scripts the audit pinned, and the
 twelve the constructor amendment migrated.
@@ -649,14 +649,14 @@ Checkpoint 2, committed in mbirtorch by concurrent sessions:
 `tomography_model.py` work.
 
 Committed in mbirjax_plans:
-`plans/experiments/torch_port/dp2_ledger_calib.py`,
-`plans/experiments/torch_port/dp2_gautschi.sbatch`.
+`plans/experiments/torch_port/archive/dp_devicepolicy/dp2_ledger_calib.py`,
+`plans/experiments/torch_port/archive/dp_devicepolicy/dp2_gautschi.sbatch`.
 
 Staged in mbirjax_plans:
-`plans/torch_port/device_policy_design.md` (both review rulings),
-`plans/torch_port/device_policy_findings.md` (this document),
-`plans/experiments/torch_port/dp3_phase_probe.py`,
-`plans/experiments/torch_port/dp3_gautschi.sbatch`.
+`plans/torch_port/closed/device_policy_design.md` (both review rulings),
+`plans/torch_port/closed/device_policy_findings.md` (this document),
+`plans/experiments/torch_port/archive/dp_devicepolicy/dp3_phase_probe.py`,
+`plans/experiments/torch_port/archive/dp_devicepolicy/dp3_gautschi.sbatch`.
 
 The mbirtorch state was re-checked at the time of writing rather than
 recalled.  Its working tree is clean, and `HEAD` carries the

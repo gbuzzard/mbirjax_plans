@@ -39,15 +39,22 @@ current state; these carry the why and the numbers.
   program (ACTIVE as of 2026-07): sinogram weight edge tapering vs recon-support padding
   (`scale_recon_shape`); synthetic characterization in
   `experiments/flash_remediation/`.
-- `torch_port/` — the PyTorch port program (ACTIVE 2026-08-04).
-  `port_plan.md` is the assessment and phase plan: motivation and the replacement
-  decision rule (within 2x time / ~1.5x memory of jax on the metrics cells), parity
-  gates, and the six-phase incremental plan.  `phase0_findings.md` records the
-  de-risking spikes (local + H100; spike scripts in `experiments/torch_port/`);
-  `phase1_findings.md` records the parallel-beam vertical slice's gate results
-  (goldens, convergence parity, backend smoke); `phase2_findings.md` the compile
-  integration and gate-cell readouts; `phase3_findings.md` the cone-beam port;
-  `panel_review.md` the 30-agent review and fix status.  The port code lives in
+- `torch_port/` — the PyTorch port program (ACTIVE 2026-08-04).  The folder is
+  organized by lifecycle, and `torch_port/README.md` is the map: it lists every
+  document and the subfolder it lives in.  `torch_port/port_plan.md` stays at the
+  top level as the plan of record: motivation and the replacement decision rule
+  (within 2x time / ~1.5x memory of jax on the metrics cells), parity gates, and
+  the six-phase incremental plan.  Below it, `torch_port/active/` holds the
+  documents whose `current_plans.md` item is still open, `torch_port/closed/`
+  holds completed campaign records that are still cited, `torch_port/phases/`
+  holds the original six-phase port record — `phases/phase0_findings.md` the
+  de-risking spikes (local + H100), `phases/phase1_findings.md` the parallel-beam
+  vertical slice's gate results (goldens, convergence parity, backend smoke),
+  `phases/phase2_findings.md` the compile integration and gate-cell readouts,
+  `phases/phase3_findings.md` the cone-beam port — and `torch_port/reviews/`
+  holds the review archives, including `reviews/panel_review.md`, the 30-agent
+  review and fix status.  Experiment scripts are in `experiments/torch_port/`
+  (see its own README for the live-vs-archive split).  The port code lives in
   the separate `mbirtorch` repo.
 - `viewer/slice_viewer_eval.md` — slice-viewer evaluation and refactor
   recommendations (2026-08-05): stay with matplotlib but

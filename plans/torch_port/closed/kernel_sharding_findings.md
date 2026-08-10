@@ -93,7 +93,7 @@ variable each.  All arms run on two GPUs at the dp5 cell (256 views, 64
 rows, 64 channels), in both geometries, with bodies bound explicitly through
 the `_view_batch_bodies` hook.  Every kernel arm binds the TORCH back body,
 so the forward carries the whole comparison.  The script is
-`plans/experiments/torch_port/ks1_launch_context.py` (job 14973047), and
+`plans/experiments/torch_port/archive/ks_sharding/ks1_launch_context.py` (job 14973047), and
 each arm runs a forward projection twice in-process, then the dp5-style
 3-iteration recon.
 
@@ -362,7 +362,7 @@ layout-independence), and `tests/test_memory_ledger.py` (the latent
 pre-amendment eligibility test brought to the amended contract).
 
 The probes and gates, in mbirjax_plans:
-`plans/experiments/torch_port/ks1_launch_context.py` and
+`plans/experiments/torch_port/archive/ks_sharding/ks1_launch_context.py` and
 `ks1_gautschi.sbatch` (the isolation matrix), the refreshed
 `dp6_sharded_kernels.sbatch` header, and this document.
 `.claude/cluster_use.md` gained the concurrent-install and mid-run-sync

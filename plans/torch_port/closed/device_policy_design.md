@@ -952,4 +952,4 @@ goes live against a multi-device forward path that is measured correct.
 
 ## Checkpoint-1 staged files
 
-`plans/torch_port/device_policy_design.md` (this document).
+`plans/torch_port/closed/device_policy_design.md` (this document).
