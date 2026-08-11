@@ -735,10 +735,19 @@ increment's own premise: busy time did NOT exclude the stall at more than one
 device, because peer-serving copies interleaved inside the busy brackets, so
 the visible stall understated the transfer cost and the win exceeded it.
 
-**Increment 6: reduce the per-batch accumulation.**  The prototype adds each
-batch's contribution into the full sinogram shard.  Accumulating into a
-preallocated buffer, or accumulating less often, removes a per-batch cost that
-the larger batches of increment 3 would otherwise hide rather than remove.
+**Increment 6, complete: reduce the per-batch accumulation.**  The prototype
+adds each batch's contribution into the full sinogram shard.  Accumulating
+into a preallocated buffer, or accumulating less often, removes a per-batch
+cost that the larger batches of increment 3 would otherwise hide rather than
+remove.  The implementation found the literal preallocated buffer already
+effectively in place and the real cost in the projector's per-batch block
+allocation and hand-back; the fused form adds later batches into the running
+total inside the projector's view loop, bit-identically.  mg14 measured it on
+2026-08-11 and findings §1.15 carries the result: forward wall down 3.5 to
+6.4 percent, per-device peak down about 0.9 GB, busy flat, values at the
+repeat floor.  With this, increments 1 through 10 are all complete and the
+forward remedy's implementation is finished; increment 11, the item-13
+re-gate, closed the same day by measurement (findings §1.14).
 
 **Increment 7, complete: the default, gated.**  Flip the switch on for cone
 only after the §7.2 gates pass on the library implementation rather than on
