@@ -100,6 +100,27 @@ fix (deferred to the multi-gpu campaign, see above).  Decision (Charlie,
 2026-08-10): do not work around it by setting the device list in the
 application script; rerun the job after A2 lands.
 
+**Update (2026-08-11): the rerun with the fix succeeded.**  Job 15185020
+(same full-resolution Lilly MAR configuration, 4 H100s, mbirtorch
+prerelease 72208bb) completed in 49 minutes with exit code 0.  The log
+shows the automatic device selection running before the initial FDK
+("Using 4 CUDA device(s) for this reconstruction (was 1)") and every
+reconstruction reporting "4 x CUDA (sharded)"; peak GPU memory was
+37 GB per device against the 79 GB limit, where the failed run built
+the whole volume on GPU 0.  The 19.3 GB reconstruction
+(1365 x 1880 x 1880 float32) saved cleanly.  This closes the section A
+real-hardware test.  Still open for Greg: whether the vcd-calibrated
+widening floors are the right rule inside fdk_recon, and the same
+latent gap in the other geometries' direct recons.
+
+Cluster note (2026-08-11): /scratch on Gautschi is returning I/O errors
+on writes (a 200-file creation test failed at file 13; lfs quota reports
+storage devices "not working or deactivated"), and /home is at its 25 GB
+quota.  The job's environment, working directory, and torch compile
+caches are temporarily at /depot/bouman/data/claude_runtime/; move them
+back to scratch when RCAC repairs it.  Anything on Gautschi that writes
+to /scratch or /home — including the nightly — may fail until then.
+
 # mbirtorch port — remaining work (updated 2026-08-09)
 
 Read and update this during mbirtorch work.  Rule: a function is not
