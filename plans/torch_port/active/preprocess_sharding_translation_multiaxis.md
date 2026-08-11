@@ -44,6 +44,40 @@ Both mbirjax modules are fully multi-device (Fable verified, 2026-08-09), so per
 
 **Net state (2026-08-10):** Sections A and B are BOTH complete (A1, A3, A4, A5, A7; translation and multiaxis).  A2 rides the guard; A6 stays item 15.  The one open gate is the full-resolution MAR run on Gautschi, blocked on A2 (see the Update note below).
 
+**Note for Greg (2026-08-11, from Charlie's session): the FDK gap,
+stated precisely — because "the FDK multi-GPU problem" now names two
+different things, and the campaign fixed one of them.**
+
+FIXED by the campaign: FDK on a model that already has a multi-device
+layout.  When the devices have been chosen, `fdk_filter` and
+`back_project` run sharded, and the streaming and transient-memory work
+improved that path.
+
+NOT fixed (this is A2): a bare `direct_recon` on a model whose devices
+were never chosen.  The automatic use-N-GPUs decision,
+`_apply_device_policy`, has exactly one call site in the library, inside
+`vcd_recon` (tomography_model.py:2945 at merge tip 511af63).
+`recon_plastic_metal`'s first act is
+`ct_model.direct_recon(sino, output_sharded=True)` on an unconfigured
+model.  No `vcd_recon` has run yet, so the layout is still the
+single-device placeholder.  `output_sharded=True` then returns the
+device form OF THAT LAYOUT: one tensor on GPU 0, not four shards.  The
+18 GB FDK volume lands whole on GPU 0, segmentation's first full-volume
+temporary needs another 18 GB there, and the job dies — job 15047383's
+exact traceback, and the streaming improvements never enter the picture
+because the decision to use more than one GPU is never made.
+
+Why we did not just add the call: your A2 note.  `fdk_recon` calling
+`_apply_device_policy` today would consult widening floors calibrated on
+3-iteration vcd, and you ruled that the right rule for a
+one-filter-plus-one-backprojection call is a design question for the
+campaign.  Until that lands, full-resolution MAR fails on GPU 0 down
+every entry path.
+
+The test that settles it empirically: rerun job 15047383's
+configuration on the merged tip.  It either completes, or it produces
+the same segmentation traceback on GPU 0.
+
 **Update (2026-08-10): the Gautschi rerun ran and failed, blocked on A2.**
 Job 15047383 (full-resolution Lilly MAR, 4 H100s, mbirtorch prerelease
 944aec2) ran out of GPU memory 2m40s in, at the segmentation step of the
