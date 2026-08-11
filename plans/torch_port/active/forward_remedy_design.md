@@ -718,14 +718,22 @@ is what lets the parity suite run both forms in one session for the distances
 of §7.2.  This landed as commit 142b394, and the §13 extension brought
 parallel beam onto the same driver as commit a33c7e8.
 
-**Increment 5: overlap the gather with the compute.**  The prototype issues its
-gathers serially, and §3.1 gives the stalls that costs.  Issue the next batch's
-gather before waiting on the current batch's projection, which
+**Increment 5, complete: overlap the gather with the compute.**  The prototype
+issues its gathers serially, and §3.1 gives the stalls that costs.  Issue the
+next batch's gather before waiting on the current batch's projection, which
 `run_per_device` already permits by performing no synchronization
 (`_sharding.py` lines 286 to 292).  The increment is measured on the bracket
 rather than on busy time, because busy time already excludes the stall.  It
 also raises the resident count of §5.2 from two to three while one extra batch
-is in flight, so the ledger term moves with it.
+is in flight, so the ledger term moves with it.  mg12 measured it on
+2026-08-11 and findings §1.13 carries the result: the prefetch alone bought
+0.8 to 2.4 s of forward wall, dedicated per-device copy streams on top of it
+closed the stall and more (16.57 to 9.32 s at the widest configuration,
+composed reconstructions 1.07x to 1.41x across five configurations), values
+at the repeat floor, memory floors held.  The same measurement corrected this
+increment's own premise: busy time did NOT exclude the stall at more than one
+device, because peer-serving copies interleaved inside the busy brackets, so
+the visible stall understated the transfer cost and the win exceeded it.
 
 **Increment 6: reduce the per-batch accumulation.**  The prototype adds each
 batch's contribution into the full sinogram shard.  Accumulating into a

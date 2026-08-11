@@ -763,6 +763,67 @@ relative on the forward over forty solo calls, 3.51e-07 on the worst
 back row.  The compiler defect of §1.11 is therefore confined to the
 compiled bodies, and the padding fix covers every affected path.
 
+### 1.13 The copy streams land: the transfer stall closes, and the busy
+### reading is corrected (mg12, 2026-08-11)
+
+Measured 2026-08-11, job 15175187 on h012, 37 minutes.  The rows are
+`plans/experiments/torch_port/rows/mg12_stream_gate_h012_20260811_113813.jsonl`,
+and the harness and job files sit beside the other mg entries.
+
+mg12 measured three trees in one session, five configurations each.
+The control was the committed tip.  The first overlay added only the
+prefetch: the driver issues each batch's gather one batch ahead of the
+projection that reads it, with every copy still on the device's
+default stream.  The second overlay added dedicated per-device copy
+streams with per-batch event ordering on top of the prefetch.  Every
+arm witnessed its transfer route, and all fifteen ran direct
+device-to-device.
+
+The copy streams won everywhere, by far more than the visible stall.
+The forward wall fell from 16.57 to 9.32 s at the widest-stall
+configuration (parallel, four devices, batch 4096) and by comparable
+ratios at the other four, and the composed reconstruction followed:
+1.41x, 1.31x, 1.20x, 1.27x, and 1.07x across the five configurations,
+with pass-to-pass spreads two orders below the margins.  Values sat at
+the control's own repeat floor on every arm, and no memory reading
+fell below the model's floor: the smallest modeled-to-measured ratio
+was 1.004, and the measured allocated peaks were unchanged, so the
+concern that a second allocator pool would raise the peak did not
+materialize.
+
+The size of the win exposed a measurement error this page must
+correct.  GPU-busy time fell along with the wall -- 12.70 to 7.00 s at
+the widest configuration -- and busy was defined as the event-bracketed
+time of the projection calls alone, which a transfer change should not
+touch.  The explanation is that the old busy reading was never pure:
+with one stream per device, the copies serving OTHER devices' gathers
+interleave between a device's own kernel launches, inside the
+bracketed windows.  The visible stall (wall minus busy) was therefore
+only the part of the transfer cost that fell between brackets, and the
+rest hid inside the busy column.  Moving the copies to their own
+streams removed the contention and purified the metric in one step.
+The correction's reach: every busy reading taken at more than one
+device on the gather path (mg10, mg11, and the §1.9 table's
+multi-device columns) carries the same contamination, and the
+conclusions built on one-device readings -- the kernel width effect
+above all -- are untouched, because a single device serves no peer
+copies.
+
+The prefetch-only prediction was refuted, five of five.  Issuing the
+copies early bought 0.8 to 2.4 s of wall on its own, against a
+prediction of no change.  The refuted argument assumed a copy and a
+projection on one stream cannot overlap at all; the measured gain says
+the issue order still matters within a stream's schedule.  The
+prediction check cost one arm per configuration and converted a wrong
+belief into a measured one, which is what it was for.
+
+Both overlays are one staged increment: the prefetch and the copy
+streams, with the resident-count charge at three, its tests, and the
+ordering witness.  The design note's increment 5 closes with this
+measurement.  Increment 6, the per-batch accumulation, remains open,
+and the corrected busy metric is the right instrument to measure it
+with.
+
 ### 2.1 The torch-body charge (mg8)
 
 Measured 2026-08-10, job 15149052 on h014, on the verified 1a2deb0
