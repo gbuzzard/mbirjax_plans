@@ -66,6 +66,11 @@ strike.  Nothing here is decided.
   module a reader must chase.
 - The script is the primary artifact; whether Colab notebook twins are
   kept is an open question below.
+- CONFIRMED (Charlie, 2026-08-11): parameters returned by a data
+  generator are unpacked EXPLICITLY and passed visibly — for example
+  ``angles = params['angles']`` and then ``angles`` handed to the model
+  constructor — never an invisible hand-off of the whole dictionary.
+  The reader must be able to see what is going on.
 
 ## 5. Critiques (filled in as reviewed)
 
@@ -123,6 +128,21 @@ col_scale about 1.2) so the region of interest reconstructs cleanly.
 The new demo generates its data that way.  Verdict: MERGE into the new
 field-of-view pair.
 
+### demo_4_wrong_rotation_direction.py (reviewed 2026-08-11)
+
+1. **Lesson:** a reversed rotation direction produces a subtly warped,
+   top/bottom-mirrored cone-beam reconstruction.
+2. **Earns its own demo:** no.  It teaches something a user
+   RECOGNIZES, not something a user does; the fix is "don't reverse
+   the angles", and it spends two full reconstructions showing one
+   visual symptom.
+3. **Problems:** the usual Colab residue; otherwise the script is
+   fine — the shape is just not demo-shaped.
+4. **Simplest version:** a paragraph with one picture.
+5. **Verdict (Charlie, 2026-08-11): DROP as a demo; move the lesson to
+   the FAQ section as a paragraph** (the symptom, its cause, and the
+   fix).
+
 ## 6. Proposed consolidated demos (grows as the critiques proceed)
 
 | # | working name | lesson | draws from |
@@ -131,6 +151,26 @@ field-of-view pair.
 | 2 | cone beam and real-data practices | cone geometry, plus the concepts a real reconstruction needs: weights, sharpness, saving results | old demo 1 |
 | 3 | parallel beam region-of-interest scan | the object extends outside the field of view (the common real parallel-beam case); reconstruct the region of interest, padding with row_scale = col_scale = 1.2; shown without and with the padding so the artifacts and their mitigation are both visible | old demos 2 + 3 |
 | 4 | cone beam axial field-of-view artifacts | the object extends outside the field of view in the axial direction, producing cone-beam artifacts; extend the reconstruction axially (axial_pad_fraction) to reduce them; shown without and with the padding | old demos 2 + 3 |
+
+**Lessons awaiting a home in the table:**
+
+- **ALUs and auto_set_recon_geometry (Charlie, 2026-08-11).**  The
+  demos must teach the use of ALUs (the package's length units) in
+  reconstruction — in particular, that after changing a parameter such
+  as the detector spacing, the user must call
+  ``auto_set_recon_geometry()``, which users find super confusing
+  today.
+
+**Library and documentation work the new set needs:**
+
+- ``generate_demo_data`` must support objects that extend outside the
+  field of view — laterally (new demo 3) and axially (new demo 4).
+- ``generate_demo_data`` must support the translation and multiaxis
+  geometries; this connects to the known pre-release bug that its
+  translation branch produces an all-zero phantom.
+- An FAQ paragraph for the reversed rotation direction: the symptom
+  (warped, top/bottom-mirrored cone recon), the cause, and the fix
+  (from the dropped old demo 4).
 
 ## 7. Open questions, settled during the critiques
 
