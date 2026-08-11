@@ -566,10 +566,14 @@ The device-scaling table in `usr_multi_gpu.rst` is the gate matrix from
 two, and four devices.
 
 The band-length numbers come from the `_slice_band_length` docstring in
-`tomography_model.py`, which cites the H100 gate matrix.  Two appear: a sub-band
-default costs 47 to 66 percent more warm time at the two-device cells, and a
-four-device 512-cell run trades 6.6 GiB down to 2.6 GiB for about 8 percent more
-time.
+`tomography_model.py`.  Both were replaced on 2026-08-11, because the originals
+were measured before the compiled kernels landed and the kernels moved them.
+The pages and the docstring now carry the mg10 kernel-era readings from the
+design note's §2.1 table: sub-band walks cost 2 to 23 percent more busy time at
+parallel 1024 with two devices, and the memory saving is about 0.5 GB of
+per-device peak at the 252-slice band, growing slightly as the band narrows.
+The pre-kernel figures they replace were 47 to 66 percent more time, and
+6.6 GiB down to 2.6 GiB for 8 percent more time at the four-device 512 cell.
 
 ### Claims dropped for lack of mbirtorch evidence
 

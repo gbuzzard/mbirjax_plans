@@ -334,9 +334,16 @@ states the term the seam hooks exist for.  The band reduce holds n
 partials plus the running total on the owner device.  That term comes
 to about 1.5 x cyl(P, S_pad) for n = 2 to 4, flat in the count, so
 more devices do not shrink it.  `back_project_slice_band` is the one
-lever that reduces it.  The lever's pre-kernel time cost was +8 to
-+66 percent depending on the cell, and the cheapest cell (+8 percent,
-n=4 at 512) was also the largest peak saving (6.6 to 2.6 GiB).
+lever that reduces it.  The band levers' cost was re-measured with the
+compiled kernels in place (mg10, 2026-08-10, design note §2.1): on the
+forward side, `forward_project_slice_band` saves about 0.5 GB of
+per-device peak for about 2 percent more busy time at the 252-slice
+walk of parallel 1024 with two devices, and narrower walks save
+slightly more memory for more time, up to 23 percent.  That
+measurement replaces the pre-kernel figures this paragraph carried,
+which were +8 to +66 percent time and a 6.6 to 2.6 GiB saving at the
+four-device 512 cell.  The forward knob is recorded as a memory lever
+on those numbers, and no default changes.
 
 **The expected knee region is recorded.**  `lessons.md` §6 records
 that vcd has a problem-size floor near 256-class cells: per-subset

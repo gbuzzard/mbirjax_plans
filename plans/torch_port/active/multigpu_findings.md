@@ -593,6 +593,147 @@ phase is bit-identical across the release.  That reading is therefore
 the genuine peak instant at its cell, not a term the release masked.
 The ledger question this section opened is CLOSED.
 
+### 1.10 The flip gates passed, and the column gather is now the default (mg11)
+
+Measured 2026-08-11, job 15163071 on h001, on the tree of commit
+a33c7e8.  The rows are
+`plans/experiments/torch_port/rows/mg11_flip_gates_h001_20260811_041522.jsonl`,
+and the job's log sits beside them.
+
+mg11 is the combined gate campaign the checkpoint ruled for the design
+note's increment 7 and its parallel extension.  It ran 22 arms at the
+1024-class cell: a one-device anchor per geometry, a banded control at
+two and at four devices, and column-gather arms over a pixel-batch
+sweep, with three batches on cone and four on parallel.  Each geometry
+was read against three gates: speed, value, and memory.  All six
+readings passed, and the harness printed the flip authorization for
+both geometries.
+
+The speed gate asks the best gather arm to beat the banded control by
+more than the control's own pass-to-pass spread.  Cone composed wall
+fell from 67.12 s to 55.05 s at two devices and from 53.00 s to
+37.28 s at four, ratios of 1.219 and 1.422.  Parallel composed wall
+fell from 39.21 s to 27.88 s at two devices and from 23.46 s to
+18.53 s at four, ratios of 1.406 and 1.266.  The smallest margin was
+4.93 s, against a control spread of 0.04 s.
+
+The value gate is the shipped parity floor, which the checkpoint ruled
+the governing bar.  The largest distance any gather arm showed from
+the one-device anchor was 4.887e-06 relative, against the 5e-3 bar.
+The checksum comparison against the banded control stayed in the
+1e-09 class on every arm.  The logged
+expectation held as well: the relative L2 distance to the one-device
+anchor read 1.474e-06 on cone and 1.410e-06 on parallel, against the
+1.50e-06 class mg10 registered, and no reading approached the 1e-05
+marker.
+
+The memory gate is the ledger floor.  The smallest modeled-to-measured
+ratio over the gather arms was 1.003, and every arm of the campaign,
+controls included, sat inside the 1.00 to 1.30 calibration band, with
+1.158 the largest reading.  The library's own `last_memory_ledger`
+agreed with the harness's independently built ledger on every arm.
+These readings also serve as increment 8's re-calibration for the
+gather path: the closed-form column terms landed with the
+implementation, and every cell they price now has an in-band measured
+reading.
+
+The parallel extension's caveat check printed beside the parallel
+verdict.  Section 13 predicted a 2.00x forward-busy improvement at two
+devices with the pixel count held full; the measured improvement at
+the swept batches was 1.76x.  The prediction named that direction: the
+gather cuts each call's pixel count to the batch, and a narrower call
+runs the kernel less efficiently.  The gate did not depend on reaching
+the prediction.
+
+The batch sweep moved the best batch above the shipped default, and
+the default deliberately stays.  Composed wall kept improving through
+16384 and 32768 depending on the cell, by 4 to 15 percent over 8192,
+so the knee is still not bracketed.  These readings come from the
+1024-class harness.  Production runs at the 2K class and above, where
+the batch's cross-device transient grows with the slice axis, and no
+sweep has run there.  `FORWARD_PIXEL_BATCH` therefore remains 8192,
+its comment records this sweep, and the 2K sweep belongs to the
+production-scale charter.
+
+The default flip landed in the library the same morning.  Unset
+`forward_column_gather` now selects the gather on cone and parallel,
+an explicit False selects the banded walk, and the environment
+variable still overrides in both directions.  The full suite passes in
+all three environment states: variable unset, gather forced, and
+banded forced.  The banded-forced state was never green before,
+because the gather-specific tests did not pin their shape against the
+environment; they now clear the variable the way the banded-specific
+tests always did.  The widening-floors staleness note is tripped by
+design and passes stale.  The floors re-measure runs on the committed
+flip, because the refresh script stamps the commit it measured.
+
+### 1.11 The first GPU nightly on greg_dev found a compiler defect at
+### single-pixel calls (2026-08-11)
+
+The nightly regression of 2026-08-11 ran greg_dev for the first time,
+on a four-GPU node, against commit a33c7e8.  main passed clean.
+greg_dev reported two test failures, and this section records what
+each one is.
+
+The first failure is a test whose discrimination premise is
+input-lucky, not a library defect.  In
+`test_masked_single_device_plastic_floor_keeps_the_unsharded_arithmetic`,
+the assertion that the library keeps the float32 masked-sum floor
+expression passed.  What failed is the test's second demand: that the
+float64-divide variant produce a visibly different output on its
+seeded input.  On the GPU node the two floor values differ at the
+eighth decimal and zero output elements move, so the inequality
+assert fails with the library fully correct.  The fix is to make the
+discrimination robust to the platform, and it is being made in the
+test only.
+
+The second failure is a real wrong answer with a diagnosed mechanism:
+torch 2.13.0's CPU compiler on linux miscompiles the parallel-beam
+projector bodies when their first compilation is for a single-pixel
+call.  The failing test leg drives the column gather at a pixel batch
+of one, which makes every call carry one pixel, and it read a 6.56e-02
+relative error against a comparison class of 1e-07.  The diagnosis
+ran as a chain of single-variable measurements on the cluster, each
+eliminating one layer.  The error reproduces in a fresh process, so
+it does not depend on test order.  Pixel batches of two, three, and
+four are correct, and a width-one remainder call after a wider batch
+is also correct, so the defect is specific to width one.  A
+single-device model shows the same error when one pixel is projected
+alone through the plain projectors, so the sharding drivers are not
+involved.  The geometry chain and the per-tap weights are bit-identical
+between the solo and the batched evaluation, so the library's
+arithmetic is not involved.  With compilation genuinely disabled
+(TORCHDYNAMO_DISABLE=1) the solo call is correct at 1.05e-07, and with
+it enabled the same call misplaces the pixel's footprint one full
+detector channel to the right.  These results identify the compiled
+width-one specialization as the defect: a body first compiled at a
+larger width handles width one correctly through its dynamic-shape
+recompile, and only a body whose first compile is at width one emits
+the wrong kernel.  The back projector body carries the same defect,
+measured at 5.04e-02 on the same probe.  The cone bodies do not: their
+width-one test legs passed on the same node the same night.  macOS
+compiles the same width-one bodies correctly, which is why the local
+suite never showed it.
+
+The defect predates the column gather and is reachable without it.
+Any caller of `sparse_forward_project` or `sparse_back_project` with a
+single pixel, on a compiled parallel-beam model on linux, gets the
+wrong answer on the committed tree.  The gather merely added a second
+route to the same width through its pixel-batch knob.  The mg11 gates
+are unaffected: their batches were 4096 and above with remainders of
+256, every call was wide, and the value readings stand.
+
+The remedy is to keep the compiled bodies away from width one
+entirely.  A thin uncompiled shim pads a single-pixel call to two
+pixels -- a zero-valued column on the forward, whose contribution is
+exactly zero, and a duplicated index with an output slice on the back
+-- so every compiled call has width two or more, which is the measured
+correct region.  The shim is gated to parallel beam, changes nothing
+for wider calls, and lands with a regression test asserting the
+solo-pixel identity on both directions.  The fix is its own increment
+beside the flip, because the flip neither introduced nor enlarges the
+defect.
+
 ### 2.1 The torch-body charge (mg8)
 
 Measured 2026-08-10, job 15149052 on h014, on the verified 1a2deb0

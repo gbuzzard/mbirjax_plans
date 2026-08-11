@@ -1,6 +1,14 @@
 # Design note: the two forward remedies
 
-**Status.** RULED (Greg, 2026-08-10, evening).  Shape C is adopted.  The
+**Status.** GATES PASSED AND THE DEFAULT FLIPPED (2026-08-11, morning).
+The combined gate campaign the §13 ruling called for ran as job mg11 and
+authorized the flip on both geometries.  Findings §1.10 carries the
+readings, and the flip is implemented and staged in the library.  The
+increments below record their own completion.  The floors re-measure of
+increment 9 waits for the flip's commit, because the refresh script stamps
+the commit it measured.
+
+**Prior status.** RULED (Greg, 2026-08-10, evening).  Shape C is adopted.  The
 value bar is ruled: the shipped kernel-parity floor governs acceptance, and
 the ruling's two conditions were verified against the rows before it was
 recorded — the column gather is faster than the banded walk (busy 0.65x at
@@ -692,18 +700,23 @@ shard collapses onto the shard.  §2.1 carries the result.
 mg10 ran three batches at two and four devices, reading busy time, bracket,
 copy volume, transient, peak, and value distance.  §3.1 carries the result.
 
-**Increment 3: the extended batch sweep.**  Sweep the pixel batch above 8192,
-at 16384 and 32768, at both counts.  Busy time was still falling at 8192, so
-the knee is not yet bracketed.  Read the realized view batch alongside, because
-it moves with the pixel batch, per §5.2.  This increment runs in the plans
-repository and edits no library code.
+**Increment 3, complete: the extended batch sweep.**  Sweep the pixel batch
+above 8192, at 16384 and 32768, at both counts.  Busy time was still falling
+at 8192, so the knee is not yet bracketed.  Read the realized view batch
+alongside, because it moves with the pixel batch, per §5.2.  This increment
+runs in the plans repository and edits no library code.  mg11 ran the sweep
+on both geometries: composed wall kept improving through the new batches, by
+4 to 15 percent over 8192 depending on the cell, so the knee is still not
+bracketed.  The default stays at 8192 for the scale reason findings §1.10
+records, and the 2K sweep belongs to the production-scale charter.
 
-**Increment 4: the column gather behind a switch, defaulting off.**  Add
-`gather_column_band` to `_sharding.py` with its own unit test, add the cone
-branch that uses it, and select it from a model attribute that defaults to
-false.  The banded branch stays in place and is the rollback.  The switch is
-what lets the parity suite run both forms in one session for the distances of
-§7.2.
+**Increment 4, complete: the column gather behind a switch, defaulting off.**
+Add `gather_column_band` to `_sharding.py` with its own unit test, add the
+cone branch that uses it, and select it from a model attribute that defaults
+to false.  The banded branch stays in place and is the rollback.  The switch
+is what lets the parity suite run both forms in one session for the distances
+of §7.2.  This landed as commit 142b394, and the §13 extension brought
+parallel beam onto the same driver as commit a33c7e8.
 
 **Increment 5: overlap the gather with the compute.**  The prototype issues its
 gathers serially, and §3.1 gives the stalls that costs.  Issue the next batch's
@@ -719,29 +732,42 @@ batch's contribution into the full sinogram shard.  Accumulating into a
 preallocated buffer, or accumulating less often, removes a per-batch cost that
 the larger batches of increment 3 would otherwise hide rather than remove.
 
-**Increment 7: the cone default, gated.**  Flip the switch on for cone only
-after the §7.2 gates pass on the library implementation rather than on the
-prototype.  The bar those gates are read against is §12's sixth question, which
-the checkpoint must rule before this increment runs.  Translation and multiaxis
-keep the banded walk.
+**Increment 7, complete: the default, gated.**  Flip the switch on for cone
+only after the §7.2 gates pass on the library implementation rather than on
+the prototype.  The bar those gates are read against is §12's sixth question,
+which the checkpoint must rule before this increment runs.  Translation and
+multiaxis keep the banded walk.  The §13 ruling extended the flip to parallel
+beam under one combined gate campaign.  That campaign ran as job mg11 on
+2026-08-11 and passed all six gates, findings §1.10 carries the readings, and
+the flip is implemented: unset selects the gather on cone and parallel, an
+explicit False selects the banded walk, and translation and multiaxis are
+unchanged.
 
-**Increment 8: the ledger terms.**  Land the closed forms of §5 with their
-tests, then re-run the mg2 calibration and re-read every cell against the 1.00
-to 1.30 band.
+**Increment 8, complete: the ledger terms.**  Land the closed forms of §5
+with their tests, then re-run the mg2 calibration and re-read every cell
+against the 1.00 to 1.30 band.  The closed forms landed with increment 4.
+mg11 supplied the re-read: all 22 arms sat inside the band, from 1.003 to
+1.158, and the library's own `last_memory_ledger` agreed with the harness's
+independently built ledger on every arm.
 
-**Increment 9: the floors refresh and the record corrections.**  Run
-`dev_scripts/refresh_widening_floors.py` and paste its block.  Correct the two
-documented band-length numbers, which are the 47 to 66 percent and the 8
+**Increment 9, half complete: the floors refresh and the record corrections.**
+Run `dev_scripts/refresh_widening_floors.py` and paste its block.  Correct the
+two documented band-length numbers, which are the 47 to 66 percent and the 8
 percent readings quoted from the `_slice_band_length` docstring in the user
 documentation (`plans/torch_port/active/docs.md`, "Numbers used, with their
 source").  Both are pre-kernel measurements, as the plan's lever table already
 notes (`plans/torch_port/active/multigpu_plan.md`, the streaming row).  mg10
-now supplies the kernel-era replacement for both, at §2.1's table.
+now supplies the kernel-era replacement for both, at §2.1's table.  The record
+corrections landed 2026-08-11, in the docstring, in both documentation pages,
+and in the two plan records.  The floors refresh waits for the flip's commit:
+the refresh script stamps the commit it measured, so it runs on the committed
+flip, on a four-GPU node, as the next cluster step.
 
-**Increment 10: the parallel band knob, documented.**  Record
+**Increment 10, complete: the parallel band knob, documented.**  Record
 `forward_project_slice_band` as a memory lever with §2.1's measured cost, which
 is about 0.5 GB of peak for about 2 percent of time at the 252 walk.  No
-default changes.
+default changes.  The record landed 2026-08-11 in the plan's lever paragraph
+and in the user documentation's memory-lever list.
 
 **Increment 11: the item-13 re-gate.**  Re-evaluate item 13's step-1 STOP
 threshold on post-remedy numbers, and probe the light per-call sorted form
