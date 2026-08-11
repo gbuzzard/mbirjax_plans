@@ -1,7 +1,9 @@
 # Demo consolidation — plan
 
-**Status:** STARTED 2026-08-10 (Charlie's session).  Critique phase; no
-demo code is written until the consolidated design is approved.
+**Status:** DESIGN APPROVED by Charlie 2026-08-11; implementation in
+progress, one demo at a time, each reviewed as it lands.  AMENDMENT at
+approval: demo 8 (translation) is HELD for now — Charlie is not sure
+the geometry is ready for prime time.
 
 ## 1. Goal and ground rules
 
@@ -217,6 +219,15 @@ viewer's page.
 - An FAQ paragraph for the reversed rotation direction: the symptom
   (warped, top/bottom-mirrored cone recon), the cause, and the fix
   (from the dropped old demo 4).
+- NOTED for Greg, not scheduled (Charlie, 2026-08-11): the lateral
+  field-of-view truncation warning fires on the sinogram alone, so it
+  still appears after the user applies the recommended fix — the
+  warning suggests scale_recon_shape, the user enlarges the
+  reconstruction region, and the next reconstruction warns again
+  anyway, which reads as "the fix did not work".  The warning could
+  stay quiet when the reconstruction region already exceeds the field
+  of view.  Found while running new demo 3, where both the broken and
+  the fixed reconstructions trigger it.
 
 ## 7. Open questions, settled during the critiques
 
