@@ -53,8 +53,12 @@ in section 5 below.
 ## 4. Draft principles for the new set
 
 These are starting points for the critiques to confirm, sharpen, or
-strike.  Nothing here is decided.
+strike.
 
+- CONFIRMED, and FIRST in priority (Charlie, 2026-08-11): demos must be
+  very simple and direct, clearly demonstrating simple concepts to
+  users.  Explanations are simple and direct, without complicated
+  jargon.  This is very important.
 - One lesson per demo, stated in one sentence at the top of the script.
 - Short: a demo someone can read top to bottom in a few minutes.
 - Runs to completion on a laptop CPU in a few minutes, with a note on
@@ -163,6 +167,26 @@ field-of-view pair.
    with a very sparse-view case that clearly illustrates the
    improvement of MBIR — illustrative rather than practical is fine.
 
+### demos 6-11 (reviewed together, 2026-08-11)
+
+- **demo_6_qggmrf_denoiser.py — KEEP, simplified.**  A distinct
+  capability (image in, image out, no geometry).  Add noise, denoise,
+  view, one knob (sigma).
+- **demo_7_multiaxis_parallelbeam.py — KEEP as a short geometry demo.**
+  The two-angle (azimuth, elevation) form; the zero-tilt-equals-
+  parallel check is worth keeping.
+- **demo_8_helical_recon.py — KEEP as a short geometry demo.**  The
+  per-view z-shift and pitch.
+- **demo_9_anisotropic_voxels.py — MERGE with the ALU lesson.**
+  Units, detector spacing, anisotropic voxels, and the
+  auto_set_recon_geometry() requirement are one subject.
+- **demo_10_artifacts.py — DROP (Charlie, 2026-08-11).**  Super
+  complicated; Charlie cannot understand it, so a new user has no
+  chance.  Demos must clearly demonstrate simple concepts.  The
+  rotation-direction FAQ paragraph is unaffected.
+- **demo_slice_viewer.py — DROP.**  Every demo uses the viewer; its
+  options belong on the viewer's documentation page.
+
 ## 6. Proposed consolidated demos (grows as the critiques proceed)
 
 | # | working name | lesson | draws from |
@@ -172,15 +196,16 @@ field-of-view pair.
 | 3 | parallel beam region-of-interest scan | the object extends outside the field of view (the common real parallel-beam case); reconstruct the region of interest, padding with row_scale = col_scale = 1.2; shown without and with the padding so the artifacts and their mitigation are both visible | old demos 2 + 3 |
 | 4 | cone beam axial field-of-view artifacts | the object extends outside the field of view in the axial direction, producing cone-beam artifacts; extend the reconstruction axially (axial_pad_fraction) to reduce them; shown without and with the padding | old demos 2 + 3 |
 | 5 | direct vs model-based reconstruction | FBP and MBIR on the same parallel-beam data, side by side: comparable on many clean views, then a very sparse-view case where the MBIR improvement is unmistakable (illustrative, not practical); states plainly when direct reconstruction is all you need | old demo 5 |
+| 6 | helical cone beam | the helical scan: per-view z-shifts and pitch, on the demo-1 skeleton | old demo 8 |
+| 7 | multiaxis parallel (laminography) | the two-angle (azimuth, elevation) form; zero tilt reproduces parallel beam | old demo 7 |
+| 8 | translation (TCT) | the translation geometry, newly ported and previously undemonstrated; translation vectors as the one distinctive concept | new |
+| 9 | units, spacing, and voxel shape | ALUs; changing detector spacing; anisotropic voxels; and the rule that geometry-parameter changes require auto_set_recon_geometry() — the confusion Charlie flagged, addressed head-on | old demo 9 + the ALU lesson |
+| 10 | the qGGMRF denoiser | add noise to a phantom, denoise, view; one knob (sigma) | old demo 6 |
 
-**Lessons awaiting a home in the table:**
-
-- **ALUs and auto_set_recon_geometry (Charlie, 2026-08-11).**  The
-  demos must teach the use of ALUs (the package's length units) in
-  reconstruction — in particular, that after changing a parameter such
-  as the detector spacing, the user must call
-  ``auto_set_recon_geometry()``, which users find super confusing
-  today.
+Dropped entirely: old demo 10 (the artifact gallery) and old demo 11
+(the viewer script).  Documentation work instead of demos: the
+rotation-direction FAQ paragraph, and the viewer's options on the
+viewer's page.
 
 **Library and documentation work the new set needs:**
 
@@ -195,14 +220,13 @@ field-of-view pair.
 
 ## 7. Open questions, settled during the critiques
 
-1. How many demos should the consolidated set have?
+1. SETTLED (2026-08-11): ten demos (the table above).
 2. SETTLED (Charlie, 2026-08-10): scripts only — all Colab notebook
    material is dropped.  Users are moving away from notebooks because
    they can easily build interfaces with Claude.
-3. Do the two new geometries (translation, multiaxis) get demos in the
-   first consolidated set?
-4. Does the artifact gallery (demo 10, 401 lines) survive as a gallery,
-   become documentation prose, or split?
+3. SETTLED (2026-08-11): yes — translation and multiaxis are rows 8
+   and 7.
+4. SETTLED (Charlie, 2026-08-11): dropped entirely.
 5. Where do demos live in the docs: the current demos-and-FAQs page
    structure, or something simpler?
 
