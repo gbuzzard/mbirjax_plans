@@ -1,9 +1,16 @@
 # Demo consolidation — plan
 
-**Status:** DESIGN APPROVED by Charlie 2026-08-11; implementation in
-progress, one demo at a time, each reviewed as it lands.  AMENDMENT at
-approval: demo 8 (translation) is HELD for now — Charlie is not sure
-the geometry is ready for prime time.
+**Status:** IMPLEMENTED and reviewed (mbirtorch d8d3e02, 2026-08-11).
+Charlie ran every demo interactively and approved the set.  The
+translation demo stays HELD (Charlie: not ready for prime time); the
+shipped demos are numbered 1-9 consecutively, so translation takes a
+new number when it lands.  Changes made during Charlie's review:
+demo 2 gained the Bouman-Sauer transmission noise model at dosage
+10,000 (1,000 was tried and rejected — the SNR is too low for
+attenuation 6, and the Shepp-Logan shell dominates the sinogram);
+demo 3's padding rose to 1.3 with display window [0, 1]; demo 4's
+viewer opens on the vertical cut; every viewer opens at display
+minimum 0; generate_demo_data gained multiaxis support.
 
 ## 1. Goal and ground rules
 
@@ -195,7 +202,7 @@ field-of-view pair.
 |---|---|---|---|
 | 1 | parallel beam basics | the simplest complete pipeline: phantom, forward project, reconstruct, view | old demo 1 |
 | 2 | cone beam and real-data practices | cone geometry, plus the concepts a real reconstruction needs: weights, sharpness, saving results | old demo 1 |
-| 3 | parallel beam region-of-interest scan | the object extends outside the field of view (the common real parallel-beam case); reconstruct the region of interest, padding with row_scale = col_scale = 1.2; shown without and with the padding so the artifacts and their mitigation are both visible | old demos 2 + 3 |
+| 3 | parallel beam region-of-interest scan | the object extends outside the field of view (the common real parallel-beam case); reconstruct the region of interest, padding with row_scale = col_scale = 1.3; shown without and with the padding so the artifacts and their mitigation are both visible | old demos 2 + 3 |
 | 4 | cone beam axial field-of-view artifacts | the object extends outside the field of view in the axial direction, producing cone-beam artifacts; extend the reconstruction axially (axial_pad_fraction) to reduce them; shown without and with the padding | old demos 2 + 3 |
 | 5 | direct vs model-based reconstruction | FBP and MBIR on the same parallel-beam data, side by side: comparable on many clean views, then a very sparse-view case where the MBIR improvement is unmistakable (illustrative, not practical); states plainly when direct reconstruction is all you need | old demo 5 |
 | 6 | helical cone beam | the helical scan: per-view z-shifts and pitch, on the demo-1 skeleton | old demo 8 |
