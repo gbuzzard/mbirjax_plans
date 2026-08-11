@@ -734,6 +734,35 @@ solo-pixel identity on both directions.  The fix is its own increment
 beside the flip, because the flip neither introduced nor enlarges the
 defect.
 
+### 1.12 The floors refresh on the new default, and the kernel probe
+### (2026-08-11, job 15172987)
+
+The widening floors were re-measured on commit 4a222c7, the first
+refresh under the column-gather forward.  The refresh ran on a
+four-GPU node in 33 minutes, and its block is pasted into
+`_widening_floors.py` with the staleness note now clean.
+
+Three floors confirmed and one moved.  Parallel and cone at two
+devices stay at the 512-class shape, both now winning by 1.21x where
+cone's 2026-08-10 admission had been marginal at 1.02x.  Cone at four
+devices stays at the 1024-class shape, re-derived against two devices
+as the crossover rule requires, winning by 1.45x.  Parallel at four
+devices MOVED DOWN: the floor fell from the 1024-class shape to the
+768-class, a 3.4x smaller admission size.  These results indicate the
+new forward did not only speed up the admitted shapes; it widened
+where four devices pay for themselves at all.  Translation and
+multiaxis still declare no floor family, so the parallel floors
+continue to govern their automatic device count, and their own
+measurement remains open.
+
+The one-pixel kernel probe rode the same session and closed the last
+open corner of the single-pixel question.  The hand-written CUDA
+kernel bodies, which the padding fix deliberately does not wrap,
+match the full pass at one-pixel calls in both directions: 3.15e-07
+relative on the forward over forty solo calls, 3.51e-07 on the worst
+back row.  The compiler defect of §1.11 is therefore confined to the
+compiled bodies, and the padding fix covers every affected path.
+
 ### 2.1 The torch-body charge (mg8)
 
 Measured 2026-08-10, job 15149052 on h014, on the verified 1a2deb0

@@ -74,7 +74,7 @@ comparison is read and goal 3 is ruled met.  4. DONE — by device-span
 measurement the forward is about 70 percent of GPU time at the large
 parallel size, so item 13's entry gate is SATISFIED.
 
-**Remaining (dashboard steps 5 through 9):** the forward-remedy choice
+**Remaining (`multigpu_plan.md` steps 5 through 9):** the forward-remedy choice
 (driver change versus item 13's sorted stream); the seam decision, whose
 memory premise is now met at the 1K sizes and which is Greg's call; the
 2K capacity table on the corrected charges; close-out; moving the floors
