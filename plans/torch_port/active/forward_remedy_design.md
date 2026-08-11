@@ -955,3 +955,36 @@ whichever kernel campaign runs), and on-chip accumulation through sorted
 streams (the sorted-stream charter, which that framing strengthens).  Declined:
 cross-stage fusion, the sinogram layout transpose, persistent kernels, and
 full-scale accumulator privatization.
+
+## 13. Addendum (2026-08-10, late): the discriminator's answer, and the parallel extension
+
+The probes of questions 1 and 7 ran the same night as job 15159551, and
+findings §1.9 carries the full read.  Both questions are answered.  The
+parallel doubling is a kernel width effect and nothing else: cutting the
+one-device call into two 504-wide pieces doubles its cost, a launch at width
+504 takes the same 41.4 ms as a launch at width 1008, and the device count
+contributes nothing.  The L2 reading resolved the other way: putting the
+write slab inside L2 through the view chunk moved nothing at either count,
+so L2 residency is the width-63 arm's ten percent and not the doubling.
+
+The answer converts this note's parallel verdict from a decline into an
+extension.  §2 declined SUB-BANDING because narrower blocks cannot help a
+kernel whose efficient regime is the widest block, and the measurement now
+says exactly that.  What parallel needs is the opposite of sub-banding:
+full-width values blocks at every device count, which is what the column
+gather already provides for cone.  For parallel the gather is
+order-preserving, because each detector row keeps a single producing piece,
+so the cone value question of §7.2 does not arise.  The transient is the
+same bounded column cylinder, so the 2K arithmetic of §6 carries over
+unchanged.  From the measured rates, parallel 1024 at two devices should
+fall from 28.2 to about 14.1 s of forward busy and from 39.2 to about 25 s
+composed, which is the scale §6 of the memo predicted for a successful
+remedy.
+
+The implementation is small by construction, because the mechanism landed
+behind a geometry capability: `column_gather_geometry` moves to true on
+`ParallelBeamModel`, the row-aligned refusal in the driver's resolver is
+lifted for the gather path, the ledger's column term already prices the
+shape, and the parallel parity tests join the flag-on suite.  The gates are
+the same as cone's: the standing suites, the cluster value gates, and the
+default flip only behind them.  PROPOSED, awaiting the repo owner's ruling.

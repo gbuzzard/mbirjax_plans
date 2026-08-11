@@ -77,6 +77,37 @@
 #     cone,     4 devices: the same four
 #     parallel, 4 devices: the shipped control (252), then sub-bands of 128
 #                          and 256
+#
+# FOUR MORE ARMS, ADDED AFTER THE FIRST RUN AND OFF BY DEFAULT -- and four more
+# beside them.  The first run's sub-band sweep left one thing unattributed, and
+# these arms are the cell that attributes it.  At two devices the per-launch
+# time was very nearly LINEAR in the sub-band width (4.70, 10.99, 17.01, 21.21
+# and 41.51 ms at widths 63, 126, 168, 252 and 504), so the cost per SLICE sat
+# at about 0.084 ms at every width -- but one device at the full 1008-slice
+# width costs 0.0412 ms per slice.  The cost per slice doubles somewhere
+# between those two rows and nobody can say where, because ONE DEVICE WITH A
+# NARROWED VALUES BLOCK was never run.  Experiment 3 runs it (widths 1008, 504,
+# 252 and 63 at one device), and experiment 4 reaches the same question from
+# the other axis of one launch's atomic write slab (view batch x channels x
+# values columns x 4 B) by narrowing the forward VIEW chunk instead, at one and
+# two devices and at the shipped band width.
+#     parallel, 1 device:  p1_shipped (the shipped monolithic call, width
+#                          1008 -- also the control every other one-device arm
+#                          is read against), then values widths 504, 252, 63
+#     parallel, 1 device:  p1_vc8, p1_vc16 -- forward view chunk 8 and 16 at
+#                          the full width (slabs about 32 and 64 MB)
+#     parallel, 2 devices: p2_vc8, p2_vc16 -- the same two chunks at the
+#                          shipped 504-slice band (slabs about 16 and 32 MB),
+#                          read against p2_shard IN THE SAME JOB
+# These nine tokens are NOT in the default run.  The harness drops them unless
+# MG10_ARMS names them, so a plain resubmit of this file is exactly the
+# eighteen arms above and cannot quietly grow a wall.  The follow-up job is one
+# narrowed run:
+#     export MG10_ARMS=p1_shipped,p1_band0504,p1_band0252,p1_band0063,p1_vc8,p1_vc16,p2_shard,p2_vc8,p2_vc16
+# p1_shipped and p2_shard both have to be in that list: every comparison in the
+# two experiments is against a control measured in the SAME job, on the same
+# node, in the same process ordering, which is the only way the small
+# differences these arms turn on can be read.
 # Two of those requests land on a walk another arm already runs, and the plan
 # print names both out loud: the driver caps a band request at the shard and
 # its balanced tiling snaps to a divisor, so at two devices 256 and 384 both
@@ -108,6 +139,34 @@
 # covers a shared node.  --dry-run prints this same arithmetic before any GPU
 # time is spent, so a mis-set knob is caught there.
 #
+# THE NARROWED RUN'S WALL, for the nine opt-in tokens above.  The same base
+# rates apply: parallel 203 s at one device, 200 s at two, one generator 65 s
+# (the narrowed job builds only the parallel sinogram, because no cone arm is
+# in it).
+#     1 generator                                65 s
+#     parallel n=1, 4 width arms     812 to    1126 s
+#     parallel n=1, 2 chunk arms     406 to     609 s
+#     parallel n=2, 1 control        200 to     210 s
+#     parallel n=2, 2 chunk arms     400 to     600 s
+#     TOTAL                      31 min to   43 min
+# The walltime stays 03:00:00.  It is far more than this run needs, and that is
+# deliberate: the file is the same file for both runs, an unchanged walltime is
+# one fewer thing to get wrong between them, and a three-hour request that
+# finishes in forty minutes costs the queue nothing it would not have spent.
+# The high end of that estimate is the softer one here, because a narrowed view
+# chunk multiplies the launch COUNT by sixteen and nobody has measured what
+# that does to the wall -- which is the point of the arms.
+#
+# WHY THE NARROWED RUN STILL ASKS FOR FOUR GPUS.  It uses one device for seven
+# of its nine arms and two for the other two.  The allocation below is not
+# narrowed to match, for two reasons: this is ONE sbatch file serving both runs
+# and a device count that changes with an environment variable is a way to ship
+# the wrong one, and the run is under forty-five minutes on a partition where
+# the four-GPU block is the unit that gets scheduled anyway.  The idle GPUs are
+# real but small and bounded; each arm still PINS its own device count through
+# MBIRTORCH_NUM_DEVICES and asserts the list it actually got, so nothing about
+# the allocation can leak into a measurement.
+#
 # IF THIS JOB MUST BE SPLIT OR CUT, use MG10_ARMS, which takes the tokens the
 # dry-run prints.  Trim in this order: the parallel four-device arms first,
 # then the largest column batch.  The parallel two-device sweep and the cone
@@ -118,12 +177,19 @@
 #     MG10_ARMS=c1,c2_banded,c2_2048,c2_4096,c2_8192
 #     MG10_ARMS=c4_banded,c4_2048,c4_4096,c4_8192
 #     MG10_ARMS=p4_shard,p4_128,p4_256
+# and the opt-in follow-up, which is the ONLY way experiments 3 and 4 run:
+#     MG10_ARMS=p1_shipped,p1_band0504,p1_band0252,p1_band0063,p1_vc8,p1_vc16,p2_shard,p2_vc8,p2_vc16
 # A split has one cost worth naming: the value distances are computed across
 # arms in ONE process, so a cone split that leaves the anchor in another job
 # loses the vs_anchor column for those arms.  Keep c1 with whichever cone arms
-# run.  Two further knobs extend rather than narrow the sweep, if the measured
-# curve says the interesting region is outside the swept one:
+# run, and keep p1_shipped and p2_shard with the opt-in arms for the same
+# reason.  Four further knobs extend rather than narrow the sweep, if the
+# measured curve says the interesting region is outside the swept one:
 #     MG10_PARALLEL_BANDS=32,48,64,96      MG10_CONE_BATCHES=8192,16384,32768
+#     MG10_PARALLEL_N1_WIDTHS=504,252,126,63       MG10_PARALLEL_VIEW_CHUNKS=4,8,16,32
+# The last two RENAME the arms they create (width 504 is the token p1_band0504,
+# chunk 8 is p1_vc8 and p2_vc8), so overriding either one changes what MG10_ARMS
+# has to ask for.  The dry-run prints the tokens it built; read them there.
 #
 # DISK.  Two shared sinograms at the 1024 cell, about 4 GB each, plus two
 # strided reconstruction samples per arm at about 1.2 MB each (the value
@@ -274,6 +340,91 @@ for n_dev, requested in ((2, None), (2, 64), (2, 128), (2, 192), (2, 256),
 print('both mg10 patch seams are where mg10 expects them, and the band tiling '
       'matches the harness prediction at every swept length')
 " || { echo "a mg10 patch seam moved in this tree; do not run the sweep against it"; exit 1; }
+# Part 5, and it runs ONLY when MG10_ARMS asks for the opt-in arms.  Experiments
+# 3 and 4 rest on three more facts about this tree, and a plain resubmit of the
+# eighteen default arms must not be able to fail on facts it does not use -- so
+# this whole block is gated on the token list naming a p1_* or p2_vc* arm.
+case ",${MG10_ARMS:-}," in
+  *,p1_*|*,p2_vc*)
+    "$TORCHPY" -c "
+import inspect, sys
+sys.path.insert(0, '/scratch/gautschi/buzzard/torch_p3')
+from mbirtorch.tomography_model import TomographyModel
+from mbirtorch.projectors import Projectors
+from mbirtorch import triton_parallel
+import mg10_shape_sweep as mg10
+# FACT 1, and experiment 3 exists BECAUSE of it: the forward driver returns for
+# a trivial placement BEFORE it reads the sub-band knob, so at one device that
+# knob is inert and a knob arm at n=1 would silently report the control.
+src = inspect.getsource(TomographyModel._sparse_forward_project_sharded)
+for token in ('is_trivial', '_sparse_forward_project_single_device',
+              'forward_project_slice_band'):
+    if token not in src:
+        sys.exit('the forward driver no longer mentions ' + token +
+                 '; mg10 experiment 3 reasons about where that trivial return '
+                 'sits relative to the knob read and cannot without it.')
+if not (src.index('is_trivial') < src.index('forward_project_slice_band')):
+    sys.exit('the forward driver now reads forward_project_slice_band BEFORE '
+             'its trivial-placement return.  That inverts the fact experiment '
+             '3 is built on -- the knob would no longer be inert at one device '
+             '-- so re-derive the seam before running these arms.')
+# FACT 2: the one-device choke point experiment 3 patches, and both of its
+# callers.  A timed reconstruction reaches it through both.
+if not hasattr(Projectors, '_sparse_forward_project_single_device'):
+    sys.exit('Projectors._sparse_forward_project_single_device is gone; '
+             'experiment 3 patches exactly that function.')
+funnel = inspect.getsource(TomographyModel.sparse_forward_project)
+if '_sparse_forward_project_single_device' not in funnel:
+    sys.exit('the forward funnel no longer calls the single-device projector '
+             'directly; experiment 3 would miss the recon entry and part of '
+             'every reconstruction would run the shipped monolithic call.')
+one_dev = inspect.getsource(Projectors._sparse_forward_project_single_device)
+if 'sparse_forward_project_view_range' not in one_dev:
+    sys.exit('the single-device forward no longer goes through '
+             'sparse_forward_project_view_range; experiment 3 calls that entry '
+             'once per piece and would not be making the same calls.')
+# FACT 3, experiment 4's: the forward view chunk is its OWN module constant,
+# read by the cost function at call time, and separate from the back one.
+if triton_parallel.PARALLEL_FWD_VIEW_CHUNK != 128:
+    sys.exit('the shipped forward view chunk is %r, not 128; every mg10 arm '
+             'asserts 128 as its anchor.'
+             % (triton_parallel.PARALLEL_FWD_VIEW_CHUNK,))
+cost = inspect.getsource(triton_parallel._parallel_forward_view_batch_cost)
+if 'PARALLEL_FWD_VIEW_CHUNK' not in cost:
+    sys.exit('the parallel forward cost function no longer reports '
+             'PARALLEL_FWD_VIEW_CHUNK; experiment 4 rebinds that constant and '
+             'the realized batch would not follow it.')
+back_cost = inspect.getsource(triton_parallel._parallel_back_view_batch_cost)
+if 'PARALLEL_FWD_VIEW_CHUNK' in back_cost:
+    sys.exit('the parallel BACK cost function now reads the forward chunk; '
+             'experiment 4 would move the back projection too, and the back '
+             'projection is inside the same timed reconstruction.')
+body = inspect.getsource(triton_parallel._parallel_forward_view_batch_triton)
+if 'torch.zeros((num_views, num_channels, num_value_cols)' not in body:
+    sys.exit('the parallel forward kernel no longer allocates its output as '
+             '(views, channels, values columns); that shape IS the write slab '
+             'experiment 4 reports in megabytes.')
+# And the tiling of the WHOLE volume at experiment 3's widths, value by value,
+# against the harness's own re-derivation -- the same check part 4 makes for
+# the shards, on the one-device extent the new arms cut.
+for requested in (None, 504, 252, 63):
+    band = TomographyModel._slice_band_length(1008, 1, 771240, requested)
+    lib = [b - a for a, b in TomographyModel._balanced_slice_bounds(1008, band)]
+    ours = mg10.realized_band_lengths(1008, requested)
+    if lib != ours:
+        sys.exit('the driver tiles the 1008-slice volume at request %r as %r '
+                 'while mg10 predicts %r; every experiment-3 witness compares '
+                 'against the prediction.' % (requested, lib, ours))
+print('experiment 3 and 4 seams verified: the trivial return still precedes '
+      'the knob read, the one-device choke point and both its callers are '
+      'present, the forward view chunk is still its own constant, and the '
+      'whole-volume tiling matches the harness prediction')
+" || { echo "an mg10 experiment-3/4 seam moved in this tree; do not run the opt-in arms against it"; exit 1; }
+    ;;
+  *)
+    echo "MG10_ARMS names no opt-in arm; skipping the experiment 3/4 seam checks"
+    ;;
+esac
 # Every python file in the tree must parse, checked on THIS node before any GPU
 # time.  The login node's filesystem client has intermittently returned
 # truncated reads for files whose bytes are correct on disk; a module the arms
@@ -300,12 +451,23 @@ unset MBIRTORCH_MEMORY_CALIBRATION
 # The speed guard is bypassed by a device-count pin anyway; unset so nothing
 # inherited changes the automatic path an arm never takes.
 unset MBIRTORCH_WIDENING_GUARD
-# The arm-narrowing, sweep-extending and artifact knobs, named here only so a
-# re-run needs no edit to the file.  See the header for the trim order.
-unset MG10_ARMS
+# MG10_ARMS is deliberately NOT unset here, and this is a correction rather
+# than a preference.  It is the one knob the header and SHIP.md tell a reader
+# to export from the SUBMITTING SHELL, and slurm's default --export=ALL is what
+# carries it in; an unset here would have thrown it away at this line and run
+# the full default list under a narrowed job's name.  That never bit the first
+# run, which wanted the full list anyway, but the opt-in follow-up cannot run
+# at all without it -- experiments 3 and 4 are reachable ONLY through this
+# variable.  It is echoed below so the log records what the job was asked for.
+echo "MG10_ARMS=${MG10_ARMS:-<unset: the full default arm list>}"
+# The remaining sweep-extending and artifact knobs ARE unset, so nothing stale
+# in a submitting shell can silently change what the swept values are.  See the
+# header for the trim order and for what the two width/chunk knobs rename.
 unset MG10_PARALLEL_BANDS
 unset MG10_PARALLEL_BANDS_N4
 unset MG10_CONE_BATCHES
+unset MG10_PARALLEL_N1_WIDTHS
+unset MG10_PARALLEL_VIEW_CHUNKS
 unset MG10_KEEP_ARTIFACTS
 unset MG10_SMOKE
 

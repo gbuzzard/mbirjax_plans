@@ -447,6 +447,65 @@ devices read at that same width.  Neither adopted decision depends on
 the answer, and the answer decides whether the column-gather shape is
 also the right remedy for parallel.
 
+### 1.9 The discrimination: the parallel flatness is a kernel width effect
+
+Measured 2026-08-10, job 15159551 on h008, on the same frozen tree.
+The rows are
+`plans/experiments/torch_port/rows/mg10_shape_sweep_h008_20260810_201612.jsonl`.
+Nine arms ran: the one-device control, three one-device arms with the
+values block cut into fixed-width pieces, view-chunk arms at 8 and 16
+at one and two devices, and the two-device control.
+
+The reading is valid on four checks.  All nine arms passed their
+checks, including the piece-structure witnesses on both sides of every
+patched arm.  The one-device control reproduced §1.7's anchor at
+0.0411 against 0.0412 ms per slice.  Every cross-arm value distance
+sits at its own repeat floor (checksum spreads 1.3e-12 to 7.8e-10
+against floors of 2.2e-10 to 1.0e-09), so every arm computes the same
+reconstruction.  The strided-piece packing cost was measured per arm
+at 0.2 to 1.3 ms per launch set against 21 to 41 ms launches, so
+netting it out changes no conclusion.
+
+The discrimination table, one device throughout:
+
+| values-block width | pieces | per launch | per slice | busy |
+|---|---|---|---|---|
+| 1008 (the shipped call) | 1 | 41.38 ms | 0.0411 ms | 28.14 s |
+| 504 | 2 | 41.46 ms | 0.0823 ms | 56.39 s |
+| 252 | 4 | 21.18 ms | 0.0840 ms | 57.60 s |
+| 63 | 16 | 4.69 ms | 0.0744 ms | 51.02 s |
+
+The first conclusion is that the doubling is a property of the kernel
+and the width alone.  Cutting the one-device call into two 504-wide
+pieces doubles its cost, and a launch at width 504 takes the same
+41.4 ms a launch at width 1008 takes.  Per-slice cost at every width
+at or under 504 matches what two and four devices read at their
+matched widths, so the device count contributes nothing.  The
+multi-device hypothesis is refuted.
+
+The second conclusion is that the write slab's L2 residency is the
+sweep's small anomaly and not its doubling.  The view-chunk arms put
+the accumulation slab well inside L2 at both counts, and busy time
+did not move: 28.90 against 28.14 s at one device, 28.98 against
+28.17 s at two.  The width-63 bonus reproduced at one device at the
+same ten percent.  These results indicate that L2 residency buys the
+ten percent and the width regime costs the factor of two.
+
+The third conclusion is the remedy.  At more than one device the
+banded walk hands the kernel 504-wide or narrower blocks, which is
+the inefficient regime; the column gather hands it full-width blocks,
+which is the efficient one, at a bounded transient the 2K point
+survives.  The column-gather shape adopted for cone is therefore also
+parallel's remedy, for a different measured reason, and for parallel
+it is order-preserving because each detector row keeps a single
+producing piece.  From the measured rates, parallel 1024 at two
+devices should fall from 28.2 to about 14.1 s of forward busy and
+from 39.2 to about 25 s composed.  The design note's addendum carries
+the extension proposal.  Why the kernel runs twice as efficiently at
+width 1008 as at 504 remains unexplained; the leading candidate is
+grid occupancy, and the question now belongs to the kernel campaigns,
+because no adopted remedy depends on the answer.
+
 ---
 
 ## 2. The ledger at n>1 (mg2)

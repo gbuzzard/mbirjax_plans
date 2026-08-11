@@ -29,8 +29,51 @@ live model object at run time.
     bodies, the same transfer primitive -- and reads time, memory and VALUE
     against the banded path we ship.
 
+    Experiment 3, THE ONE-DEVICE WIDTH DISCRIMINATOR (added after the first
+    mg10 run, and OFF unless MG10_ARMS asks for it by name).  Experiment 1's
+    sweep produced one result nobody can attribute yet.  At parallel 1024 with
+    two devices the per-launch time is very nearly LINEAR in the sub-band
+    width -- 4.70, 10.99, 17.01, 21.21 and 41.51 ms at widths 63, 126, 168, 252
+    and 504 -- so the cost per slice is about 0.084 ms at EVERY width.  But the
+    single-device arm runs the same kernel at 0.0412 ms per slice at width
+    1008.  The cost per slice therefore DOUBLES between one device at width
+    1008 and two-or-four devices at any width, and two different stories
+    explain that equally well:
+        (a) a MULTI-DEVICE effect -- the doubling follows from n > 1 itself
+            (peer-visible memory, cold reads of a copied tensor, whatever), or
+        (b) a KERNEL WIDTH effect -- the kernel is simply half as efficient per
+            slice at widths at or below 504 as it is at 1008, at ANY device
+            count.
+    The cell that separates them was never run: ONE device with a NARROWED
+    values block.  This experiment runs it, at widths 1008 (the shipped
+    monolithic call), 504, 252 and 63.  If the narrowed one-device arms land
+    near 0.041 ms per slice, the width is innocent and the doubling belongs to
+    the device count; if they land near 0.084, the device count is innocent and
+    the doubling belongs to the width.  Width 63 carries a second question of
+    its own: it was the only sub-band that BEAT the control at two devices
+    (by 9.5 percent), and it is the only one whose per-launch atomic write
+    target (128 views x 63 rows x 1024 channels x 4 B = 33 MB) fits inside an
+    H100's 50 MB L2 (126 rows is 66 MB, just over).  Whether that win survives
+    at one device says whether it is an L2 effect or a sharding effect.
+
+    Experiment 4, THE SAME SLAB FROM THE OTHER AXIS (also opt-in, and added
+    with experiment 3).  One forward launch's atomic write target is the zeroed
+    plane the kernel accumulates into: (view batch) x (channels) x (values
+    columns), float32.  Experiment 3 varies the values columns of that plane;
+    this varies the VIEW BATCH, at a values width nobody touches.  The two axes
+    reach the same byte counts from different directions -- 8 views at the full
+    1008-slice width writes what 128 views at 63 slices writes -- so if fitting
+    the plane in cache is what the width-63 anomaly was about, the two have to
+    agree.  Four arms: forward view chunk 8 and 16 at ONE device (the shipped
+    1008-slice call, slabs of about 32 and 64 MB) and the same two at TWO
+    devices (the shipped 504-slice bands, slabs of about 16 and 32 MB).  The
+    two-device pair is a second discriminator on its own: if the two-device
+    cost per slice falls toward 0.041 when the launch writes less, then how
+    much one launch writes explains the doubling and the device count is a
+    bystander.
+
 WHAT THE DECISION READS OFF THIS.  Three numbers, one per open question in the
-remedy memo's section 8.6.
+remedy memo's section 8.6, plus the two slab discriminations.
     * The parallel band knee: per-launch ms against sub-band length, at two and
       four devices.  A remedy exists only where (launches x per-launch time)
       falls below the control's.  Sub-banding multiplies the launch count by
@@ -43,6 +86,13 @@ remedy memo's section 8.6.
     * The cone value gate: the column gather changes the order the vertical
       contributions are summed in, so this file records three distances and the
       run-to-run floor to read them against.
+    * Experiment 3's discrimination: ms_per_slice at one device against the
+      values-block width, printed beside the two- and four-device readings of
+      the same column.  The summary prints the RULE (0.041 says multi-device,
+      0.084 says width) and nothing else; the attribution is analysis.
+    * Experiment 4's: the same column against the forward VIEW chunk, at one
+      and two devices, with the write slab in megabytes beside every row so the
+      crossing of the H100's 50 MB L2 is legible without arithmetic.
 
 THE NORMALIZED COST COLUMNS, and why a null result must be legible.  A narrower
 launch always has a smaller per-launch time, which on its own says nothing at
@@ -67,10 +117,16 @@ whole sweep beside it, and choosing stays the note's job.
 
 TERMS OF ART, each defined once, here.
     arm          one subprocess run at fixed parameters -- one geometry, one
-                 device count, and one shape knob.  Eighteen arms.
+                 device count, and one shape knob.  Eighteen arms by default;
+                 experiment 3 adds four more that run ONLY when MG10_ARMS names
+                 them, so a plain re-run is the same eighteen it always was.
     sub-band     a fixed-length slice range within ONE slice-owner's shard.
                  Today there is one sub-band per owner and it is the whole
                  shard; experiment 1 makes them shorter.
+    piece        experiment 3's unit: a width-W slice range of the WHOLE volume
+                 at one device.  A piece is what a sub-band would be if a
+                 sub-band existed at n = 1, and the two are deliberately tiled
+                 by the same rule so their widths are comparable.
     column batch a batch of pixel columns whose FULL-HEIGHT cylinder (every
                  slice, gathered from every slice-owner) is assembled on one
                  view-owner and projected in a single call.  Experiment 2's
@@ -109,6 +165,26 @@ the arm loudly on any disagreement.
     full-height and not a band by another name.  The prototype's arm also
     requires the broadcast counter to read exactly ZERO, which is what proves
     the banded branch did not run.
+    Experiment 4's witness is the REALIZED FORWARD VIEW BATCH, which the
+    harness already records per device by position.  It is asserted on every
+    parallel arm, not only on the arms that narrow it: an arm whose batch
+    quietly moved would report a write slab it never wrote.  A view-chunk arm
+    must read its own chunk and nothing else; every other parallel arm must
+    read the shipped chunk.  The arm also proves the seam is FORWARD-ONLY --
+    the back chunk constant is re-read and must be untouched -- and, on the
+    kernel path, that the module constant did all the work: the clamp that
+    exists for the CPU smoke's torch bodies must never have fired.
+    Experiment 3's witness is DOUBLE, and the two halves are recorded at
+    different places by different code.  The splitter counts, per forward
+    funnel call, how many pieces it cut and how wide each one was; the busy
+    probe independently records the column count of every values block the
+    KERNEL was handed.  Both are checked against this file's own re-derivation
+    of the tiling, and they are checked against each other, so a splitter that
+    counted pieces it did not actually project could not pass.  The one-device
+    CONTROL arm proves the opposite: exactly one piece, of the full slice
+    count, which is the shipped monolithic call.  Every experiment-3 arm also
+    proves it ran on ONE device -- zero band fan-outs, zero column gathers,
+    zero cross-device bytes, and a device list of length exactly one.
 
 WHY THE PATCHES SIT WHERE THEY SIT.
 
@@ -134,6 +210,45 @@ WHY THE PATCHES SIT WHERE THEY SIT.
     only ever change the cone multi-device branch.  It returns exactly what the
     original returns: a `Shards` of one (views, rows, channels) tensor per
     view-owner, in device order, with any padded view tail zero-filled.
+
+    Experiment 3 CANNOT use experiment 1's knob, and the driver's own source is
+    why.  `_sparse_forward_project_sharded` returns on its first statement when
+    the placement is trivial (tomography_model.py lines 448 to 452), thirteen
+    lines BEFORE the line that reads `forward_project_slice_band` (line 461).
+    At one device the knob is never consulted, so an experiment-1 arm at n = 1
+    would set an attribute nothing reads and report the control under a
+    narrowed arm's name -- the exact silent-no-op failure this file exists to
+    prevent.  The batch file re-checks that ordering against the tree's own
+    source before any experiment-3 arm runs.  So experiment 3 patches
+    `Projectors._sparse_forward_project_single_device` instead, ON THE CLASS.
+    That function is the single choke point for one device: its only two
+    callers are the funnel's non-`Shards` branch (line 342) and the trivial
+    early return above (line 450), and mg10's timed reconstruction reaches it
+    through BOTH -- the recon entry projects a plain tensor, and the VCD loop
+    projects a one-shard `Shards`.  Patching the class rather than the
+    projector INSTANCE is what makes it survive the device-count settle that
+    rebuilds the projector object inside the cold pass; the patch checks
+    `self.model is` this arm's model and delegates otherwise, so it cannot
+    reach anything else in the process.
+    The patched body does exactly what the shipped one does, once per piece:
+    the same `Projectors.sparse_forward_project_view_range`, the same
+    `(0, num_views)` view range, the same `dev_index=0`, the same argument
+    coercion -- handed `values[:, l0:l1]` instead of `values`.  Rows track
+    slices one to one in parallel beam, so a piece's sinogram IS the matching
+    row band, and the pieces concatenate along the row axis in slice order.
+    Nothing is summed and nothing is reordered, which is the same assembly the
+    two-device driver performs for a row-aligned geometry (line 540).
+    ONE FIDELITY NOTE, measured rather than argued.  `values[:, l0:l1]` is a
+    STRIDED view, and the Triton parallel forward body calls `.contiguous()` on
+    its values argument (triton_parallel.py line 437), inside the per-call
+    bracket.  So a narrowed piece pays a pack of its own block where the width
+    1008 control pays none.  That is not a harness artifact: it is exactly what
+    the two-device driver already pays on every band it projects from its OWN
+    shard (`move_shard` to a tensor's own device returns the tensor itself, so
+    half of the two-device fan-out's bands arrive strided and half arrive as
+    fresh contiguous copies).  The pack is width-proportional, so it cannot
+    bend the shape of the width curve, and every arm measures its own pack cost
+    directly (`values_pack_ms`) so a reader can subtract it.
 
 WHEN THE PATCHES GO IN, and why it is not where mg9 puts its probes.  mg9
 installs its probes AFTER the discarded cold pass, because they live inside the
@@ -199,7 +314,11 @@ and a truncated job should lose the least.  The parallel two-device sweep is
 first (the core of experiment 1), then the cone one-device value anchor (which
 every cone value row needs), then the cone two-device batches (the core of
 experiment 2), then cone at four, then the parallel four-device arms, which the
-brief names as the first thing to trim.
+brief names as the first thing to trim.  Experiment 3's four arms are declared
+LAST and are OPT-IN: they are not in the default run at all, so a plain re-run
+of this file is the same eighteen arms it has always been, and the follow-up job
+asks for them by name with
+MG10_ARMS=p1_shipped,p1_band0504,p1_band0252,p1_band0063.
 
 Run:
     <torch python> mg10_shape_sweep.py        on a 4-GPU node (mg10_gautschi.sbatch)
@@ -214,6 +333,13 @@ Environment (export from the SUBMITTING SHELL; never in an sbatch
     MG10_ARMS=p2_shard,p2_128,...  subset of the arms, by token
     MG10_PARALLEL_BANDS=64,128,192,256,384    the swept sub-band lengths
     MG10_CONE_BATCHES=2048,4096,8192          the swept column-batch sizes
+    MG10_PARALLEL_N1_WIDTHS=504,252,63        experiment 3's one-device
+                                   values-block widths.  The tokens follow the
+                                   widths (504 -> p1_band0504), so overriding
+                                   this renames the arms MG10_ARMS must ask for.
+    MG10_PARALLEL_VIEW_CHUNKS=8,16            experiment 4's forward view
+                                   chunks.  The tokens follow these too
+                                   (8 -> p1_vc8 and p2_vc8).
     MG10_ITERATIONS=3              VCD iterations per reconstruction
     MG10_WARM_REPEATS=3            timed reconstructions after the cold pass
     MG10_MAX_EVENT_PAIRS=400000    per-reconstruction event budget
@@ -274,6 +400,23 @@ PARALLEL_BANDS_N4 = _int_list("MG10_PARALLEL_BANDS_N4",
 CONE_BATCHES = _int_list("MG10_CONE_BATCHES",
                          (64,) if SMOKE else (2048, 4096, 8192))
 
+# Experiment 3's ONE-DEVICE values-block widths, and their smoke stand-ins.
+# The production widths are the two-device sweep's widths that are also
+# divisors of the whole 1008-slice volume (504 and 252) plus the width that won
+# there (63), so every one of them lines up with a measured n > 1 point.  The
+# smoke volume is 24 slices, so the smoke substitutes widths that fit it; the
+# TOKENS stay named after the production widths either way, because MG10_ARMS
+# has to name the same arms on the cluster and on this Mac.
+PARALLEL_N1_WIDTHS = _int_list("MG10_PARALLEL_N1_WIDTHS", (504, 252, 63))
+PARALLEL_N1_SMOKE_WIDTHS = (12, 6, 3)
+
+# Experiment 4's forward view chunks: the OTHER axis of one launch's atomic
+# write slab.  The slab is (view batch x channels x values columns) x 4 B, so
+# 8 views at the full 1008-slice width covers the same bytes as 128 views at
+# 63 slices -- the width that won at two devices.  These run at both device
+# counts, at the SHIPPED band width, so nothing but the view axis moves.
+PARALLEL_VIEW_CHUNKS = _int_list("MG10_PARALLEL_VIEW_CHUNKS", (8, 16))
+
 VCD_ITERATIONS = int(os.environ.get("MG10_ITERATIONS", "1" if SMOKE else "3"))
 VCD_SEED = 13             # mg1's / mg5's / mg9's seed, so the arms stay comparable
 WARM_REPEATS = max(1, int(os.environ.get("MG10_WARM_REPEATS",
@@ -293,6 +436,34 @@ MG9_ANCHOR = {
     ("cone", 2): dict(bracket_s=30.65, busy_s=29.70, calls=None,
                       per_launch_ms=None, composed_s=67.30, peak_gb=14.31),
 }
+# EXPERIMENT 3's REFERENCE COLUMN: the parallel per-launch and per-slice
+# readings this job has ALREADY taken, so the discriminator table can print the
+# n > 1 side beside the new n = 1 side even when only the n = 1 arms are run.
+# Keyed by (device count, the values-block width the kernel was handed).  The
+# n = 2 and n = 4 entries are mg10's own first run (h004, 2026-08-10, rows
+# mg10_shape_sweep_h004_20260810_174925.jsonl), read off its summary series.
+# The n = 1 entry at width 1008 is mg9's (finding 1.7, job 15152345 on h018),
+# and it is the one number in this table that the new p1_shipped control
+# re-measures rather than merely quotes -- if the control disagrees with it, the
+# node or the tree moved and the whole discrimination is suspect.
+PARALLEL_PER_SLICE_REFERENCE = {
+    (1, 1008): dict(per_launch_ms=None, ms_per_slice=0.0412, source="mg9 1.7"),
+    (2, 504): dict(per_launch_ms=41.515, ms_per_slice=0.08237, source="mg10 p2_shard"),
+    (2, 252): dict(per_launch_ms=21.213, ms_per_slice=0.08418, source="mg10 p2_256"),
+    (2, 168): dict(per_launch_ms=17.009, ms_per_slice=0.10124, source="mg10 p2_192"),
+    (2, 126): dict(per_launch_ms=10.990, ms_per_slice=0.08722, source="mg10 p2_128"),
+    (2, 63): dict(per_launch_ms=4.697, ms_per_slice=0.07456, source="mg10 p2_64"),
+    (4, 252): dict(per_launch_ms=21.399, ms_per_slice=0.08492, source="mg10 p4_shard"),
+    (4, 126): dict(per_launch_ms=11.223, ms_per_slice=0.08907, source="mg10 p4_128"),
+}
+# The two readings the discrimination rule is stated against, and nothing else:
+# the one-device width-1008 cost per slice, and the cost per slice the n > 1
+# sweep held at every width it tried.
+N1_WIDE_MS_PER_SLICE = 0.0412
+NGT1_MS_PER_SLICE = 0.084
+# Width 63 was the only two-device sub-band that beat its control, by this much.
+N2_WIDTH63_WIN_FRAC = 0.095
+
 # From mg5 / findings 1.5, for the arms mg9 did not run.
 MEMO_FORWARD_SPAN_S = {("cone", 1): 32.18, ("cone", 2): 30.61, ("cone", 4): 30.48,
                        ("parallel", 1): 28.87, ("parallel", 2): 28.75}
@@ -377,9 +548,11 @@ def build_arms():
     incrementally).  Each entry is a dict describing one subprocess run."""
     arms = []
 
-    def add(token, geometry, n_dev, band=None, batch=None, role="control"):
+    def add(token, geometry, n_dev, band=None, batch=None, width=None,
+            chunk=None, role="control"):
         arms.append(dict(token=token, geometry=geometry, n_dev=n_dev,
-                         band_len=band, pixel_batch=batch, role=role))
+                         band_len=band, pixel_batch=batch, values_width=width,
+                         view_chunk=chunk, role=role))
 
     # Experiment 1's core: parallel at two devices.  Control first, so its
     # reproduction of mg9's anchor is known before any patched arm is read.
@@ -401,18 +574,58 @@ def build_arms():
     add("p4_shard", "parallel", 4)
     for length in PARALLEL_BANDS_N4:
         add(f"p4_{length}", "parallel", 4, band=length, role="subband")
+    # EXPERIMENT 3, declared last and NOT in the default run: `selected_arms`
+    # drops every one of these unless MG10_ARMS names it, so a plain re-run of
+    # this file is the eighteen arms it has always been.  Control first, so its
+    # reproduction of mg9's one-device anchor is known before any narrowed arm
+    # is read -- the same ordering rule experiment 1 follows.
+    add("p1_shipped", "parallel", 1, role="anchor")
+    widths = list(PARALLEL_N1_WIDTHS)
+    if SMOKE:
+        # The smoke volume is 24 slices, so the production widths would all cap
+        # back onto the whole volume and measure the control four times.  The
+        # tokens keep the production names (see PARALLEL_N1_SMOKE_WIDTHS).
+        widths = list(PARALLEL_N1_SMOKE_WIDTHS)[:len(PARALLEL_N1_WIDTHS)]
+    for nominal, width in zip(PARALLEL_N1_WIDTHS, widths):
+        add(f"p1_band{nominal:04d}", "parallel", 1, width=width,
+            role="values_split")
+    # EXPERIMENT 4, also opt-in: the same write slab from the VIEW axis, at
+    # both device counts and at the shipped band width.  The one-device arms
+    # read against p1_shipped and the two-device arms against p2_shard, both of
+    # which must be in the same job for the comparison to be same-run.
+    for chunk in PARALLEL_VIEW_CHUNKS:
+        add(f"p1_vc{chunk}", "parallel", 1, chunk=chunk, role="view_chunk")
+    for chunk in PARALLEL_VIEW_CHUNKS:
+        add(f"p2_vc{chunk}", "parallel", 2, chunk=chunk, role="view_chunk")
     return arms
+
+
+# The tokens experiments 3 and 4 add, which are OPT-IN: `selected_arms` keeps
+# them out of an unnarrowed run.  Declared here rather than derived at the use
+# site so the exclusion and the arm list cannot drift apart.  p2_shard is NOT
+# in this set -- it is one of the original eighteen, and the two-device view
+# chunk arms read against it, so the narrowed job names it too.
+OPT_IN_TOKENS = frozenset(
+    ["p1_shipped"]
+    + [f"p1_band{w:04d}" for w in PARALLEL_N1_WIDTHS]
+    + [f"p1_vc{c}" for c in PARALLEL_VIEW_CHUNKS]
+    + [f"p2_vc{c}" for c in PARALLEL_VIEW_CHUNKS])
 
 
 ARMS = build_arms()
 
 
 def selected_arms():
-    """The arms to run, narrowed by MG10_ARMS (comma-separated tokens)."""
+    """The arms to run, narrowed by MG10_ARMS (comma-separated tokens).
+
+    Experiment 3's arms are OPT-IN.  An unnarrowed run drops them, so this
+    file's default job is exactly the eighteen arms mg10 has always run and a
+    plain resubmit of the batch file cannot quietly grow four arms and a
+    wall.  Naming one in MG10_ARMS is the only way to run it."""
     by_token = {a["token"]: a for a in ARMS}
     raw = os.environ.get("MG10_ARMS", "").strip()
     if not raw:
-        chosen = list(ARMS)
+        chosen = [a for a in ARMS if a["token"] not in OPT_IN_TOKENS]
     else:
         wanted = set()
         for token in raw.split(","):
@@ -429,11 +642,18 @@ def selected_arms():
     if SMOKE and not os.environ.get("MG10_ARMS", "").strip():
         # The device-count pin is a CUDA-only mechanism, so on CPU an n > 1 arm
         # pins by device LIST instead and says so on its row.  The smoke keeps
-        # one arm of every KIND -- control, sub-band, anchor, prototype -- so
-        # every patch seam, witness and value column is exercised, and drops
-        # the four-device arms, which add nothing the two-device ones do not.
+        # one arm of every KIND -- control, sub-band, anchor, prototype,
+        # one-device control and one-device split -- so every patch seam,
+        # witness and value column is exercised, and drops the four-device
+        # arms, which add nothing the two-device ones do not.  The experiment-3
+        # arms are opt-in in a real run but kept here on purpose: the smoke is
+        # the only place their seam and their two witnesses get exercised
+        # before the cluster sees them.
         keep = {"p2_shard", f"p2_{PARALLEL_BANDS[0]}", "c1", "c2_banded",
-                f"c2_{CONE_BATCHES[0]}"}
+                f"c2_{CONE_BATCHES[0]}", "p1_shipped",
+                f"p1_band{PARALLEL_N1_WIDTHS[0]:04d}",
+                f"p1_vc{PARALLEL_VIEW_CHUNKS[0]}",
+                f"p2_vc{PARALLEL_VIEW_CHUNKS[0]}"}
         chosen = [a for a in ARMS if a["token"] in keep]
     return chosen
 
@@ -1417,6 +1637,325 @@ def install_cone_column_gather(model, pixel_batch):
     return counters, verify, detach
 
 
+# ── PATCH 3: the one-device narrowed values block ─────────────────────────────
+def install_parallel_n1_values_split(model, width):
+    """Hand the ONE-device forward its values block in width-``width`` pieces.
+
+    WHY THIS IS NOT EXPERIMENT 1'S KNOB.  `forward_project_slice_band` is read
+    inside `_sparse_forward_project_sharded`, thirteen lines AFTER that driver
+    has already returned for a trivial placement (tomography_model.py 448 to
+    452, then 461).  At one device the knob is inert.  Setting it here would
+    produce a row that claims a narrowed walk and measures the control, which
+    is the one failure mode this file is built to make impossible.
+
+    THE SEAM, and why it is this one.
+      * `Projectors._sparse_forward_project_single_device` is the SINGLE choke
+        point for one device.  Its only two callers are the funnel's
+        non-`Shards` branch (line 342) and the trivial early return (line 450),
+        and a timed reconstruction reaches it through both: `recon` projects
+        the initial volume as a plain tensor, and the VCD loop projects each
+        subset's delta as a one-shard `Shards`.  A patch on either caller alone
+        would leave part of every reconstruction running the shipped
+        monolithic call, and the mixture would read as a narrowed arm.
+      * It is patched ON THE CLASS.  A device-count settle inside the cold pass
+        rebuilds the projector OBJECT (`_install_device_layout` ->
+        `create_projectors`), which would throw away an instance attribute; the
+        class survives that, and the new projector instance still holds the
+        same model.  The patch checks `self.model is` this arm's model and
+        delegates otherwise, so nothing else in the process can reach it.
+
+    WHAT ONE PIECE'S CALL LOOKS LIKE, against the shipped call.  The shipped
+    body coerces the values and the indices, then makes ONE call:
+        sparse_forward_project_view_range(values, idx, (0, num_views),
+                                          dev_index=0)
+    with `values` the whole (P, num_slices) block.  This body makes the same
+    coercion and then the same call once per piece, with `values[:, l0:l1]` in
+    place of `values` -- same entry, same view range, same device index, same
+    `slice_start` default, same per-device compiled body, same view batching
+    (the transient budget's cap is far above the nominal 128 at every width
+    here, so the view batch is 128 for the pieces exactly as for the whole
+    block).  Rows track slices one to one in parallel beam, so piece k's
+    sinogram IS detector rows [l0, l1), and `torch.cat(..., dim=1)` in slice
+    order rebuilds the whole sinogram: no summation, no reordering, and the
+    same concatenation the two-device driver performs for a row-aligned
+    geometry (tomography_model.py line 540).
+
+    THE TILING is this file's own `balanced_slice_bounds` -- the driver's rule,
+    re-derived here -- applied to the WHOLE volume rather than to a shard, so a
+    piece width at one device means the same thing a sub-band width means at
+    two.  A request wider than the volume caps to the volume, exactly as
+    `_slice_band_length` caps a band request at the shard.
+
+    ONE COST THAT IS INSIDE THE TIMED BODY, named so it can be subtracted.
+    `values[:, l0:l1]` is a strided view and the Triton parallel forward body
+    calls `.contiguous()` on its values argument (triton_parallel.py line 437),
+    so a narrowed piece packs its own block inside the per-call bracket where
+    the width-1008 control packs nothing.  The two-device driver already pays
+    exactly this on every band it projects from its own shard, because a
+    `move_shard` to a tensor's own device returns the tensor itself -- half of
+    that fan-out's bands arrive strided.  The arm measures the pack directly
+    (`values_pack_ms`) so a reader can subtract it; it is proportional to the
+    width, so it cannot bend the shape of the width curve.
+
+    Returns ``(counters, verify, detach)``."""
+    import torch
+
+    from mbirtorch.projectors import Projectors
+
+    if width is None or int(width) < 1:
+        raise ValueError("install_parallel_n1_values_split needs a width")
+    width = int(width)
+    if not getattr(model, "rows_track_slices", False):
+        raise RuntimeError(
+            "the one-device values split is a ROW-ALIGNED geometry's "
+            "measurement: it assembles the sinogram by concatenating each "
+            "piece's detector rows, which is only the right answer when rows "
+            "track slices one to one.  This model says they do not.")
+    original = Projectors._sparse_forward_project_single_device
+    if getattr(original, "_mg10_n1_split", False):
+        raise RuntimeError(
+            "Projectors._sparse_forward_project_single_device is already "
+            "patched; this arm would measure a split of a split")
+
+    counters = dict(
+        width=width,
+        split_calls=0,          # one-device forwards this body served
+        delegated_other_model=0,  # calls from some other model, handed back
+        pieces_per_call={},     # pieces cut per call -> how many calls
+        piece_widths={},        # piece width -> how many pieces
+        piece_contiguous={},    # was the piece contiguous -> how many pieces
+        cat_calls=0,            # calls whose pieces had to be concatenated
+    )
+    lock = threading.Lock()
+
+    def patched(self, voxel_values, pixel_indices):
+        if self.model is not model:
+            with lock:
+                counters["delegated_other_model"] += 1
+            return original(self, voxel_values, pixel_indices)
+        m = self.model
+        num_views = int(m.get_params('sinogram_shape')[0])
+        # The shipped body's own coercion, verbatim: the seam is the split, not
+        # the placement.
+        values = torch.as_tensor(voxel_values, dtype=torch.float32,
+                                 device=m.torch_device)
+        indices = torch.as_tensor(pixel_indices, dtype=torch.int64,
+                                  device=m.torch_device)
+        extent = int(values.shape[-1])
+        bounds = balanced_slice_bounds(extent, min(width, extent))
+        pieces = []
+        for (l0, l1) in bounds:
+            block = values[:, l0:l1]
+            with lock:
+                counters["piece_widths"][l1 - l0] = \
+                    counters["piece_widths"].get(l1 - l0, 0) + 1
+                key = bool(block.is_contiguous())
+                counters["piece_contiguous"][key] = \
+                    counters["piece_contiguous"].get(key, 0) + 1
+            pieces.append(self.sparse_forward_project_view_range(
+                block, indices, (0, num_views), dev_index=0))
+        with lock:
+            counters["split_calls"] += 1
+            counters["pieces_per_call"][len(bounds)] = \
+                counters["pieces_per_call"].get(len(bounds), 0) + 1
+            if len(pieces) > 1:
+                counters["cat_calls"] += 1
+        # Slice order, along the ROW axis -- the driver's own assembly for a
+        # row-aligned geometry.  A single piece is returned as is, so a width
+        # that caps back onto the whole volume is bit-for-bit the shipped call.
+        return pieces[0] if len(pieces) == 1 else torch.cat(pieces, dim=1)
+
+    patched._mg10_n1_split = True
+    patched.__name__ = "mg10_n1_values_split"
+    Projectors._sparse_forward_project_single_device = patched
+
+    def verify():
+        return dict(
+            split_installed=(
+                Projectors._sparse_forward_project_single_device is patched),
+            class_method_replaced=(original is not patched),
+            band_knob_untouched=(
+                getattr(model, "forward_project_slice_band", None) is None
+                and getattr(model, "back_project_slice_band", None) is None))
+
+    def detach():
+        Projectors._sparse_forward_project_single_device = original
+
+    return counters, verify, detach
+
+
+# ── PATCH 4: the narrowed forward view chunk ──────────────────────────────────
+def install_parallel_view_chunk(model, chunk, kernel_module, fwd_const,
+                                back_const, expect_kernel):
+    """Narrow the FORWARD view chunk to ``chunk`` views per launch.
+
+    WHAT THIS MOVES, and why it is the other axis of the same question.  One
+    forward launch's atomic write target is the zeroed output plane the kernel
+    accumulates into: ``(view batch, channels, values columns)`` float32
+    (triton_parallel.py line 444).  Experiment 3 varies the VALUES COLUMNS of
+    that slab; this varies the VIEW BATCH, at a values width nobody touches.
+    Both land on the same byte count from different directions, so if the slab
+    fitting in cache is what the two-device width-63 anomaly was about, the two
+    axes have to agree.
+
+    THE SEAM.  ``Projectors.view_batch_charge`` takes its nominal from
+    ``model.view_batch_size`` when the user set one, and otherwise from the
+    BODY's own ``_view_batch_cost``, which for the Triton parallel forward
+    returns the module constant ``PARALLEL_FWD_VIEW_CHUNK`` -- read as a module
+    global at call time (triton_parallel.py line 484), so rebinding the
+    constant is exactly the change a library edit would make and nothing else
+    moves.  ``model.view_batch_size`` was NOT used: it is the nominal for every
+    body, forward and back alike, and the back projection is inside the same
+    timed reconstruction.  The forward and back chunks are separate constants
+    (lines 115 and 130), so this seam is forward-only by construction, and the
+    arm re-reads the back constant afterwards to prove it.
+
+    THE SMOKE'S SECOND HALF.  On CPU the parallel bodies are torch bodies with
+    no ``_view_batch_cost``, so the constant is never consulted and the nominal
+    is ``Projectors.VIEW_BATCH_BODY_DEFAULT``.  A constant-only patch would
+    make the local smoke exercise nothing.  So this also clamps
+    ``Projectors._effective_view_batch`` -- on the CLASS, so a projector
+    rebuild cannot drop it -- for FORWARD bodies only, identified by identity
+    against ``_fwd_body_per_dev`` (which holds the busy probe's wrappers once
+    those are installed, and the raw bodies before).  On the kernel path the
+    clamp must never fire, because the constant already produced the same
+    number, and the arm ASSERTS that: a firing clamp on CUDA means the constant
+    seam moved and the row would be measuring the clamp instead.
+
+    Returns ``(counters, verify, detach)``."""
+    from mbirtorch.projectors import Projectors
+
+    if chunk is None or int(chunk) < 1:
+        raise ValueError("install_parallel_view_chunk needs a positive chunk")
+    chunk = int(chunk)
+    original_fwd_chunk = int(getattr(kernel_module, fwd_const))
+    original_back_chunk = int(getattr(kernel_module, back_const))
+    if chunk >= original_fwd_chunk:
+        raise RuntimeError(
+            f"the view chunk arm asked for {chunk} against a shipped forward "
+            f"chunk of {original_fwd_chunk}; a chunk at or above the shipped "
+            f"one is the control under another name")
+    original_effective = Projectors._effective_view_batch
+    if getattr(original_effective, "_mg10_view_chunk", False):
+        raise RuntimeError(
+            "Projectors._effective_view_batch is already clamped; this arm "
+            "would be measuring a clamp of a clamp")
+
+    counters = dict(chunk=chunk, forward_calls=0, back_calls=0,
+                    clamped_calls=0, forward_values={}, back_values={})
+    lock = threading.Lock()
+
+    setattr(kernel_module, fwd_const, chunk)
+
+    def clamped(self, body, num_pixels, band_cols, args):
+        value = int(original_effective(self, body, num_pixels, band_cols, args))
+        forward = any(body is other for other in self._fwd_body_per_dev)
+        out = min(value, chunk) if forward else value
+        with lock:
+            if forward:
+                counters["forward_calls"] += 1
+                counters["forward_values"][out] = \
+                    counters["forward_values"].get(out, 0) + 1
+                if out != value:
+                    counters["clamped_calls"] += 1
+            else:
+                counters["back_calls"] += 1
+                counters["back_values"][value] = \
+                    counters["back_values"].get(value, 0) + 1
+        return out
+
+    clamped._mg10_view_chunk = True
+    Projectors._effective_view_batch = clamped
+
+    def verify():
+        out = dict(
+            fwd_chunk_forced=(int(getattr(kernel_module, fwd_const)) == chunk),
+            back_chunk_untouched=(
+                int(getattr(kernel_module, back_const)) == original_back_chunk),
+            clamp_installed=(Projectors._effective_view_batch is clamped))
+        if expect_kernel:
+            # A kernel body takes its nominal from the constant, so on this
+            # path the clamp must never have anything to do.  A clamp that
+            # fired means the constant seam moved and the row would be
+            # measuring the clamp instead of the change a library edit makes.
+            # On the CPU smoke's torch bodies the clamp IS the mechanism, so
+            # the key is absent there rather than false.
+            out["clamp_never_fired_on_the_kernel_path"] = (
+                counters["clamped_calls"] == 0)
+        return out
+
+    def detach():
+        setattr(kernel_module, fwd_const, original_fwd_chunk)
+        Projectors._effective_view_batch = original_effective
+        pf = getattr(model, "projector_functions", None)
+        # attach_forward_probes restores its observer by ASSIGNING the bound
+        # method it captured, which lands as an instance attribute that would
+        # shadow the class method restored above.  There was none before this
+        # arm, so removing it is the restoration.
+        if pf is not None and "_effective_view_batch" in pf.__dict__:
+            del pf.__dict__["_effective_view_batch"]
+
+    return counters, verify, detach
+
+
+def measure_values_pack(model, torch_module, cuda, width, repeats=5):
+    """Time the strided-to-contiguous pack a narrowed piece pays INSIDE the
+    timed body, so it can be subtracted from that arm's per-launch time.
+
+    The Triton parallel forward body calls ``.contiguous()`` on its values
+    argument, and a width-W piece of the volume is a strided view, so the pack
+    is real work charged to the launch.  This measures it directly on a block
+    of the arm's own shape rather than modelling it: allocate one
+    (num_pixels, num_slices) float32 block, take ``[:, 0:W]``, and time
+    ``.contiguous()`` on it.  Returns the MEDIAN of ``repeats`` timings in
+    milliseconds, or None when the shape does not fit or the arm is not
+    narrowed.
+
+    Run OUTSIDE every timed reconstruction and after the probes are detached,
+    so its own allocation never lands in a measured peak or a measured span.
+    """
+    import mbirtorch
+
+    if not width:
+        return None
+    recon_shape = tuple(model.get_params("recon_shape"))
+    num_slices = int(recon_shape[2])
+    if width >= num_slices:
+        return 0.0
+    num_pixels = int(mbirtorch.gen_full_indices(recon_shape).shape[0])
+    device = model.sino_placement.devices[0]
+    try:
+        block = torch_module.zeros((num_pixels, num_slices),
+                                   dtype=torch_module.float32, device=device)
+    except Exception:                                             # noqa: BLE001
+        return None
+    try:
+        view = block[:, 0:width]
+        timings = []
+        for index in range(repeats + 1):
+            if cuda:
+                with torch_module.cuda.device(device):
+                    start = torch_module.cuda.Event(enable_timing=True)
+                    end = torch_module.cuda.Event(enable_timing=True)
+                    start.record()
+                    packed = view.contiguous()
+                    end.record()
+                torch_module.cuda.synchronize(device)
+                span = float(start.elapsed_time(end))
+            else:
+                host0 = time.perf_counter()
+                packed = view.contiguous()
+                span = (time.perf_counter() - host0) * 1e3
+            packed = None
+            if index:                       # the first pass is the warm-up
+                timings.append(span)
+        return float(statistics.median(timings)) if timings else None
+    finally:
+        block = None
+        if cuda:
+            torch_module.cuda.empty_cache()
+
+
 # ── the torch side (mg5's / mg9's model builder and checks) ───────────────────
 def _build_torch_model(geometry, cell, pin_devices=None):
     """The model.  ``pin_devices`` is a device LIST for the smoke's CPU paths
@@ -1456,14 +1995,21 @@ def _launch_key_counts(geometry):
     return back, fwd
 
 
-def _view_batch_static(model, expect_kernels, arm_fwd_cols):
+def _view_batch_static(model, expect_kernels, arm_fwd_cols,
+                       forced_fwd_chunk=None):
     """The realized view batch per direction per device, against the formula of
     the body EXPECTED to be bound (mg1's static probe).  Run BEFORE the probes
     are installed, so the probe's own observer cannot see this traffic.
 
     ``arm_fwd_cols`` is this arm's own forward column count -- the sub-band
     width, or the full slice count for the cone prototype -- so the row carries
-    the batch the arm will actually run at as well as the shipped default's."""
+    the batch the arm will actually run at as well as the shipped default's.
+
+    ``forced_fwd_chunk`` is experiment 4's narrowed view chunk.  On the kernel
+    path the constant already produced it and this changes nothing; on the CPU
+    smoke's torch bodies the arm forces it through the clamp instead, and the
+    expectation has to know that or a smoke arm would report vb:FAIL for doing
+    exactly what it was asked to do."""
     import mbirtorch
 
     pf = model.projector_functions
@@ -1498,6 +2044,8 @@ def _view_batch_static(model, expect_kernels, arm_fwd_cols):
                                           budget // max(1, bytes_pv)))
             else:
                 expected = int(legacy)
+            if direction == "fwd" and forced_fwd_chunk and expected is not None:
+                expected = min(int(expected), int(forced_fwd_chunk))
             realized.append(value)
             expected_all.append(expected)
             ok = ok and (expected is not None) and (value == expected)
@@ -1566,6 +2114,8 @@ def torch_worker(cfg):
     n_dev = cfg.get("n_dev")
     band_len = cfg.get("band_len")
     pixel_batch = cfg.get("pixel_batch")
+    values_width = cfg.get("values_width")
+    view_chunk = cfg.get("view_chunk")
     cuda = DEVICE == "cuda" and torch.cuda.is_available()
     smoke_cpu_devices = cfg.get("cpu_devices")
 
@@ -1622,15 +2172,36 @@ def torch_worker(cfg):
     # read back out of the library.
     n_owners = n_dev if cuda else len(pin_devices or [DEVICE])
     slices_per_dev = num_slices // max(1, n_owners)
-    lengths = realized_band_lengths(slices_per_dev, band_len)
+    # ONE width request per arm, whichever seam produces it, tiled by the same
+    # rule: experiment 1's sub-band inside a shard, experiment 3's piece inside
+    # the whole one-device volume (which at n = 1 IS the shard).  Keeping one
+    # set of realized-width fields is what lets the n = 1 and n > 1 rows be read
+    # in one table; `width_seam` says which mechanism produced them.
+    width_request = band_len if band_len is not None else values_width
+    lengths = realized_band_lengths(slices_per_dev, width_request)
     result["slices_per_dev"] = slices_per_dev
     result["requested_band_len"] = band_len
+    result["requested_values_width"] = values_width
+    result["width_seam"] = (
+        "model.forward_project_slice_band (the driver's own knob)" if band_len
+        else ("Projectors._sparse_forward_project_single_device (the harness "
+              "splits the one-device values block; the knob is inert at n=1)"
+              if values_width else None))
     result["realized_band_lengths"] = lengths
     result["realized_band_len"] = lengths[0] if lengths else None
     result["sub_bands_per_owner"] = len(lengths)
     result["band_is_whole_shard"] = (len(lengths) == 1)
-    result["patch"] = ("cone_column_gather" if pixel_batch else
-                       ("parallel_subband" if band_len else "none"))
+    result["requested_view_chunk"] = view_chunk
+    names = []
+    if pixel_batch:
+        names.append("cone_column_gather")
+    if band_len:
+        names.append("parallel_subband")
+    if values_width:
+        names.append("parallel_n1_values_split")
+    if view_chunk:
+        names.append("parallel_view_chunk")
+    result["patch"] = "+".join(names) if names else "none"
 
     # ── the shared sinogram artifact, md5-verified ───────────────────────────
     sino_path = _sino_path(geometry, cell)
@@ -1648,12 +2219,47 @@ def torch_worker(cfg):
     result["sinogram_checksum"] = float(np.sum(np.abs(sinogram),
                                                dtype=np.float64))
 
-    # ── THE PATCH, before the cold pass (see the docstring) ──────────────────
-    patch_verify, patch_detach, cone_counters = None, None, None
+    # ── THE PATCHES, before the cold pass (see the docstring) ────────────────
+    # A list, because the view chunk is an INDEPENDENT seam that can ride along
+    # with any of the others: it moves one axis of the write slab and the shape
+    # patches move a different one.  Every arm here uses at most one shape
+    # patch plus at most one chunk patch, and the composite verify is the flat
+    # merge of the parts (no two parts share a key).
+    patch_parts, detach_parts = [], []
+    cone_counters = split_counters = chunk_counters = None
+    if band_len is not None and values_width is not None:
+        raise RuntimeError(
+            "an arm asked for BOTH a sub-band and a one-device values split; "
+            "they are two different seams answering two different questions "
+            "and an arm carrying both would be neither measurement")
     if band_len is not None:
         if geometry != "parallel":
             raise RuntimeError("a sub-band arm must be a parallel arm")
-        patch_verify, patch_detach = install_parallel_subband(model, band_len)
+        if (n_owners or 1) < 2:
+            raise RuntimeError(
+                "a sub-band arm needs more than one device: the driver reads "
+                "forward_project_slice_band only AFTER its trivial-placement "
+                "return, so at one device the knob is inert and this arm would "
+                "report the shipped control under a narrowed arm's name.  The "
+                "one-device widths are experiment 3's arms (p1_band*).")
+        parts = install_parallel_subband(model, band_len)
+        patch_parts.append(parts[0])
+        detach_parts.append(parts[1])
+    elif values_width is not None:
+        if geometry != "parallel":
+            raise RuntimeError(
+                "a one-device values-split arm must be a parallel arm: the "
+                "assembly concatenates each piece's detector rows, which is "
+                "only correct where rows track slices one to one")
+        if (n_owners or 1) != 1:
+            raise RuntimeError(
+                "a one-device values-split arm must run at exactly one device; "
+                "at more than one the shipped banded driver owns the walk and "
+                "experiment 1's knob is the seam")
+        split_counters, verify_fn, detach_fn = \
+            install_parallel_n1_values_split(model, values_width)
+        patch_parts.append(verify_fn)
+        detach_parts.append(detach_fn)
     elif pixel_batch is not None:
         if geometry != "cone":
             raise RuntimeError("a column-gather arm must be a cone arm")
@@ -1662,8 +2268,34 @@ def torch_worker(cfg):
                 "a column-gather arm needs more than one device: at one device "
                 "the placement is trivial and the shipped single-device path "
                 "already makes the full-height calls this prototype imitates")
-        cone_counters, patch_verify, patch_detach = \
+        cone_counters, verify_fn, detach_fn = \
             install_cone_column_gather(model, pixel_batch)
+        patch_parts.append(verify_fn)
+        detach_parts.append(detach_fn)
+    if view_chunk is not None:
+        if geometry != "parallel":
+            raise RuntimeError(
+                "the view-chunk arms are parallel arms: the constant they "
+                "rebind is the parallel forward kernel's own, and cone's "
+                "realized batch is capped by the transient budget rather than "
+                "by the constant at this cell, so the seam would not bite")
+        chunk_counters, verify_fn, detach_fn = install_parallel_view_chunk(
+            model, view_chunk, kernel_module, spec["fwd_chunk_const"],
+            spec["back_chunk_const"], expect_kernels[0])
+        patch_parts.append(verify_fn)
+        detach_parts.append(detach_fn)
+    patch_verify = None
+    patch_detach = None
+    if patch_parts:
+        def patch_verify():                                       # noqa: F811
+            merged = {}
+            for part in patch_parts:
+                merged.update(part())
+            return merged
+
+        def patch_detach():                                       # noqa: F811
+            for part in reversed(detach_parts):
+                part()
     result["patch_verify_at_install"] = patch_verify() if patch_verify else None
     if patch_verify and not all(result["patch_verify_at_install"].values()):
         raise RuntimeError(
@@ -1747,7 +2379,8 @@ def torch_worker(cfg):
     arm_cols = dict(
         pixels=(pixel_batch if pixel_batch else None),
         cols=(num_slices if pixel_batch else result["realized_band_len"]))
-    vb_record, vb_ok = _view_batch_static(model, expect_kernels, arm_cols)
+    vb_record, vb_ok = _view_batch_static(model, expect_kernels, arm_cols,
+                                          forced_fwd_chunk=view_chunk)
     result.update(vb_record)
     result["vb_ok"] = vb_ok
 
@@ -1756,8 +2389,15 @@ def torch_worker(cfg):
                                             spec["fwd_chunk_const"]))
     result["back_chunk_after"] = int(getattr(kernel_module,
                                              spec["back_chunk_const"]))
+    # Two different questions, kept apart.  "unchanged" is the literal reading
+    # and stays on the row for every arm; "as intended" is what the summary
+    # flags, because a view-chunk arm is SUPPOSED to have moved the forward
+    # constant and is not supposed to have moved the back one.
     result["chunks_unchanged_ok"] = (
         result["fwd_chunk_after"] == shipped_fwd_chunk
+        and result["back_chunk_after"] == shipped_back_chunk)
+    result["chunk_as_intended_ok"] = (
+        result["fwd_chunk_after"] == (view_chunk or shipped_fwd_chunk)
         and result["back_chunk_after"] == shipped_back_chunk)
 
     # ── the instruments, installed on the settled projector ──────────────────
@@ -1792,6 +2432,21 @@ def torch_worker(cfg):
             cone_counters["cyl_width"] = {}
             cone_counters["batches"] = [0] * len(devices)
             cone_counters["moves"] = [0] * len(devices)
+        if split_counters is not None:
+            # Per-reconstruction, for the same reason the cone counters are:
+            # the witness compares piece counts against THIS pass's forward
+            # funnel call count.  Reset AFTER the previous pass was recorded.
+            split_counters["split_calls"] = 0
+            split_counters["cat_calls"] = 0
+            split_counters["pieces_per_call"] = {}
+            split_counters["piece_widths"] = {}
+            split_counters["piece_contiguous"] = {}
+        if chunk_counters is not None:
+            chunk_counters["forward_calls"] = 0
+            chunk_counters["back_calls"] = 0
+            chunk_counters["clamped_calls"] = 0
+            chunk_counters["forward_values"] = {}
+            chunk_counters["back_values"] = {}
         start = time.perf_counter()
         out = vcd()
         wall = time.perf_counter() - start
@@ -1821,6 +2476,13 @@ def torch_worker(cfg):
                                   record["busy_ms_per_device"])]
         record["probe_verify"] = verify()
         record["patch_verify"] = patch_verify() if patch_verify else None
+        # The realized forward view batch, per device, keyed BY POSITION -- the
+        # observer accumulates from the moment the probes went in, so at the
+        # first timed pass this snapshot IS that pass and the witness can read
+        # it.  Later passes read it cumulatively, which is what the summary
+        # wants.
+        record["view_batch_observed"] = {
+            key: sorted(bucket.items()) for key, bucket in observed.items()}
         # THE MEMORY COLUMN: the per-device peak as it stands after this timed
         # reconstruction.  No reset between passes, so the series is a running
         # maximum and the first pass carries most of it; the point of reading
@@ -1840,6 +2502,28 @@ def torch_worker(cfg):
                                 in sorted(cone_counters["cyl_width"].items())},
                 pixel_counts={str(k): v for k, v
                               in sorted(cone_counters["pixel_counts"].items())})
+        if split_counters is not None:
+            record["n1_split"] = dict(
+                width=split_counters["width"],
+                split_calls=split_counters["split_calls"],
+                delegated_other_model=split_counters["delegated_other_model"],
+                cat_calls=split_counters["cat_calls"],
+                pieces_per_call={str(k): v for k, v in
+                                 sorted(split_counters["pieces_per_call"].items())},
+                piece_widths={str(k): v for k, v in
+                              sorted(split_counters["piece_widths"].items())},
+                piece_contiguous={str(k): v for k, v in
+                                  sorted(split_counters["piece_contiguous"].items())})
+        if chunk_counters is not None:
+            record["view_chunk_patch"] = dict(
+                chunk=chunk_counters["chunk"],
+                forward_calls=chunk_counters["forward_calls"],
+                back_calls=chunk_counters["back_calls"],
+                clamped_calls=chunk_counters["clamped_calls"],
+                forward_values={str(k): v for k, v in
+                                sorted(chunk_counters["forward_values"].items())},
+                back_values={str(k): v for k, v in
+                             sorted(chunk_counters["back_values"].items())})
         per_recon.append(record)
         health.append(sample_gpu_health())
 
@@ -1861,7 +2545,11 @@ def torch_worker(cfg):
         # ── the witnesses (trap 4), on the first timed reconstruction ────────
         if repeat == 0:
             _check_witnesses(result, record, device_names, n_owners,
-                             lengths, num_slices, pixel_batch, band_len)
+                             lengths, num_slices, pixel_batch, band_len,
+                             values_width, view_chunk,
+                             expected_fwd_view_batch=(
+                                 view_chunk or result.get("arm_fwd_view_batch")),
+                             expect_fwd_kernel=expect_kernels[0])
 
     result["vcd_warm_all"] = warm
     result["vcd_warm"] = statistics.median(warm)
@@ -1888,6 +2576,15 @@ def torch_worker(cfg):
                                      in zip(peaks_cold or [0] * len(peaks_warm),
                                             peaks_warm)]
     result["gpu_peak_bytes"] = max(result["gpu_peak_per_device"], default=0)
+
+    # The pack a narrowed one-device piece pays INSIDE the timed body, measured
+    # directly so it can be subtracted (see install_parallel_n1_values_split).
+    # Run LAST: after every probe is detached and after the peak columns have
+    # been read, because it allocates a volume-sized block of its own and the
+    # peak counter is a running maximum that no reset may be spent on here.
+    result["values_pack_ms"] = (
+        measure_values_pack(model, torch, cuda, values_width)
+        if values_width else None)
 
     result["realized_devices"] = realized_devices
     result["realized_n_devices"] = len(realized_devices)
@@ -1974,7 +2671,9 @@ def torch_worker(cfg):
 
 
 def _check_witnesses(result, record, device_names, n_owners, lengths,
-                     num_slices, pixel_batch, band_len):
+                     num_slices, pixel_batch, band_len, values_width=None,
+                     view_chunk=None, expected_fwd_view_batch=None,
+                     expect_fwd_kernel=False):
     """The proof that this arm measured what its name says, run on the first
     timed reconstruction and fatal on any disagreement.
 
@@ -2004,7 +2703,198 @@ def _check_witnesses(result, record, device_names, n_owners, lengths,
             f"the {result['patch']} patch left the driver's path during the "
             f"first timed reconstruction: {record['patch_verify']}")
 
-    if pixel_batch is not None:
+    # -- shared, PARALLEL only: the realized forward view batch ---------------
+    # The view batch is the other axis of one launch's atomic write slab, so it
+    # has to be pinned on EVERY parallel arm and not only on the arms that
+    # narrow it: an arm whose batch quietly moved would report a slab size it
+    # never wrote.  Cone is excluded because its realized batch is capped by
+    # the transient budget rather than by the constant at this cell (mg10's own
+    # cone rows carry two values, 52 and 128), so a single-value check would
+    # abort a healthy arm.
+    if result.get("geometry") == "parallel" and expected_fwd_view_batch:
+        observed = record.get("view_batch_observed") or {}
+        fwd_seen = set()
+        for key, pairs in observed.items():
+            if key.startswith("fwd_dev"):
+                fwd_seen.update(int(value) for value, _count in pairs)
+        if not fwd_seen:
+            raise RuntimeError(
+                "no forward view batch was observed by position; the batch "
+                "chooser's observer is not on the driver's path and the write "
+                "slab this arm claims cannot be derived.")
+        if fwd_seen != {int(expected_fwd_view_batch)}:
+            raise RuntimeError(
+                f"the realized forward view batch was {sorted(fwd_seen)} where "
+                f"this arm expects {int(expected_fwd_view_batch)}"
+                + (f" (the arm forces chunk {view_chunk})" if view_chunk else
+                   " (the shipped chunk, which no arm here moves)")
+                + ".  One launch's write slab is view batch x channels x "
+                  "values columns, so a batch that is not the expected one "
+                  "mislabels every slab number in this row.")
+        checks["fwd_view_batch"] = int(expected_fwd_view_batch)
+    if view_chunk is not None:
+        patch = record.get("view_chunk_patch") or {}
+        if not patch:
+            raise RuntimeError(
+                "the view-chunk arm recorded nothing from its batch chooser; "
+                "Projectors._effective_view_batch is not the function the "
+                "driver called.")
+        if patch["forward_calls"] <= 0:
+            raise RuntimeError(
+                "the view-chunk arm's batch chooser saw ZERO forward calls; "
+                "the forward bodies it identifies by position are not the "
+                "ones the driver passed it.")
+        fwd_values = {int(k) for k in patch["forward_values"]}
+        if fwd_values != {int(view_chunk)}:
+            raise RuntimeError(
+                f"the batch chooser returned {sorted(fwd_values)} for forward "
+                f"calls where this arm forces {view_chunk}.")
+        if expect_fwd_kernel and patch["clamped_calls"]:
+            raise RuntimeError(
+                f"the clamp fired {patch['clamped_calls']} times on the KERNEL "
+                f"path.  On that path the module constant supplies the nominal "
+                f"and the clamp must have nothing to do; a firing clamp means "
+                f"the constant seam moved and this row measures the clamp "
+                f"instead of the change a library edit would make.")
+        if result.get("back_chunk_after") != result.get("shipped_back_chunk"):
+            raise RuntimeError(
+                f"the back view chunk moved from "
+                f"{result.get('shipped_back_chunk')} to "
+                f"{result.get('back_chunk_after')}; this seam is forward-only "
+                f"and the back projection is inside the same timed "
+                f"reconstruction.")
+        checks["view_chunk_forward_calls"] = patch["forward_calls"]
+        checks["view_chunk_clamped_calls"] = patch["clamped_calls"]
+        checks["view_chunk_back_values"] = patch["back_values"]
+
+    if values_width is not None or (n_dev == 1 and result.get("geometry") ==
+                                    "parallel" and band_len is None
+                                    and pixel_batch is None):
+        # ── EXPERIMENT 3's witnesses: the piece structure, twice over ────────
+        # This branch serves BOTH the narrowed one-device arms and the
+        # one-device control, because the control's claim ("the shipped
+        # monolithic call ran") is the same claim with a piece count of one and
+        # has to be proved just as hard.  There are two independent readings of
+        # the same structure: the splitter's own count of pieces cut, and the
+        # busy probe's count of the COLUMN COUNT of every values block the
+        # kernel was handed.  The second is recorded by different code at a
+        # different place, so a splitter that counted pieces it never projected
+        # cannot pass.  The control has no splitter, so only the second exists
+        # for it -- which is exactly what "no patch is installed" means.
+        widths = [b for b in lengths]
+        pieces = len(widths)
+        want_widths = {}
+        for value in widths:
+            want_widths[value] = want_widths.get(value, 0) + funnel_calls
+        # -- half one: single device, nothing fanned out or gathered ----------
+        if n_dev != 1:
+            raise RuntimeError(
+                f"an experiment-3 arm settled on {n_dev} devices "
+                f"({device_names}); the whole point of these arms is that the "
+                f"device count is ONE while the width varies.")
+        for name, count in (("band fan-outs", int(record["broadcast_calls"])),
+                            ("column gathers", int(record["gather_calls"])),
+                            ("cross-device copies", int(record["copy_count"])),
+                            ("cross-device bytes", int(record["copy_bytes"]))):
+            if count:
+                raise RuntimeError(
+                    f"a one-device arm recorded {count} {name}.  At a trivial "
+                    f"placement the forward moves nothing, so this row is not "
+                    f"the single-device measurement it claims to be.")
+        # -- half two: the kernel really saw pieces of this width -------------
+        seen = {}
+        for hist in record["busy_value_cols_per_device"]:
+            for key, count in hist.items():
+                seen[int(key)] = seen.get(int(key), 0) + int(count)
+        if set(seen) != set(want_widths):
+            raise RuntimeError(
+                f"the kernel was handed values blocks of widths "
+                f"{sorted(seen)} where this arm's own tiling of "
+                f"{num_slices} slices at width {values_width or num_slices} "
+                f"says {sorted(want_widths)}.  Either the split did not "
+                f"engage, or part of the forward took another path.")
+        launches = sum(seen.values())
+        if launches != int(record["busy_calls_per_device"][0]):
+            raise RuntimeError(
+                f"the width histogram covers {launches} launches against "
+                f"{record['busy_calls_per_device'][0]} timed body calls; the "
+                f"two are recorded by the same probe and must agree.")
+        # Every piece is projected in the same number of view batches, so the
+        # launch count has to divide evenly into (funnel calls x pieces).
+        if launches % max(1, funnel_calls * pieces):
+            raise RuntimeError(
+                f"{launches} launches do not divide into {funnel_calls} "
+                f"forward funnel calls x {pieces} pieces.  Either the walk is "
+                f"not the one this row claims, or the view batch varied "
+                f"between calls -- at mg10's cell the transient budget's cap "
+                f"sits far above the nominal 128 at every width here, so it "
+                f"does not, but a larger cell could change that "
+                f"(view_batch_observed_per_device on the row says).")
+        per_piece = launches // max(1, funnel_calls * pieces)
+        for value, count in want_widths.items():
+            if seen.get(value) != count * per_piece:
+                raise RuntimeError(
+                    f"width {value} was handed to the kernel "
+                    f"{seen.get(value)} times where this arm's tiling says "
+                    f"{count * per_piece} ({count} pieces x {per_piece} view "
+                    f"batches each).")
+        # -- half three: the splitter's own count, for a narrowed arm ---------
+        split = record.get("n1_split")
+        if values_width is None:
+            if split is not None:
+                raise RuntimeError(
+                    "the one-device CONTROL arm recorded a values split; it "
+                    "must run the shipped monolithic call")
+            if view_chunk is None and record.get("patch_verify") is not None:
+                raise RuntimeError("a control arm must carry no patch")
+            if pieces != 1 or widths[0] != num_slices:
+                raise RuntimeError(
+                    f"the one-device control's own tiling says {pieces} x "
+                    f"{widths[0]}; the shipped call is one piece of "
+                    f"{num_slices} slices.")
+        else:
+            if not split:
+                raise RuntimeError(
+                    "the one-device values splitter recorded nothing: "
+                    "Projectors._sparse_forward_project_single_device is not "
+                    "the function the driver called.")
+            if split["split_calls"] != funnel_calls:
+                raise RuntimeError(
+                    f"the splitter served {split['split_calls']} calls against "
+                    f"{funnel_calls} forward funnel calls.  Both of the "
+                    f"one-device entries -- the recon's plain-tensor forward "
+                    f"and the VCD loop's one-shard forward -- must land on it, "
+                    f"or part of this row is the shipped monolithic call.")
+            if split["delegated_other_model"]:
+                raise RuntimeError(
+                    f"the splitter handed back {split['delegated_other_model']} "
+                    "calls from another model; this arm builds one model and "
+                    "that number must be zero.")
+            got_pieces = {int(k): v for k, v in split["pieces_per_call"].items()}
+            if got_pieces != {pieces: funnel_calls}:
+                raise RuntimeError(
+                    f"the splitter cut {got_pieces} where this arm's tiling of "
+                    f"{num_slices} slices at width {values_width} says "
+                    f"{{{pieces}: {funnel_calls}}}.")
+            got_widths = {int(k): v for k, v in split["piece_widths"].items()}
+            if got_widths != want_widths:
+                raise RuntimeError(
+                    f"the splitter cut widths {got_widths} where this arm's "
+                    f"tiling says {want_widths}.")
+            if pieces == 1:
+                raise RuntimeError(
+                    f"width {values_width} caps back onto the whole "
+                    f"{num_slices}-slice volume, so this arm IS the control "
+                    f"under another name; run it as p1_shipped or narrow it.")
+        checks["one_device_ok"] = True
+        checks["pieces_per_forward_call"] = pieces
+        checks["piece_widths"] = {str(k): v for k, v in sorted(want_widths.items())}
+        checks["launches_per_piece"] = per_piece
+        checks["kernel_saw_widths"] = {str(k): v for k, v in sorted(seen.items())}
+        if values_width is not None:
+            checks["splitter_calls"] = record["n1_split"]["split_calls"]
+            checks["piece_contiguous"] = record["n1_split"]["piece_contiguous"]
+    elif pixel_batch is not None:
         # ── EXPERIMENT 2's witness: the column gather ────────────────────────
         proto = record.get("cone_proto") or {}
         if not proto:
@@ -2103,7 +2993,10 @@ def _check_witnesses(result, record, device_names, n_owners, lengths,
             raise RuntimeError(
                 "a control arm must walk ONE band per slice-owner; this file's "
                 f"tiling says {len(lengths)}, so the plan is inconsistent.")
-        if band_len is None and record.get("patch_verify") is not None:
+        if band_len is None and view_chunk is None \
+                and record.get("patch_verify") is not None:
+            # A view-chunk arm walks the shipped band and carries a patch on
+            # the OTHER axis, so it is not a control and this does not apply.
             raise RuntimeError("a control arm must carry no patch")
         if int(record["gather_calls"]) != 0:
             raise RuntimeError(
@@ -2114,6 +3007,16 @@ def _check_witnesses(result, record, device_names, n_owners, lengths,
         checks["fan_outs_seen"] = got_calls
         checks["band_widths"] = record["band_cols_hist"]
     result["witnesses"] = checks
+
+
+def parallel_control_token(n_dev):
+    """The token of the unpatched parallel arm at this device count.
+
+    One place, because three different readers look it up -- the value table,
+    the experiment-1 table and the design note's slots -- and experiment 3's
+    one-device control does not follow the `p<n>_shard` pattern (it is named
+    for what it is, the shipped call, not for a shard it does not have)."""
+    return "p1_shipped" if n_dev == 1 else f"p{n_dev}_shard"
 
 
 def _hist_mean(hist):
@@ -2327,7 +3230,7 @@ def value_table(rows):
         geometry, n_dev = row.get("geometry"), row.get("n_dev")
         samples = row.get("value_sample_paths") or []
         own = _rel_distance(samples[1], samples[0]) if len(samples) > 1 else None
-        control_token = ("p%d_shard" % n_dev if geometry == "parallel"
+        control_token = (parallel_control_token(n_dev) if geometry == "parallel"
                          else "c%d_banded" % n_dev)
         control = by_token.get(control_token)
         vs_control = None
@@ -2343,7 +3246,19 @@ def value_table(rows):
         median_checksum, repeat_spread = _checksum_stats(row)
         entry = dict(token=token, geometry=geometry, n=n_dev,
                      patch=row.get("patch"),
-                     band=row.get("requested_band_len"),
+                     band=(row.get("requested_band_len")
+                           if row.get("requested_band_len") is not None
+                           else row.get("requested_values_width")),
+                     # What this arm changed, in words: the value slots print
+                     # one line per arm and "band None" would name nothing.
+                     label=(
+                         f"sub-band {row.get('requested_band_len')}"
+                         if row.get("requested_band_len") else
+                         (f"values width {row.get('requested_values_width')}"
+                          if row.get("requested_values_width") else
+                          (f"view chunk {row.get('requested_view_chunk')}"
+                           if row.get("requested_view_chunk") else
+                           "the shipped walk"))),
                      batch=row.get("pixel_batch"),
                      checksums=row.get("recon_checksums"),
                      checksum_median=median_checksum,
@@ -2368,7 +3283,16 @@ def value_table(rows):
         # at the DRIVER level, so a patched parallel checksum "should" match its
         # control -- but the kernel's own atomics are not bit-reproducible, so
         # the honest test is against this arm's pass-to-pass floor, not zero.
-        if geometry == "parallel" and row.get("patch") == "parallel_subband":
+        # The one-device values split carries the same expectation for the same
+        # reason: each piece produces its own detector rows and the pieces are
+        # concatenated, so nothing is summed and nothing is reordered.  So does
+        # the view chunk: view batches write disjoint view slices of the same
+        # output, so which pixels accumulate into a given element is unchanged
+        # and only the launch grouping moves.
+        if geometry == "parallel" and set(
+                (row.get("patch") or "none").split("+")) & {
+                    "parallel_subband", "parallel_n1_values_split",
+                    "parallel_view_chunk"}:
             cs = row.get("recon_checksums") or []
             ctrl_cs = (control or {}).get("recon_checksums") or []
             entry["checksum_equals_control_exactly"] = bool(
@@ -2423,7 +3347,8 @@ def build_plan(arms):
         cell = cell_for(geometry)
         gen = dict(framework="torch", arm_class="generator", geometry=geometry,
                    cell=list(cell), n_dev=None, token=f"gen_{geometry}",
-                   band_len=None, pixel_batch=None,
+                   band_len=None, pixel_batch=None, values_width=None,
+                   view_chunk=None,
                    arm_id=f"{geometry}_{cell[0]}_generator")
         if SMOKE and DEVICE != "cuda":
             gen["cpu_devices"] = [DEVICE]
@@ -2433,9 +3358,17 @@ def build_plan(arms):
         cell = cell_for(arm["geometry"])
         if arm["band_len"] is not None:
             tag = f"band{arm['band_len']:04d}"
+        elif arm.get("values_width") is not None:
+            # Named for the width ACTUALLY used, which is the smoke's
+            # substituted width on the smoke and the asked width otherwise --
+            # the arm_id should say what the arm did, while the token stays
+            # stable across cells so MG10_ARMS names the same arms everywhere.
+            tag = f"band{arm['values_width']:04d}"
+        elif arm.get("view_chunk") is not None:
+            tag = f"vc{arm['view_chunk']:03d}"
         elif arm["pixel_batch"] is not None:
             tag = f"cols{arm['pixel_batch']:05d}"
-        elif arm["role"] == "anchor":
+        elif arm["role"] == "anchor" and arm["geometry"] == "cone":
             tag = "anchor"
         else:
             tag = "shipped"
@@ -2443,6 +3376,8 @@ def build_plan(arms):
                    geometry=arm["geometry"], cell=list(cell),
                    n_dev=arm["n_dev"], token=arm["token"], role=arm["role"],
                    band_len=arm["band_len"], pixel_batch=arm["pixel_batch"],
+                   values_width=arm.get("values_width"),
+                   view_chunk=arm.get("view_chunk"),
                    arm_id=f"{arm['geometry']}_{cell[0]}_n{arm['n_dev']}_{tag}")
         if SMOKE and DEVICE != "cuda":
             # SMOKE ONLY: virtual cpu devices, so the n>1 wiring -- the band
@@ -2467,6 +3402,39 @@ def _fmt(value, spec, dash="-"):
         else:
             break
     return f"{dash:>{int(width) if width else 1}}"
+
+
+DISCRIMINATION_RULE = (
+    "  THE RULE, stated before the numbers so it cannot be fitted to them.\n"
+    "    The cost per slice at ONE device with a narrowed values block is the\n"
+    "    reading.  Two anchors bracket it: 0.041 ms per slice is what one "
+    "device costs at the\n"
+    "    full 1008-slice width, and 0.084 is what two and four devices cost at "
+    "EVERY width they\n"
+    "    were tried at (63 through 504).\n"
+    "      * near 0.041 at every narrowed width -> the width is innocent, and "
+    "the doubling\n"
+    "        belongs to the DEVICE COUNT (hypothesis a).\n"
+    "      * near 0.084 at every narrowed width -> the device count is "
+    "innocent, and the\n"
+    "        doubling belongs to the KERNEL WIDTH (hypothesis b).\n"
+    "      * anything else -- a reading that climbs or falls across the widths, "
+    "or sits\n"
+    "        between the two anchors -- means neither story is the whole one "
+    "and the shape of\n"
+    "        the curve is the finding.\n"
+    "    THE SECOND QUESTION, width 63.  At two devices width 63 was the only "
+    "sub-band that\n"
+    "    beat its control, by 9.5 percent, and it is the only width whose "
+    "per-launch atomic\n"
+    "    write target fits inside an H100's 50 MB L2 (128 views x 63 rows x "
+    "1024 channels x\n"
+    "    4 B = 33 MB; 126 rows is 66 MB, just over).  If width 63 also wins at "
+    "one device, the\n"
+    "    win is about the cache and not about sharding; if it does not, it is "
+    "about sharding.\n"
+    "    Both readings are printed above.  No verdict is printed: the "
+    "attribution is analysis.")
 
 
 READING_TEXT = (
@@ -2499,16 +3467,26 @@ READING_TEXT = (
 def print_arm_table(row):
     """The per-device table for one arm, in plain English."""
     geometry, n_dev = row.get("geometry"), row.get("n_dev")
-    shape = row.get("patch")
-    if shape == "parallel_subband":
+    parts = set((row.get("patch") or "none").split("+"))
+    if "parallel_subband" in parts:
         shape = (f"sub-band {row.get('requested_band_len')} -> walked as "
                  f"{row.get('sub_bands_per_owner')} x "
                  f"{row.get('realized_band_len')}")
-    elif shape == "cone_column_gather":
+    elif "parallel_n1_values_split" in parts:
+        shape = (f"values block cut into {row.get('sub_bands_per_owner')} x "
+                 f"{row.get('realized_band_len')} slices "
+                 f"(asked {row.get('requested_values_width')})")
+    elif "cone_column_gather" in parts:
         shape = (f"column gather, {row.get('pixel_batch')} pixels x "
                  f"{row.get('num_slices')} slices")
+    elif n_dev == 1:
+        shape = (f"shipped call, the whole {row.get('num_slices')}-slice "
+                 f"values block in one piece")
     else:
         shape = f"shipped walk, band = the whole {row.get('slices_per_dev')}-slice shard"
+    if "parallel_view_chunk" in parts:
+        shape += (f", forward view chunk {row.get('requested_view_chunk')} "
+                  f"(shipped {row.get('shipped_fwd_chunk')})")
     print(f"\n--- {row.get('arm_id')}: {geometry} {row['cell'][0]}, {n_dev} "
           f"device(s), {shape} (median of "
           f"{len(row.get('per_recon') or [])} timed reconstructions) ---")
@@ -2555,6 +3533,17 @@ def print_arm_table(row):
               f"handed: {cols}")
     if row.get("witnesses"):
         print(f"   witnesses: {row['witnesses']}")
+    if row.get("width_seam"):
+        print(f"   the width seam: {row['width_seam']}")
+    if row.get("values_pack_ms") is not None:
+        print(f"   the strided-to-contiguous pack this width costs INSIDE the "
+              f"timed body: {row['values_pack_ms']:.3f} ms per launch")
+        print("      (the kernel body calls .contiguous() on its values "
+              "argument, and a narrowed piece")
+        print("      of the volume is a strided view.  The two-device driver "
+              "pays the same on every band")
+        print("      it projects from its own shard.  Subtract it from "
+              "per_launch_ms for the pure kernel.)")
     xfer = row.get("transfer") or {}
     if xfer:
         rate = xfer.get("copy_gb_per_s")
@@ -2590,6 +3579,28 @@ def print_arm_table(row):
               f"{row['view_batch_observed_per_device']}")
 
 
+def _observed_fwd_view_batch(row):
+    """The realized forward view batch this arm ran at, read off the observer's
+    per-position record.  A single value at every parallel arm (the witness
+    asserts it); the largest is taken if a future cell ever produces more."""
+    seen = set()
+    for key, pairs in (row.get("view_batch_observed_per_device") or {}).items():
+        if key.startswith("fwd_dev"):
+            for value, _count in pairs:
+                seen.add(int(value))
+    return max(seen) if seen else None
+
+
+def _write_slab_bytes(view_batch, band_cols, num_channels):
+    """One forward launch's atomic write target: the zeroed output plane the
+    parallel kernel accumulates into is (view batch, channels, values columns)
+    float32 (triton_parallel.py line 444).  This is the number the L2 reading
+    turns on -- an H100's L2 is 50 MB."""
+    if not (view_batch and band_cols and num_channels):
+        return None
+    return int(view_batch) * int(num_channels) * int(round(band_cols)) * 4
+
+
 def _arm_series_entry(row):
     """The one-line reduction of an arm: the LARGEST reading over its devices,
     because the reconstruction waits for its slowest device."""
@@ -2604,10 +3615,21 @@ def _arm_series_entry(row):
     mean_cols = _hist_mean(entries[0].get("value_cols"))
     mean_pixels = _hist_mean(entries[0].get("value_pixels"))
     xfer = row.get("transfer") or {}
+    fwd_vb = _observed_fwd_view_batch(row)
+    channels = (row.get("cell") or [None, None, None])[2]
+    slab = _write_slab_bytes(fwd_vb, mean_cols, channels)
     return dict(token=row.get("token"), arm_id=row.get("arm_id"),
+                arm_role=row.get("role"),
                 geometry=row.get("geometry"), n=row.get("n_dev"),
                 patch=row.get("patch"),
                 band=row.get("requested_band_len"),
+                values_width=row.get("requested_values_width"),
+                view_chunk=row.get("requested_view_chunk"),
+                fwd_view_batch=fwd_vb,
+                num_channels=channels,
+                write_slab_bytes=slab,
+                width_seam=row.get("width_seam"),
+                values_pack_ms=row.get("values_pack_ms"),
                 realized_band=row.get("realized_band_len"),
                 sub_bands=row.get("sub_bands_per_owner"),
                 batch=row.get("pixel_batch"),
@@ -2629,6 +3651,207 @@ def _arm_series_entry(row):
                     * 4 / 2 ** 20 if row.get("pixel_batch") else None))
 
 
+def n1_rows(series):
+    """Experiment 3's arms, widest values block first: the one-device parallel
+    arms that do NOT move the view chunk (those are experiment 4's)."""
+    out = [e for e in series
+           if e["geometry"] == "parallel" and e["n"] == 1
+           and not e["view_chunk"]]
+    return sorted(out, key=lambda e: -(e["realized_band"] or 0))
+
+
+def view_chunk_rows(series):
+    """Experiment 4's arms and the same-run controls they are read against:
+    every parallel arm that walks the SHIPPED band, at any device count, with
+    or without a narrowed view chunk.  Sorted by device count then by
+    decreasing chunk, so each control leads its own pair."""
+    out = [e for e in series
+           if e["geometry"] == "parallel"
+           and (e["view_chunk"]
+                or (e["patch"] == "none" and e["sub_bands"] == 1))]
+    if not any(e["view_chunk"] for e in out):
+        return []
+    return sorted(out, key=lambda e: (e["n"], -(e["view_chunk"] or 10 ** 6)))
+
+
+def print_n1_discriminator(series):
+    """Experiment 3's table: the cost per slice at ONE device against the
+    values-block width, with the two- and four-device readings of the SAME
+    column beside it, then the rule that reads them.
+
+    The n > 1 side is printed whether or not those arms ran in this job, from
+    PARALLEL_PER_SLICE_REFERENCE -- the follow-up job runs the four n = 1 arms
+    alone, and a discrimination table missing the side it discriminates
+    against would have to be assembled by hand from two logs."""
+    rows = n1_rows(series)
+    print("\n===== experiment 3: one device, narrowed values block =====")
+    if not rows:
+        print("   NOT MEASURED IN THIS RUN -- no one-device parallel arm ran.")
+        print("   These arms are opt-in: "
+              "MG10_ARMS=p1_shipped,p1_band0504,p1_band0252,p1_band0063")
+        return
+    print(f"{'arm':>12}{'n':>3}{'width':>8}{'pieces':>8}{'vb':>5}"
+          f"{'slab_MB':>9}{'launches':>10}"
+          f"{'per_launch_ms':>15}{'pack_ms':>9}{'ms_per_slice':>14}"
+          f"{'busy_s':>9}{'bracket_s':>11}{'composed_s':>12}{'peak_GB':>9}"
+          f"{'vs_control':>12}")
+    control = None
+    for entry in rows:
+        if entry["patch"] == "none":
+            control = entry
+    for entry in rows:
+        ratio = (entry["busy_s"] / control["busy_s"]
+                 if control and control["busy_s"] else None)
+        slab = entry["write_slab_bytes"]
+        print(f"{entry['token']:>12}{entry['n']:>3}"
+              f"{_fmt(entry['realized_band'], '8.0f')}"
+              f"{_fmt(entry['sub_bands'], '8.0f')}"
+              f"{_fmt(entry['fwd_view_batch'], '5.0f')}"
+              f"{_fmt((slab / 2 ** 20) if slab else None, '9.1f')}"
+              f"{_fmt(entry['calls'], '10.0f')}"
+              f"{_fmt(entry['per_launch_ms'], '15.2f')}"
+              f"{_fmt(entry['values_pack_ms'], '9.3f')}"
+              f"{_fmt(entry['ms_per_slice'], '14.4f')}"
+              f"{_fmt(entry['busy_s'], '9.2f')}"
+              f"{_fmt(entry['bracket_s'], '11.2f')}"
+              f"{_fmt(entry['composed_s'], '12.2f')}"
+              f"{_fmt(entry['peak_gb'], '9.2f')}"
+              f"{_fmt(ratio, '12.3f')}")
+    print("   width   = the column count of the values blocks the kernel was "
+          "handed, measured")
+    print("             inside the call, not asked for.  pieces = how many of "
+          "them one forward")
+    print("             call cut the volume into.  vb = the realized forward "
+          "view batch.")
+    print("   slab_MB = ONE launch's atomic write target, vb x channels x "
+          "width x 4 B: the tensor")
+    print("             the kernel zeroes and accumulates into.  An H100's L2 "
+          "is 50 MB, so this")
+    print("             column is where a cache reading crosses over.")
+    print("   pack_ms = the strided-to-contiguous copy each narrowed piece "
+          "pays INSIDE the timed")
+    print("             body, measured separately so it can be subtracted; the "
+          "full-width control")
+    print("             pays none.")
+    print("   vs_control = this arm's busy time over the one-device shipped "
+          "call's.")
+
+    print("\n   the same column, at every device count measured so far:")
+    print(f"{'n':>5}{'width':>8}{'vb':>5}{'slab_MB':>9}{'per_launch_ms':>15}"
+          f"{'ms_per_slice':>14}   source")
+    measured = {}
+    for entry in rows:
+        width = entry["realized_band"]
+        if width:
+            measured[(1, int(width))] = dict(
+                per_launch_ms=entry["per_launch_ms"],
+                ms_per_slice=entry["ms_per_slice"],
+                view_batch=entry["fwd_view_batch"],
+                slab=entry["write_slab_bytes"],
+                source=f"THIS RUN, {entry['token']}")
+    table = dict(PARALLEL_PER_SLICE_REFERENCE)
+    table.update(measured)              # this run's readings win over the quote
+    for (n_dev, width) in sorted(table, key=lambda k: (k[0], -k[1])):
+        block = table[(n_dev, width)]
+        view_batch = block.get("view_batch", SHIPPED_CHUNK)
+        slab = block.get("slab")
+        if slab is None:
+            slab = _write_slab_bytes(view_batch, width, CELL[2])
+        print(f"{n_dev:>5}{width:>8}{_fmt(view_batch, '5.0f')}"
+              f"{_fmt((slab / 2 ** 20) if slab else None, '9.1f')}"
+              f"{_fmt(block['per_launch_ms'], '15.2f')}"
+              f"{_fmt(block['ms_per_slice'], '14.4f')}   {block['source']}")
+    print("   the n=2 and n=4 lines are mg10's first run (h004); the n=1 "
+          "width-1008 line is mg9's")
+    print("   finding 1.7 unless this run re-measured it, in which case this "
+          "run's number replaces")
+    print("   it and the two should agree -- a control that does not reproduce "
+          "its anchor means the")
+    print("   node or the tree moved and nothing below can be read.  The "
+          "quoted lines all ran at")
+    print(f"   the shipped view chunk of {SHIPPED_CHUNK} and at "
+          f"{CELL[2]} channels, which is what their slab is computed from.")
+    print()
+    print(DISCRIMINATION_RULE)
+
+
+def print_view_chunk_table(series):
+    """Experiment 4's table: the same write slab reached from the VIEW axis.
+
+    Every arm here walks the SHIPPED band width, so the only thing that moves
+    between an arm and its control is how many views one launch covers -- and
+    therefore how many bytes one launch writes."""
+    rows = view_chunk_rows(series)
+    print("\n===== experiment 4: the forward view chunk =====")
+    if not rows:
+        print("   NOT MEASURED IN THIS RUN -- no view-chunk arm ran.")
+        print("   These arms are opt-in: MG10_ARMS=...,"
+              + ",".join([f"p1_vc{c}" for c in PARALLEL_VIEW_CHUNKS]
+                         + ["p2_shard"]
+                         + [f"p2_vc{c}" for c in PARALLEL_VIEW_CHUNKS]))
+        return
+    print(f"{'arm':>12}{'n':>3}{'chunk':>7}{'width':>8}{'vb':>5}{'slab_MB':>9}"
+          f"{'launches':>10}{'per_launch_ms':>15}{'ms_per_slice':>14}"
+          f"{'busy_s':>9}{'bracket_s':>11}{'composed_s':>12}{'peak_GB':>9}"
+          f"{'vs_control':>12}")
+    controls = {e["n"]: e for e in rows if not e["view_chunk"]}
+    for entry in rows:
+        control = controls.get(entry["n"])
+        ratio = (entry["busy_s"] / control["busy_s"]
+                 if control and control["busy_s"] else None)
+        slab = entry["write_slab_bytes"]
+        print(f"{entry['token']:>12}{entry['n']:>3}"
+              f"{_fmt(entry['view_chunk'], '7.0f')}"
+              f"{_fmt(entry['realized_band'], '8.0f')}"
+              f"{_fmt(entry['fwd_view_batch'], '5.0f')}"
+              f"{_fmt((slab / 2 ** 20) if slab else None, '9.1f')}"
+              f"{_fmt(entry['calls'], '10.0f')}"
+              f"{_fmt(entry['per_launch_ms'], '15.2f')}"
+              f"{_fmt(entry['ms_per_slice'], '14.4f')}"
+              f"{_fmt(entry['busy_s'], '9.2f')}"
+              f"{_fmt(entry['bracket_s'], '11.2f')}"
+              f"{_fmt(entry['composed_s'], '12.2f')}"
+              f"{_fmt(entry['peak_gb'], '9.2f')}"
+              f"{_fmt(ratio, '12.3f')}")
+    for n_dev in sorted(controls):
+        if not any(e["view_chunk"] and e["n"] == n_dev for e in rows):
+            print(f"   NOTE: no view-chunk arm ran at n={n_dev}; that "
+                  f"control's line is here only as the reference.")
+    for n_dev in sorted({e["n"] for e in rows if e["view_chunk"]}):
+        if n_dev not in controls:
+            print(f"   WARNING: no same-run control at n={n_dev}.  The "
+                  f"vs_control column is empty for those arms and the "
+                  f"comparison would have to be made against another job's "
+                  f"row, which is not what this instrument is for.")
+    print("   chunk   = the forward view chunk this arm forced; a blank is the "
+          "shipped 128.")
+    print("   width   = the values-block width, which no arm here moves: every "
+          "line walks the")
+    print("             shipped band, so the ONLY thing that changes between "
+          "an arm and its")
+    print("             control is how many views one launch covers.")
+    print("   slab_MB = the same column as experiment 3's, reached from the "
+          "other axis.  8 views")
+    print("             at the full width covers the same bytes as 128 views "
+          "at a narrow one.")
+    print("   ms_per_slice is per_launch_ms over the width, which is constant "
+          "down a device-count")
+    print("             block here, so it falls exactly as the chunk falls "
+          "unless the kernel is")
+    print("             getting more efficient per byte -- which is the whole "
+          "question.")
+    print("   READ IT AS: at two devices the shipped walk costs about 0.084 ms "
+          "per slice at every")
+    print("     width tried.  If the two-device chunk arms bring that toward "
+          "0.041 -- the cost per")
+    print("     slice one device pays at the full width -- then how much one "
+          "launch writes is what")
+    print("     the doubling was about, and the device count is a bystander.  "
+          "If they do not move")
+    print("     it, the slab is not the mechanism.  No verdict is printed "
+          "here.")
+
+
 def print_slots(series, by_token, values):
     """Print this run's numbers against the design note's slot names, verbatim.
 
@@ -2645,9 +3868,14 @@ def print_slots(series, by_token, values):
     harness's."""
     print("\n===== the design note's slots =====")
 
-    def by_geometry(geometry, patched):
+    def by_geometry(geometry, patched, drop_n1=False):
+        # drop_n1 keeps experiments 3 and 4's arms out of experiment 1's knee
+        # slot: the knee is a question about how a SHARD is walked, a
+        # one-device row has no shard to walk, and a view-chunk row walks the
+        # shipped band.  Both have their own slots below.
         out = [e for e in series if e["geometry"] == geometry
-               and ((e["patch"] != "none") == patched)]
+               and ((e["patch"] != "none") == patched)
+               and not (drop_n1 and (e["n"] == 1 or e["view_chunk"]))]
         return sorted(out, key=lambda e: (e["n"], e["band"] or e["batch"] or 0))
 
     def missing(name, why):
@@ -2655,7 +3883,7 @@ def print_slots(series, by_token, values):
         print(f"      NOT MEASURED IN THIS RUN -- {why}")
 
     # ── shape P, the parallel band knee ──────────────────────────────────────
-    swept = by_geometry("parallel", True)
+    swept = by_geometry("parallel", True, drop_n1=True)
     if not swept:
         missing("mg10 parallel band knee", "no sub-band arm ran")
         missing("mg10 shape P band-copy values at the chosen knee",
@@ -2664,7 +3892,7 @@ def print_slots(series, by_token, values):
         print("  [SLOT: mg10 parallel band knee]")
         best = None
         for entry in swept:
-            control = by_token.get(f"p{entry['n']}_shard")
+            control = by_token.get(parallel_control_token(entry["n"]))
             ratio = (entry["busy_s"] / control["busy_s"]
                      if control and control["busy_s"] else None)
             print(f"      n={entry['n']} asked {entry['band']:>3} -> walked "
@@ -2675,7 +3903,7 @@ def print_slots(series, by_token, values):
                   f"{_fmt(ratio, '.3f')} x the control")
             if ratio is not None and (best is None or ratio < best[1]):
                 best = (entry, ratio)
-        for entry in by_geometry("parallel", False):
+        for entry in by_geometry("parallel", False, drop_n1=True):
             print(f"      n={entry['n']} CONTROL (whole "
                   f"{entry['realized_band']}-slice shard): "
                   f"{_fmt(entry['per_launch_ms'], '.2f')} ms/launch, "
@@ -2694,13 +3922,93 @@ def print_slots(series, by_token, values):
                   f"{best[0]['sub_bands']} x {best[0]['realized_band']}, at "
                   f"{best[1]:.3f} x the control's busy time")
         print("  [SLOT: mg10 shape P band-copy values at the chosen knee]")
-        for entry in swept + by_geometry("parallel", False):
+        for entry in swept + by_geometry("parallel", False, drop_n1=True):
             label = (f"asked {entry['band']}" if entry["band"]
                      else "control, whole shard")
             print(f"      n={entry['n']} {label:>22}: band copies "
                   f"{_fmt(entry['copy_gb'], '.2f')} GB per reconstruction, "
                   f"per-device peak {_fmt(entry['peak_gb'], '.2f')} GB "
                   f"(band {entry['realized_band']} slices)")
+
+    # ── the one-device width discrimination ──────────────────────────────────
+    n1 = n1_rows(series)
+    if not n1:
+        missing("mg10 one-device width discrimination",
+                "no one-device parallel arm ran (they are opt-in: "
+                "MG10_ARMS=p1_shipped,p1_band0504,p1_band0252,p1_band0063)")
+    else:
+        print("  [SLOT: mg10 one-device width discrimination]")
+        for entry in n1:
+            print(f"      n=1 width {str(entry['realized_band']):>4} "
+                  f"({entry['sub_bands']} piece(s)): "
+                  f"{_fmt(entry['per_launch_ms'], '.2f')} ms/launch, "
+                  f"{_fmt(entry['ms_per_slice'], '.4f')} ms/slice, "
+                  f"busy {_fmt(entry['busy_s'], '.2f')} s, pack "
+                  f"{_fmt(entry['values_pack_ms'], '.3f')} ms")
+        for n_dev in (2, 4):
+            for (ref_n, width) in sorted(PARALLEL_PER_SLICE_REFERENCE,
+                                         key=lambda k: -k[1]):
+                if ref_n != n_dev:
+                    continue
+                block = PARALLEL_PER_SLICE_REFERENCE[(ref_n, width)]
+                print(f"      n={ref_n} width {width:>4} (already measured): "
+                      f"{_fmt(block['per_launch_ms'], '.2f')} ms/launch, "
+                      f"{_fmt(block['ms_per_slice'], '.4f')} ms/slice "
+                      f"[{block['source']}]")
+        narrowed = [e for e in n1 if e["patch"] != "none"]
+        if narrowed:
+            per_slice = [e["ms_per_slice"] for e in narrowed
+                         if e["ms_per_slice"]]
+            if per_slice:
+                print(f"      the narrowed one-device readings span "
+                      f"{min(per_slice):.4f} to {max(per_slice):.4f} ms per "
+                      f"slice, against the two anchors "
+                      f"{N1_WIDE_MS_PER_SLICE:.4f} (one device, width 1008) "
+                      f"and {NGT1_MS_PER_SLICE:.4f} (two and four devices, "
+                      f"every width).")
+        control = next((e for e in n1 if e["patch"] == "none"), None)
+        w63 = next((e for e in narrowed if e["realized_band"] == 63), None)
+        if control and w63 and control["busy_s"]:
+            ratio = w63["busy_s"] / control["busy_s"]
+            print(f"      width 63 at one device: {ratio:.3f} x the "
+                  f"one-device control's busy time.  At two devices the same "
+                  f"width ran at "
+                  f"{1.0 - N2_WIDTH63_WIN_FRAC:.3f} x its control.")
+        print("      the rule these are read by is printed in full with "
+              "experiment 3's table above.")
+
+    # ── the write slab from the view axis ────────────────────────────────────
+    vc = [e for e in view_chunk_rows(series) if e["view_chunk"]]
+    if not vc:
+        missing("mg10 forward view-chunk discrimination",
+                "no view-chunk arm ran (they are opt-in: p1_vc*, p2_vc*, and "
+                "p2_shard has to be in the same job as the two-device pair)")
+    else:
+        print("  [SLOT: mg10 forward view-chunk discrimination]")
+        controls = {e["n"]: e for e in view_chunk_rows(series)
+                    if not e["view_chunk"]}
+        for entry in vc:
+            control = controls.get(entry["n"])
+            ratio = (entry["busy_s"] / control["busy_s"]
+                     if control and control["busy_s"] else None)
+            slab = entry["write_slab_bytes"]
+            print(f"      n={entry['n']} chunk {entry['view_chunk']:>4} at "
+                  f"width {entry['realized_band']:>4} (slab "
+                  f"{_fmt((slab / 2 ** 20) if slab else None, '.1f')} MB): "
+                  f"{_fmt(entry['per_launch_ms'], '.2f')} ms/launch, "
+                  f"{_fmt(entry['ms_per_slice'], '.4f')} ms/slice, "
+                  f"{_fmt(ratio, '.3f')} x its same-run control")
+        for n_dev, control in sorted(controls.items()):
+            slab = control["write_slab_bytes"]
+            print(f"      n={n_dev} CONTROL chunk {SHIPPED_CHUNK} at width "
+                  f"{control['realized_band']:>4} (slab "
+                  f"{_fmt((slab / 2 ** 20) if slab else None, '.1f')} MB): "
+                  f"{_fmt(control['per_launch_ms'], '.2f')} ms/launch, "
+                  f"{_fmt(control['ms_per_slice'], '.4f')} ms/slice")
+        print(f"      the two anchors these are read against are the same "
+              f"two: {N1_WIDE_MS_PER_SLICE:.4f} ms per slice at one device "
+              f"and the full width, and {NGT1_MS_PER_SLICE:.4f} at two and "
+              f"four devices at every width tried.")
 
     # ── shape C, the cone pixel batch ────────────────────────────────────────
     gathered = by_geometry("cone", True)
@@ -2771,7 +4079,7 @@ def print_slots(series, by_token, values):
         for entry in par:
             if entry["patch"] == "none":
                 continue
-            print(f"      band {str(entry['band']):>3} vs the whole-shard "
+            print(f"      {entry['label']:>18} vs the shipped "
                   f"control at n={entry['n']}: checksum "
                   f"{_fmt(entry['checksum_vs_control'], '.2e')}, sample "
                   f"{_fmt(rel(entry['vs_control']), '.2e')} "
@@ -2835,7 +4143,7 @@ def summarize(rows, out_path):
                            ("bpd", row.get("bodies_per_device_ok")),
                            ("vb", row.get("vb_ok")),
                            ("chunk", row.get("shipped_chunk_is_the_anchor_ok")),
-                           ("chunk_same", row.get("chunks_unchanged_ok")),
+                           ("chunk_same", row.get("chunk_as_intended_ok")),
                            ("kern", row.get("kernels_launched_ok")),
                            ("kill", row.get("kill_switch_off_ok")),
                            ("cal", row.get("calibration_absent_ok")),
@@ -2873,9 +4181,13 @@ def summarize(rows, out_path):
           f"{'per_launch_ms':>15}{'ms_per_slice':>14}{'busy_s':>9}"
           f"{'bracket_s':>11}{'composed_s':>12}{'peak_GB':>9}{'vs_control':>12}")
     for entry in series:
-        if entry["geometry"] != "parallel":
+        # The one-device arms are experiment 3's and the view-chunk arms are
+        # experiment 4's; both have their own table below.  This one is the
+        # knee, which is a question about how a SHARD is walked.
+        if entry["geometry"] != "parallel" or entry["n"] == 1 \
+                or entry["view_chunk"]:
             continue
-        control = by_token.get(f"p{entry['n']}_shard")
+        control = by_token.get(parallel_control_token(entry["n"]))
         ratio = (entry["busy_s"] / control["busy_s"]
                  if control and control["busy_s"] else None)
         walked = (f"{entry['sub_bands']} x {entry['realized_band']}"
@@ -2964,6 +4276,10 @@ def summarize(rows, out_path):
     print("             bands; the gather moves pixel-column pieces, and the "
           "two totals are the")
     print("             ledger input for the design note's residency section.")
+
+    # ── EXPERIMENTS 3 AND 4 ──────────────────────────────────────────────────
+    print_n1_discriminator(series)
+    print_view_chunk_table(series)
 
     # ── THE VALUE COLUMNS ────────────────────────────────────────────────────
     print("\n===== the value columns =====")
@@ -3069,7 +4385,10 @@ def wall_estimate(generators, measured):
     high = low
     for cfg in measured:
         base = BASE_ARM_S.get((cfg["geometry"], cfg["n_dev"]), 300)
-        patched = cfg["band_len"] is not None or cfg["pixel_batch"] is not None
+        patched = (cfg["band_len"] is not None
+                   or cfg["pixel_batch"] is not None
+                   or cfg.get("values_width") is not None
+                   or cfg.get("view_chunk") is not None)
         low += base
         high += int(base * (1.5 if patched else 1.05))
     return low, high
@@ -3098,9 +4417,23 @@ def main():
                         f"{len(lengths)} x {lengths[0]}"
                         + ("  [same walk as the control]"
                            if len(lengths) == 1 else ""))
+            elif cfg.get("values_width") is not None:
+                lengths = realized_band_lengths(shard, cfg["values_width"])
+                note = (f"one device, values block asked "
+                        f"{cfg['values_width']:>4} -> cut into "
+                        f"{len(lengths)} x {lengths[0]}"
+                        + ("  [same call as the control]"
+                           if len(lengths) == 1 else ""))
+            elif cfg.get("view_chunk") is not None:
+                note = (f"forward view chunk {cfg['view_chunk']:>3} at the "
+                        f"shipped {shard}-slice band (shipped chunk "
+                        f"{SHIPPED_CHUNK})")
             elif cfg["pixel_batch"] is not None:
                 note = (f"column gather, {cfg['pixel_batch']} pixels x "
                         f"{num_slices} slices")
+            elif cfg["n_dev"] == 1 and cfg["geometry"] == "parallel":
+                note = ("one-device control: the shipped call, the whole "
+                        f"{num_slices}-slice values block in one piece")
             elif cfg["n_dev"] == 1:
                 note = "value anchor: the shipped single-device path"
             else:
@@ -3114,17 +4447,19 @@ def main():
         # floor this job has, but a reader must not read them as two points.
         seen = {}
         for cfg in measured:
-            if cfg["band_len"] is None:
+            request = (cfg["band_len"] if cfg["band_len"] is not None
+                       else cfg.get("values_width"))
+            if request is None:
                 continue
             shard = num_slices // max(1, cfg["n_dev"] or 1)
-            key = (cfg["n_dev"], tuple(realized_band_lengths(shard,
-                                                             cfg["band_len"])))
+            key = (cfg["n_dev"], tuple(realized_band_lengths(shard, request)))
             seen.setdefault(key, []).append(cfg["token"])
         for (n_dev, lengths), tokens in sorted(seen.items()):
             shard = num_slices // max(1, n_dev or 1)
             control_same = (len(lengths) == 1)
             if len(tokens) > 1 or control_same:
-                same = tokens + ([f"p{n_dev}_shard"] if control_same else [])
+                same = tokens + ([parallel_control_token(n_dev)]
+                                 if control_same else [])
                 print(f"  NOTE at n={n_dev}: {', '.join(same)} all walk "
                       f"{len(lengths)} x {lengths[0]} -- the same measurement, "
                       f"kept as the arm-to-arm noise floor.")
@@ -3141,6 +4476,20 @@ def main():
               "core and the cone")
         print("  one-device anchor (c1) is what every cone value row is "
               "measured against.")
+        print("  experiments 3 and 4 are OPT-IN and are not in the list above "
+              "unless MG10_ARMS")
+        print("  named them.  They run as one short job:")
+        print("    MG10_ARMS=" + ",".join(
+            ["p1_shipped"]
+            + [f"p1_band{w:04d}" for w in PARALLEL_N1_WIDTHS]
+            + [f"p1_vc{c}" for c in PARALLEL_VIEW_CHUNKS]
+            + ["p2_shard"]
+            + [f"p2_vc{c}" for c in PARALLEL_VIEW_CHUNKS]))
+        print("  Both controls have to be in that list: p1_shipped is what "
+              "every one-device arm is")
+        print("  read against and p2_shard is what the two-device chunk arms "
+              "are read against, and")
+        print("  the comparisons are same-run by design.")
         return
     stamp = time.strftime("%Y%m%d_%H%M%S")
     os.makedirs(RESULTS_DIR, exist_ok=True)
