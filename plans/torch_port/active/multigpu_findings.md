@@ -824,6 +824,102 @@ measurement.  Increment 6, the per-batch accumulation, remains open,
 and the corrected busy metric is the right instrument to measure it
 with.
 
+### 1.14 The sorted-channel probe: the win exists, the compiler undoes
+### it, and the production kernel outruns both (mg13, 2026-08-11)
+
+Measured 2026-08-11, job 15183553 on h009.  The rows are
+`plans/experiments/torch_port/rows/mg13_sorted_probe_h009_20260811_153801.jsonl`.
+The job crashed after its four one-device arms: the conda
+environments were rebuilt at that moment (deliberate maintenance on a
+corrupted unrelated environment), which removed the base interpreter
+the job's per-arm subprocesses resolve through a symlink, so the
+four-device composed arms never ran.  The one-device arms are the
+question, by the harness's own design, and they completed.
+
+The probe measured the light per-call sorted form: sort each call's
+detector-channel writes, reduce the runs with `torch.segment_reduce`,
+and write once per channel, replacing the atomic scatter.  Three
+bodies ran on the same inputs at the 1024-class cell: the hand-written
+triton kernel (the production path), the torch scatter (the baseline
+the sorted form modifies), and the sorted candidate.
+
+Three readings, in eager mode, at full width.  The sorted form beats
+the torch scatter by 1.17x at collision ratio 12, 1.22x at ratio 25,
+and 1.32x on the full pass at ratio 2332.  The win grows with the
+collision ratio, which is the physics mbirjax's record describes.
+Values sat in the 1e-08 class against the scatter everywhere, and the
+memory-bounding chunked sort was bit-identical to the unchunked form.
+
+The compiled reading inverts the eager one.  Under torch.compile the
+sorted body takes three to four graph breaks where the scatter takes
+none, and the per-launch time reads 12.0 ms against the scatter's
+6.4 ms — the composed reconstruction pays 174 s against 140.  The
+reduction is faster; the broken compiled region is slower.
+
+The production kernel outruns both torch forms by about 3.5x.  The
+triton body ran the full pass at 6.8 ms against the sorted form's
+17.9 and the scatter's 23.6, and the composed reconstruction at 41 s
+against their 140 and 174.  These results indicate that the sorted
+idea has no role as a torch-level replacement in mbirtorch: even
+perfectly compiled, its ceiling sits far above the kernel the parallel
+path actually runs.  What the probe validates is the collision-ratio
+physics itself, and the one place that physics can still pay here is
+inside a kernel: sorted or segmented accumulation on-chip, which is
+the cache direction the checkpoint already assigned to the kernel
+campaign.  The item-13 stop therefore stands, with its rationale
+sharpened from "not worth it at the measured ratios" to "the win is
+real but lives below the level torch code can reach."
+
+One operational note: the job printed its completion sentinel after
+the crash, because the sentinel line was unconditional.  Future
+harnesses print it only on a completed arm set.
+
+### 1.15 The fused accumulation lands, and a verdict line asks the
+### wrong question (mg14, 2026-08-11)
+
+Measured 2026-08-11, job 15183914 on h009, 13 minutes.  The rows are
+`plans/experiments/torch_port/rows/mg14_accum_gate_h009_20260811_163857.jsonl`.
+An earlier submission of the same job died at its first interpreter
+check when the conda environments were rebuilt (the same maintenance
+event that ended mg13); the environments were restored within the
+hour and the job ran unchanged.
+
+The change under measurement is the design note's increment 6.  Each
+pixel batch's projection previously allocated a fresh full-size
+output block, filled it, and handed it back for the driver to add
+into the running total — one allocation and two shard-sized passes
+per batch, at a hundred or more batches per pass.  The fused form
+adds every batch after the first directly into the running total,
+inside the projector's own view loop, through one optional argument
+on a plain python method.  The same summands are added in the same
+order, so the values are bit-identical by construction.
+
+The measurement confirmed it everywhere it should show and nowhere it
+should not.  The forward wall fell 9.34 to 8.74 s, 8.37 to 8.07, and
+9.19 to 8.87 across the three configurations — 3.5 to 6.4 percent —
+against pass-to-pass spreads of a millisecond or less, and the
+composed reconstructions moved with it.  GPU-busy time was flat to
+0.2 percent, as it must be: the kernels are untouched, and the
+removed work lived between the kernel windows.  The measured
+per-device peak fell by 0.92 to 0.95 GB — the vanished per-batch
+block — while the model deliberately still charges the two-block
+shape it shares with the banded path, so the floor readings rose from
+1.007 to 1.160.  Values sat at the control's own repeat floor in
+every comparison.
+
+The verdict lines printed NO CHANGE, and the reason is a lesson worth
+recording: the job was briefed to draw its verdict on busy time, on
+the mistaken premise that the removed work sat inside the busy
+windows.  Busy sums only the kernel-body event pairs; driver-side
+work between them shows in the bracket, which is where the design
+note's own guidance for the sibling increment points.  The harness
+printed the flawed premise verbatim and concluded conservatively; the
+readings underneath were unambiguous, and the checkpoint's standing
+rule — a mechanical verdict contradicted by the printed readings goes
+to a person — is what carried the result.  Increment 6 closes with
+this measurement, and with it every implementation increment of the
+forward remedy is complete.
+
 ### 2.1 The torch-body charge (mg8)
 
 Measured 2026-08-10, job 15149052 on h014, on the verified 1a2deb0
