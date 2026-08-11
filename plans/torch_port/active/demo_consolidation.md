@@ -90,12 +90,47 @@ strike.  Nothing here is decided.
    complex concepts (weights among them).  The evicted material lands
    there rather than disappearing.
 
+### demo_2_large_object.py (reviewed 2026-08-11)
+
+1. **Lesson:** the artifacts caused when the object extends outside the
+   field of view, and the fix (enlarge the reconstruction region with
+   scale_recon_shape); shown as default vs lower-sharpness (the
+   tempting wrong fix) vs padded reconstructions.
+2. **Earns its own demo:** the lesson yes; the framing no — "large
+   object" misnames it.  The size is not the issue; extension outside
+   the field of view is.
+3. **Problems:** the heaviest Colab residue so far (generated-by
+   header, %pip magic, notebook-only caveats); jax.numpy imported for
+   one linspace and block_until_ready in the timing; the lesson's
+   observations crammed into viewer window titles; full parameter
+   dictionaries printed three times; an unexplained half-rotation angle
+   range; typos and one garbled sentence.
+4. **Simplest version:** oversized-in-extent phantom, project, the
+   without-padding and with-padding reconstructions side by side,
+   printed observations.
+5. **Verdict (Charlie, 2026-08-11): CONSOLIDATE with old demo 3 and
+   reframe as "object outside the field of view" — two new demos, one
+   per geometry (rows 3 and 4 of the table below).**
+
+### demo_3_cropped_center_recon.py (reviewed 2026-08-11, folded into
+the demo-2 verdict)
+
+Charlie: the example is confusing as written — it sets row_scale=0.5 to
+illustrate the issue, which is backwards from practice.  In a real
+parallel-beam region-of-interest application the object extends outside
+the field of view, and the reconstruction pads UP (row_scale and
+col_scale about 1.2) so the region of interest reconstructs cleanly.
+The new demo generates its data that way.  Verdict: MERGE into the new
+field-of-view pair.
+
 ## 6. Proposed consolidated demos (grows as the critiques proceed)
 
 | # | working name | lesson | draws from |
 |---|---|---|---|
 | 1 | parallel beam basics | the simplest complete pipeline: phantom, forward project, reconstruct, view | old demo 1 |
 | 2 | cone beam and real-data practices | cone geometry, plus the concepts a real reconstruction needs: weights, sharpness, saving results | old demo 1 |
+| 3 | parallel beam region-of-interest scan | the object extends outside the field of view (the common real parallel-beam case); reconstruct the region of interest, padding with row_scale = col_scale = 1.2; shown without and with the padding so the artifacts and their mitigation are both visible | old demos 2 + 3 |
+| 4 | cone beam axial field-of-view artifacts | the object extends outside the field of view in the axial direction, producing cone-beam artifacts; extend the reconstruction axially (axial_pad_fraction) to reduce them; shown without and with the padding | old demos 2 + 3 |
 
 ## 7. Open questions, settled during the critiques
 
