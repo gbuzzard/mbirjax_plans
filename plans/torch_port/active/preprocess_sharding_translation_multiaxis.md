@@ -78,6 +78,14 @@ The test that settles it empirically: rerun job 15047383's
 configuration on the merged tip.  It either completes, or it produces
 the same segmentation traceback on GPU 0.
 
+SAME DAY UPDATE: at Charlie's direction, the one-line candidate fix is
+on prerelease (mbirtorch 72208bb): fdk_recon calls
+_apply_device_policy() before its first placement.  As written it
+consults the vcd-calibrated widening floors — change it freely if a
+different rule fits FDK.  The other geometries' direct recons carry the
+same latent gap, untouched pending your design call.  The Gautschi
+rerun is the empirical test of this commit.
+
 **Update (2026-08-10): the Gautschi rerun ran and failed, blocked on A2.**
 Job 15047383 (full-resolution Lilly MAR, 4 H100s, mbirtorch prerelease
 944aec2) ran out of GPU memory 2m40s in, at the segmentation step of the
