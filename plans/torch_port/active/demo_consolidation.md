@@ -69,14 +69,40 @@ strike.  Nothing here is decided.
 
 ## 5. Critiques (filled in as reviewed)
 
-Not started.
+### demo_1_shepp_logan.py (reviewed 2026-08-10)
 
-## 6. Open questions, settled during the critiques
+1. **Lesson:** the basic pipeline — make synthetic data, build a model,
+   reconstruct, view.
+2. **Earns its own demo:** yes; it is the front door.
+3. **Problems:** teaches six lessons at once (pipeline, weights,
+   sharpness, notes, HDF5 save, HDF5 load, memory statistics); the
+   weights code contradicts its own use-None-first comment and carries
+   an unexplained conditional scaling; a geometry if-else doubles the
+   reading; Colab notebook residue (cell-heading strings, unused
+   pprint import, a typo); the notes lines append without newlines and
+   run together; the closing save-then-reload proves a round-trip a
+   reader does not need.
+4. **Simplest version:** 40-50 lines, one geometry, defaults
+   throughout, view phantom beside recon, one error number, a pointer
+   onward.
+5. **Verdict (Charlie, 2026-08-10): SPLIT.**  New demo 1 is parallel
+   beam, very simple.  New demo 2 is cone beam and introduces the more
+   complex concepts (weights among them).  The evicted material lands
+   there rather than disappearing.
+
+## 6. Proposed consolidated demos (grows as the critiques proceed)
+
+| # | working name | lesson | draws from |
+|---|---|---|---|
+| 1 | parallel beam basics | the simplest complete pipeline: phantom, forward project, reconstruct, view | old demo 1 |
+| 2 | cone beam and real-data practices | cone geometry, plus the concepts a real reconstruction needs: weights, sharpness, saving results | old demo 1 |
+
+## 7. Open questions, settled during the critiques
 
 1. How many demos should the consolidated set have?
-2. Keep the Colab notebook twins, or scripts only?  (Colab offers free
-   GPUs and zero installation, but every notebook is a second copy to
-   maintain.)
+2. SETTLED (Charlie, 2026-08-10): scripts only — all Colab notebook
+   material is dropped.  Users are moving away from notebooks because
+   they can easily build interfaces with Claude.
 3. Do the two new geometries (translation, multiaxis) get demos in the
    first consolidated set?
 4. Does the artifact gallery (demo 10, 401 lines) survive as a gallery,
@@ -84,9 +110,9 @@ Not started.
 5. Where do demos live in the docs: the current demos-and-FAQs page
    structure, or something simpler?
 
-## 7. After the critiques
+## 8. After the critiques
 
-The consolidated design is written as section 8 of this file: the list
+The consolidated design is section 6 of this file, completed: the list
 of new demos, each with its one-sentence lesson and rough length.
 Charlie approves or amends it.  Only then does implementation start,
 one demo at a time, each reviewed as it lands.
