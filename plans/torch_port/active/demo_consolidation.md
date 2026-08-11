@@ -171,7 +171,6 @@ field-of-view pair.
 | 2 | cone beam and real-data practices | cone geometry, plus the concepts a real reconstruction needs: weights, sharpness, saving results | old demo 1 |
 | 3 | parallel beam region-of-interest scan | the object extends outside the field of view (the common real parallel-beam case); reconstruct the region of interest, padding with row_scale = col_scale = 1.2; shown without and with the padding so the artifacts and their mitigation are both visible | old demos 2 + 3 |
 | 4 | cone beam axial field-of-view artifacts | the object extends outside the field of view in the axial direction, producing cone-beam artifacts; extend the reconstruction axially (axial_pad_fraction) to reduce them; shown without and with the padding | old demos 2 + 3 |
-
 | 5 | direct vs model-based reconstruction | FBP and MBIR on the same parallel-beam data, side by side: comparable on many clean views, then a very sparse-view case where the MBIR improvement is unmistakable (illustrative, not practical); states plainly when direct reconstruction is all you need | old demo 5 |
 
 **Lessons awaiting a home in the table:**
