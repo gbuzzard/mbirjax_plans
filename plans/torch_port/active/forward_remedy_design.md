@@ -987,4 +987,13 @@ behind a geometry capability: `column_gather_geometry` moves to true on
 lifted for the gather path, the ledger's column term already prices the
 shape, and the parallel parity tests join the flag-on suite.  The gates are
 the same as cone's: the standing suites, the cluster value gates, and the
-default flip only behind them.  PROPOSED, awaiting the repo owner's ruling.
+default flip only behind them.
+
+RULED (Greg, 2026-08-10, late): the extension is approved, the two
+geometries' gates run as one combined cluster campaign, and the defaults
+flip when the gates pass, without a further ruling per geometry.  One caveat
+is recorded with the approval: the two-times prediction was measured with
+the pixel count held full, and the gather cuts pixels to the batch, so the
+realized win at batch 8192 may land under two times; the combined campaign
+sweeps larger parallel batches (the transient stays under 150 MB through
+batch 32768) and the prediction is judged against the swept best.
