@@ -143,6 +143,26 @@ field-of-view pair.
    the FAQ section as a paragraph** (the symptom, its cause, and the
    fix).
 
+### demo_5_fbp_fdk.py (reviewed 2026-08-11)
+
+1. **Lesson:** direct (non-iterative) reconstruction via direct_recon —
+   FBP for parallel, FDK for cone.  The script never states when to
+   choose direct over iterative, which is the real lesson.
+2. **Earns its own demo:** not as written — stripped of boilerplate it
+   differs from demo 1 by one line.  Reframed, yes: a direct-versus-
+   model-based comparison is the package's reason for existing, and no
+   current demo makes the case.
+3. **Problems:** the geometry is chosen twice (geometry_type drives the
+   labels, model_type drives the code — change one and the labels lie);
+   a stale TestPyPI install line; demo 1's whole boilerplate list; the
+   bare get_recon_dict() asymmetry unexplained.
+4. **Simplest version:** one data set, both reconstructions beside the
+   phantom, two error numbers and times; a second, sparse-view regime
+   where the difference is vivid.
+5. **Verdict (Charlie, 2026-08-11): REFRAME as the comparison demo**,
+   with a very sparse-view case that clearly illustrates the
+   improvement of MBIR — illustrative rather than practical is fine.
+
 ## 6. Proposed consolidated demos (grows as the critiques proceed)
 
 | # | working name | lesson | draws from |
@@ -151,6 +171,8 @@ field-of-view pair.
 | 2 | cone beam and real-data practices | cone geometry, plus the concepts a real reconstruction needs: weights, sharpness, saving results | old demo 1 |
 | 3 | parallel beam region-of-interest scan | the object extends outside the field of view (the common real parallel-beam case); reconstruct the region of interest, padding with row_scale = col_scale = 1.2; shown without and with the padding so the artifacts and their mitigation are both visible | old demos 2 + 3 |
 | 4 | cone beam axial field-of-view artifacts | the object extends outside the field of view in the axial direction, producing cone-beam artifacts; extend the reconstruction axially (axial_pad_fraction) to reduce them; shown without and with the padding | old demos 2 + 3 |
+
+| 5 | direct vs model-based reconstruction | FBP and MBIR on the same parallel-beam data, side by side: comparable on many clean views, then a very sparse-view case where the MBIR improvement is unmistakable (illustrative, not practical); states plainly when direct reconstruction is all you need | old demo 5 |
 
 **Lessons awaiting a home in the table:**
 
