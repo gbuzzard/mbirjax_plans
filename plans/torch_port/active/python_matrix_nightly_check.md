@@ -353,6 +353,23 @@ Each increment is small and independently testable.
    the watchdog line in the gautschi nightly.
    The first quiet week's watchdog lines are read once.
 
+6. **First live pull request.**  DONE 2026-08-12 (mbirtorch pull
+   request #3, merged; fixes merged to main as pull request #4).  The
+   first real cycle exposed two defects, both fixed the same day:
+   (a) GitHub refused the PR creation because the repository setting
+   "Allow GitHub Actions to create and approve pull requests" is off
+   by default — Charlie enabled it; worse, the run still reported
+   success because the failing command's exit code passed through
+   `tee` — the step now sets pipefail (82698f3).
+   (b) The checker proposed Python 3.15 because torch ships wheels for
+   it, but GitHub's runners cannot install it yet, so that CI job
+   failed in 5 seconds.  The checker now filters proposals against
+   setup-python's versions manifest (stable releases only) and reports
+   the excluded versions informationally; an unreadable manifest is
+   verdict UNKNOWN, not "no divergence" (36635ee, 13 checker tests).
+   The matrix is now 3.11–3.14; 3.15 will be proposed automatically
+   once the runners install it.
+
 ## 6. Greg's rulings, and what stays open
 
 Three rulings on 2026-08-10 replace the reviewed draft's open
