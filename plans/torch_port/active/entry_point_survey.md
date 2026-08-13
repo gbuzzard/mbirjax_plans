@@ -157,6 +157,16 @@ Net: **one of five** creates a second device-choosing site; **one of five** inva
 
 ## 4. Design questions for a human ruling
 
+Greg (2028-08-13):  Here are the guiding principles to address the questions
+below:  
+ - There are two large categories of device policy: preprocessing and reconstruction.  They 
+are handled separately, with the understanding that there may be some data transfer needed as a result.
+ - Reconstruction includes all entries in categories A, B, C above.  In each case, the policy should be decided once and kept.  This prefers
+minimal churn over micro-optimizations.The entries in F are candidates for this but must be evaluated.
+ - Preprocessing includes the entries in D.  These should be run as much in parallel as possible - prefer all devices or user specified.  
+The entries in E are candidates for inclusion here. 
+ - The entries in G will have to be evaluated separately. 
+
 **D1. Does an entry that runs before any model exists consult a policy at all — and if not, must it still honor the pins?**
 `scan_to_sino` and the four `get_sino_and_model` readers do their device work *before* a `TomographyModel` exists, so there is no `sinogram_shape` parameter, no ledger plan, no `configure_devices` flag, and no `_floor_family` to consult.  The prerelease commit resolved this by giving preprocessing its own rule (all visible CUDA devices); the uniformity ruling says entries should take the same policy call.  Three coherent answers: (a) build a **model-free policy entry** that takes a shape and a workload kind, and route both preprocessing and the recon entries through it; (b) declare preprocessing **exempt but pin-obedient** — it may use all visible devices, but `MBIRTORCH_NUM_DEVICES` and a `devices=` argument must still cap it; (c) require preprocessing to be handed a model.  Today's merged behavior is none of these: it is exempt *and* pin-deaf, which will silently break the suite pin and any batch-queue pin.
 
