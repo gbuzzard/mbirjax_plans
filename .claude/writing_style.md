@@ -86,3 +86,79 @@ Write:
 
 The second version is longer, and it takes less time to read and understand.
 That trade is the point.
+
+# A longer, more structured example
+
+Instead of:
+
+## Executive summary
+
+Every device-allocating entry point follows one of two rules, chosen by
+what the entry holds per device.  Preprocessing entries stream bounded
+view batches, so they run on all visible CUDA devices with no memory
+preflight, capped by the `MBIRTORCH_NUM_DEVICES` pin or by an explicit
+`devices=` argument.  Reconstruction entries hold full arrays resident,
+so they take the automatic device policy, and the layout the policy
+chooses is settled once per model and kept.  A settled layout never
+changes because free memory moved.  It is re-decided only when the
+model's shapes change, and `configure_devices` stays the explicit
+override.
+
+This answers the floors question your `fdk_recon` commit (`72208bb`)
+left open.  The VCD-calibrated floors and the full-recon ledger govern
+every reconstruction entry, direct recons included.  The settled layout
+must serve the model's lifetime, and a later `recon` is its largest
+workload, so each entry prices the model rather than the call.
+
+The work is nine gated increments.  The first builds the settled state.
+Most of the rest add the policy call where it is missing: `fbp_recon`,
+`recon_plastic_metal`, `generate_demo_data`, and the three full-sinogram
+helpers that today place a whole sinogram on one device before the model
+has widened.  The denoiser also joins, but only after it gets a ledger
+shape and floors of its own, which is the one cluster measurement in the
+plan.  The only signature change in the package is three preprocessing
+functions gaining the `devices=` parameter `scan_to_sino` already has.
+Data crosses from preprocessing to reconstruction through host memory,
+which is the boundary the code already uses; at production sizes that
+transfer costs seconds against reconstruction minutes to hours.
+
+Write: 
+
+## Executive summary 
+
+Every entry point function (e.g., `recon` or `get_sino_and_model`) follows one of two rules (policies).  
+ - Preprocessing functions work on view
+batches, so mapping to multiple devices is simple.  Each such function uses 
+all visible CUDA devices by default.  This default can 
+be overridden in two ways: by setting the env variable `MBIRTORCH_NUM_DEVICES` in advance or 
+by passing an explicit `devices=` argument.  
+ - Reconstruction-related functions use a policy that depends on geometry and shape.  This policy is determined 
+in `_apply_device_policy`.  The device choice is 
+settled once per model and re-decided only when
+the model's shapes change.  `ct_model.configure_devices()` can be used
+to override the policy to set a layout explicitly.
+
+This approach is designed to 
+keep the code simple and minimize data movement.  
+
+Two consequences for users:  
+- The public API barely
+changes.  Three preprocessing functions gain the `devices=` argument that
+`scan_to_sino` already has, and two others change only their default. 
+- The path from preprocessing to reconstruction is via host memory.
+Preprocessing writes its result to host memory, and the reconstruction
+moves that result to the devices it chose.  This is exactly what the code
+does today.  At production sizes the transfer takes seconds, while a
+reconstruction takes minutes to hours.
+
+The work has nine increments, each reviewed before the next starts.
+ - Increment 1 implements the once-per-model rule in
+   `_apply_device_policy`.  No entry point function changes in this increment.
+ - Increments 2 through 5 add the call to `_apply_device_policy` to the functions that lack
+   it: direct reconstructions, `recon_plastic_metal`,
+   `generate_demo_data`, and four helpers that allocate full-size arrays.
+   One helper, `gen_weights`, first needs a per-shard form, because its
+   arithmetic cannot accept a sharded sinogram today.
+ - Increment 6 develops a policy for `QGGMRFDenoiser.denoise` and then implements it.  
+ - Increments 7 through 9 update the preprocessing defaults and the
+   documentation.
