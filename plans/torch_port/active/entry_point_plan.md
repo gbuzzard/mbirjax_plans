@@ -488,14 +488,11 @@ function gains or loses a policy call.  §2.2 states the rule this
 implements, including why the shape comparison does not hook
 `refresh_device_bindings`.
 
-**Step 1: add the state.**  `TomographyModel.__init__` gains two
-attributes beside `device_layout_is_automatic`
-(`tomography_model.py:165`):
-
-* `_settled_shapes` holds the `(sinogram_shape, recon_shape)` pair the
-  current automatic layout was decided from.  It is `None` until an
-  automatic decision is made.
-* `_calibration_scope_open` is `False`.  Step 5 uses it.
+**Step 1: add the state.**  `TomographyModel.__init__` gains one
+attribute beside `device_layout_is_automatic`
+(`tomography_model.py:165`): `_settled_shapes` holds the
+`(sinogram_shape, recon_shape)` pair the current automatic layout was
+decided from.  It is `None` until an automatic decision is made.
 
 **Step 2: record the shapes when the policy settles.**  `_settle`
 (`:1432`) already installs the layout and logs the choice.  It now also
@@ -522,7 +519,9 @@ enters the settled state.
 The environment pin changes behavior slightly.  A model pinned by
 `MBIRTORCH_NUM_DEVICES` reaches `_settle` today, so it now becomes
 settled, and its later calls skip the ledger and the preflight.  That
-matches the once-per-model preflight of §2.3.
+matches the once-per-model preflight of §2.3.  The pin is therefore read
+at settle time: changing the variable afterward has no effect on a
+settled model, and a test that changes the pin must build a new model.
 
 **Step 4: clear the state when the caller pins.**  `configure_devices`
 (`:1129`) sets `_settled_shapes` to `None` where it already clears
@@ -530,22 +529,29 @@ matches the once-per-model preflight of §2.3.
 `_settled_shapes`, so this keeps the two from disagreeing rather than
 changing behavior.
 
-**Step 5: arm the calibration counters once per reconstruction.**
+**Step 5: move the counter reset to the function that reads it.**
 `_arm_calibration` (`:1474`) calls `_memory_ledger.calibration_start`,
-which resets the CUDA peak counters.  `vcd_recon` calls the policy at
-`:2945` and calls `direct_recon` at `:2976`, which re-enters the policy
-on a cone model.  That second entry resets the peak after the sinogram
-and the weights are already placed, so the calibration report at `:3189`
-reads a partial run.  Two edits close this:
+which resets the CUDA peak counters.  It runs on every policy return, and
+the report that reads the counters lives in one place, `vcd_recon`'s
+`:3189`.  That split is the defect: `vcd_recon` calls `direct_recon` at
+`:2976`, whose nested policy call resets the peak after the sinogram and
+the weights are already placed, so the report reads a partial run.  A
+scope flag was considered and rejected, because a flag opened by a
+standalone `fdk_recon` would never be closed and would suppress the next
+reconstruction's reset.  Instead, the reset moves to the reader:
 
-* `_arm_calibration` calls `calibration_start` only when
-  `_calibration_scope_open` is `False`, and sets the flag when it does.
-* `vcd_recon` sets `_calibration_scope_open` back to `False` where it
-  reads the calibration report (`:3189`).  That is where the measured
-  scope ends.
+* `_arm_calibration` stops calling `calibration_start`.  It keeps
+  recording `last_memory_ledger`, and it keeps building a ledger under
+  the calibration mode when it was handed `None`.
+* `vcd_recon` calls `calibration_start(self.sino_placement.devices)`
+  itself, directly after its policy call at `:2945`, when the
+  calibration mode is on.  The one function that reads the counters now
+  also resets them, so the measured scope has one owner.
 
-The flag is read only under the calibration mode, so an ordinary run is
-unaffected.
+Nested and standalone direct reconstructions then never touch the
+counters.  Each `vcd_recon` call opens its own scope, so the per-half
+reports of `split_sino_recon` and the per-pass reports of a
+Plug-and-Play loop keep their present meaning.
 
 **Step 6: correct three docstrings.**
 
@@ -575,7 +581,9 @@ edit: it constructs a new model, which starts unsettled, so the halves of
   re-decide.  `det_channel_offset` is the case §2.2 names.
 * An explicit `configure_devices` still wins after a settle.
 * Under the calibration mode, a cone reconstruction reports one peak for
-  the whole run.  The nested `direct_recon` must not reset the counter.
+  the whole run.  The nested `direct_recon` must not reset the counter,
+  and a standalone direct reconstruction before the `recon` must not
+  inflate the `recon`'s report.
 * The existing `copy_ct_model` and `split_sino_recon` tests pass
   unchanged.
 

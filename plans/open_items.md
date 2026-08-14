@@ -17,13 +17,13 @@ compilations.
 
 ## Start here: the eight items with the most at stake
 
-1. **The widening speed floors are stale on `greg_dev` right now.**  This one
-   is measured, not inferred, and it is cheap to clear.  See [A1](#a1).
-2. **Five device-policy design questions are waiting on a ruling**, and they
-   block the largest coherent piece of remaining work.  See
-   [B1](#b1).
-3. **The FDK device-policy fix is on `prerelease` and not on `greg_dev`**,
-   and it consults a rule its own commit message says may be wrong.  See
+1. ~~The widening speed floors are stale on `greg_dev`.~~  Cleared
+   2026-08-13; every floor held its position.  See [A1](#a1).
+2. ~~Five device-policy design questions are waiting on a ruling.~~  Ruled by
+   Greg on 2026-08-13 and planned in
+   `plans/torch_port/active/entry_point_plan.md`.  See [B1](#b1).
+3. ~~The FDK device-policy fix is on `prerelease` and not on `greg_dev`.~~
+   Merged, and the rule its commit message questioned is now ruled.  See
    [B2](#b2).
 4. **The 2K production-scale work has not started.**  Production runs at 2K
    and above, and every measurement so far is at 1K.  See [C1](#c1).
@@ -56,23 +56,37 @@ compilations.
 
 ## A. Measurement debt that is live now
 
-### A1
+### A1: COMPLETE (2026-08-13)
 
-**The widening speed floors are stale.**  `stale_note()` on the current
-`greg_dev` tree names three drifted cost inputs:
-`TomographyModel._sparse_forward_project_columns`, `_sharding.py`, and
-`projectors.py`.  The floors were measured against commit `4a222c7`, and the
-copy-stream and transient-memory commits have moved that code since.  The
-guard is therefore governing the automatic device count with numbers measured
-against code that has changed.
+**The widening speed floors were stale.**  `stale_note()` named three drifted
+cost inputs: `TomographyModel._sparse_forward_project_columns`,
+`_sharding.py`, and `projectors.py`.  The floors had been measured against
+commit `4a222c7`, and the copy-stream and transient-memory commits moved that
+code since.
 
-The consequence is bounded and the remedy is known.  A stale table still runs,
-by design, and the note warns on every automatic selection.  Clearing it is one
-run of `mbirtorch/dev_scripts/refresh_widening_floors.py` on a four-GPU node,
-about 33 minutes, followed by pasting its block.
+The refresh ran as job 15268701 on a four-GPU H100 node against `greg_dev` at
+`8381a0b`, taking 32 minutes over 27 timed arms and 8 generators.  Its block
+is pasted into `mbirtorch/mbirtorch/_widening_floors.py`, the three drifted
+hashes and the table checksum are re-blessed, and `stale_note()` is clean.
+`tests/test_widening_floors.py` (26 tests) and `tests/test_device_policy.py`
+(45 tests) pass.
 
-Recorded at `mbirtorch/mbirtorch/_widening_floors.py` (the MAINTENANCE
-paragraph of the module docstring) and
+**Every floor held its position.**  The drifted code moved no crossover:
+parallel and cone at two devices stay at 88,080,384 sinogram elements, cone at
+four stays at 1,023,934,464, and parallel at four stays at 297,271,296.  Three
+of the four margins widened, so the table is further from its admission edges
+than it was on 2026-08-11: cone n=2 went from 1.21x to 1.30x, cone n=4 from
+1.45x to 1.72x, parallel n=2 from 1.21x to 1.26x.  These results indicate the
+copy-stream and transient-memory work did not shift where widening pays.
+
+Two readings are worth carrying forward.  Parallel n=4 is the tightest row in
+the table, admitting at 1.03x against a 0.5 percent spread, so it is the row to
+watch on the next refresh; this run also supplied the losing shape that entry
+had lacked, at 0.69x.  Cone n=2 carries an 11.4 percent spread, which comes
+from its small 384-class losing cell rather than from the floor shape, which
+ran at 1.0 percent.
+
+Recorded at `mbirtorch/mbirtorch/_widening_floors.py` (the FLOORS notes) and
 `plans/torch_port/active/multigpu_findings.md` §1.12.
 
 ### A2: COMPLETE (2026-08-13)
@@ -93,100 +107,92 @@ projection-cost code again.  That later drift is [A1](#a1).
 
 ## B. Device policy across entry points
 
-This section is one body of work.  Greg ruled on 2026-08-10 that every
-public-facing entry that starts sharding takes the same device policy.  The
-ruling is at `plans/torch_port/active/multigpu_plan.md:172`.  Implementation
-waits on a systematic list, and that list is
-`plans/torch_port/active/entry_point_survey.md`, which tables 57 entry points.
+This section is one body of work, and it moved on 2026-08-13.  Greg ruled
+on the five design questions, and the rulings plus eight implementation
+increments are recorded in `plans/torch_port/active/entry_point_plan.md`.
+That plan is now the authority for this section; the survey
+(`entry_point_survey.md`) stays the per-entry reference.  B1 through B3
+are closed.  B4 and B5 are planned, and they close when their increments
+land.  B6 is not covered by the plan and stays open.
 
-### B1
+### B1: COMPLETE (2026-08-13)
 
-**Five design questions need a ruling before any code moves.**  They are
-stated in full at
-`plans/torch_port/active/entry_point_survey.md:158` (§4).
+**The five design questions are ruled.**  Greg decided all five, and
+`entry_point_plan.md` §4 restates each question in words and records its
+ruling.  The question labels D1 through D5 are retired there, because
+they collide with the survey's row labels.  In summary: model-free
+entries follow the preprocessing rule and honor the device-count pin; an
+automatic layout is settled once per model and re-decided only on a shape
+change; the denoiser joins the policy after its own calibration; the
+floors and the full-reconstruction ledger govern every reconstruction
+entry; and `generate_demo_data` joins the policy while the vcls pin is
+deferred with category G.
 
-- **D1.** Does an entry that runs before any model exists consult a policy at
-  all, and if not, must it still honor the pins?
-- **D2.** When an entry inherits a layout from a previous reconstruction on
-  the same model, may it re-choose?
-- **D3.** Should `QGGMRFDenoiser.denoise` take the policy call now that its
-  loop can run sharded?
-- **D4.** Do the recon-calibrated floors and the full-recon ledger apply to
-  workloads that are not VCD reconstructions?
-- **D5.** Do `generate_demo_data`'s `devices=` argument and the vcls sibling's
-  pin keep their pins with a recorded reason, or become policy consumers?
+The concern this item recorded under D4 — that a full-recon ledger can
+refuse a direct reconstruction it over-prices — is carried forward in the
+plan.  §2.3 records it as the ruling's one known cost, and increment 2
+proposes the fix: capacity checked against the work in progress, the
+device count still chosen for a full `recon`.
 
-D4 is the one that governs the others.  The floors are measured on
-3-iteration VCD reconstructions, and the ledger prices a full VCD plan.
-Applying both to a filtered back projection over-prices its memory and decides
-its device count on a crossover measured for a different curve.
+### B2: COMPLETE (2026-08-13)
 
-### B2
+**The FDK fix is merged and its open rule is ruled.**  Commit `72208bb`
+reached `greg_dev` with the prerelease merge, so `fdk_recon` calls
+`_apply_device_policy` in the tree today.  The floors question its commit
+message left open is answered by the plan's §4 ruling.  The other
+geometries' direct reconstructions still carry the gap; closing them is
+the plan's increment 2, which also carries the narrowed capacity check.
 
-**The FDK fix is unmerged, and it uses the rule D4 is about.**  mbirtorch
-commit `72208bb` on `prerelease` makes `fdk_recon` call
-`_apply_device_policy` before its first placement.  It is one commit ahead of
-`greg_dev` and is not in the tree today.  Its own note says it consults the
-VCD-calibrated floors and invites a different rule.
+The original record stands at
+`plans/torch_port/active/preprocess_sharding_translation_multiaxis.md:81`.
 
-The fix is load-bearing.  Without it, full-resolution MAR fails on GPU 0 down
-every entry path, because the initial FDK builds an 18 GB volume on one
-device.  With it, job 15185020 completed in 49 minutes at 37 GB per device.
+### B3: COMPLETE (2026-08-13)
 
-The other geometries' direct reconstructions carry the same gap, untouched.
+**`scan_to_sino`'s rule is now the ratified preprocessing rule.**  What
+this item recorded as a second device-choosing site with no stated reason
+is now stated policy: a preprocessing entry runs on all permitted
+devices, capped by the pin (`entry_point_plan.md` §3.1).  The unfused
+siblings gain the same `devices=` parameter and default in increment 6,
+which removes the asymmetry this item named.
 
-Recorded at
-`plans/torch_port/active/preprocess_sharding_translation_multiaxis.md:81`
-and `:103`.
+### B4: PLANNED (2026-08-13, increment 1)
 
-### B3
+**A count change invalidates sharded data that a caller still holds.**
+`Shards` are bound to their placement by object identity, and the entry
+placement raises on a mismatch.  The plan's answer is to remove the
+re-decisions rather than add a re-shard path: an automatic layout is
+settled once per model and re-decided only when the model's shapes change
+(`entry_point_plan.md` §2.1).  The sharpest case this item recorded, a
+count change between beam-hardening passes holding `init_recon`, goes
+away with increment 1, because the driver's initial `direct_recon`
+settles the layout and later passes reuse it.  This item closes when
+increment 1 lands.
 
-**`scan_to_sino` chooses a device count by its own rule.**  It takes all
-visible CUDA devices, capped by `MBIRTORCH_NUM_DEVICES`, with no memory
-preflight and no speed floors.  It is the second device-choosing site in the
-package.  Its unfused siblings, `compute_sino_transmission`,
-`correct_det_rotation`, and `downsample_view_data`, stay single-device, so the
-fused path and the unfused path now differ with no stated reason.
+### B5: PLANNED (2026-08-13, increments 2 and 4)
 
-Recorded at `plans/torch_port/active/entry_point_survey.md` rows D2 and D3,
-and in the code at `mbirtorch/mbirtorch/preprocess/utilities.py:436`.
-
-### B4
-
-**A count change invalidates sharded data that a caller still holds.**  There
-is no re-shard path.  `Shards` are bound to their placement by object
-identity, and the entry placement raises on a mismatch.  Four holders are
-exposed: `prepare_sino_for_devices`, a precomputed `fm_hessian`, an
-`output_sharded=True` reconstruction, and a beam-hardening pass's
-`init_recon`.
-
-The sharpest case is `recon_plastic_metal`, where the policy re-runs on every
-beam-hardening pass while the previous pass's reconstruction is fed back as
-`init_recon`.  This is design question D2's subject.
-
-Recorded at `plans/torch_port/active/entry_point_survey.md` rows A9, D7, and
-§4 D2, and described at
-`plans/torch_port/active/execution_overview.md` §2.3.
-
-### B5
-
-**Two entries place full-size arrays before any layout is chosen.**
-`gen_weights` places a full sinogram and a full weights array on the lead
-device, and `gen_weights_mar` runs a full forward projection, both typically
-before the first reconstruction.  At production scale each doubles the lead
-device's peak.  `estimate_sino_view_offset` and `align_sino_views` do the same
-through `direct_recon` and `forward_project`.
-
-Recorded at `plans/torch_port/active/entry_point_survey.md` rows F1, F2, D9.
+**Entries that place full-size arrays before any layout is chosen.**
+`gen_weights`, `gen_weights_mar`, `prepare_sino_for_devices`, and
+`compute_hessian_diagonal` settle an unsettled model before allocating in
+increment 4, which also carries the per-shard `gen_weights` port that the
+settle requires.  `estimate_sino_view_offset` and `align_sino_views` are
+covered by increment 2, because the `direct_recon` they consume settles
+the model.  This item closes when those increments land.
 
 ### B6
 
-**Two utilities do not recognize the sharded form.**  `stitch_arrays` selects
-its device from the first tensor in the list and silently migrates the others
-onto it, and it does not recognize `Shards`.  `apply_cylindrical_mask` and
-`interpolate_defective_pixels` fail an `isinstance(recon, torch.Tensor)` check
-on a `Shards` volume.  Neither is a policy question.  Both are gaps in the
-array-forms rule that `array_forms_rule.md` states.
+**Two utilities do not recognize the sharded form.**  `stitch_arrays`
+selects its device from the first tensor in the list, silently migrates
+the others onto it, and does not recognize `Shards`.
+`interpolate_defective_pixels` accepts only a torch tensor: a numpy array
+or a `Shards` fails on its tensor attribute reads, with no raise at
+entry.  Neither is a policy question, so the entry point plan
+deliberately does not cover them.  Both are gaps in the array-forms rule
+that `array_forms_rule.md` states, and [K3](#k3) records the same gap
+from the rule's side.
+
+One utility this item originally named is fixed: commit `a5b04ce` gave
+`apply_cylindrical_mask` a per-shard branch, so it now handles all four
+input forms and returns the form it was given (checked 2026-08-13).
 
 Recorded at `plans/torch_port/active/entry_point_survey.md` rows E6 and D8.
 
@@ -633,7 +639,13 @@ Recorded at `plans/torch_port/active/demo_consolidation.md:229`.
 **The array-forms rule is not universally applied.**  Amendment 1 requires a
 function that does not implement the sharded case to say so in its docstring
 AND raise at entry on multi-shard input.  The two utilities in [B6](#b6) do
-neither.
+neither.  The model-free streaming preprocessing entries
+(`scan_to_sino` and its siblings) are in the rule's stated scope and also do
+neither: a `Shards` input fails inside `map_view_batches` rather than at
+entry, and a tensor input returns numpy rather than mirroring (checked
+2026-08-13).  The rule document also lists the denoiser among the
+transformers, while `denoise` implements the producer convention; one of
+the two should be amended.
 
 Recorded at `plans/torch_port/active/array_forms_rule.md:27` and
 `plans/torch_port/active/entry_point_survey.md` rows E6 and D8.
