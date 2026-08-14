@@ -1,3 +1,5 @@
+# TOP-LEVEL OVERVIEW
+
 ## Recon-related functions
 
 Public facing recon functions accept numpy / tensor / Shards and return numpy by default.  Can opt in to sharded form.  
@@ -22,6 +24,8 @@ Scalars returned to users are python floats (note compute_scaling_factor returns
 
 Internal pre-processing:  sinograms are sharded by view across all devices and processed in parallel. 
 
+
+# MORE DETAILED DESCRIPTIONS
 
 # Recon-related functions
 
