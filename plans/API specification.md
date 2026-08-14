@@ -8,7 +8,7 @@ forward_project, back_project, recon, prox_map,
 direct_recon (+fbp+fdk), denoise
 ```
 
-Exceptions: The two below accept numpy input only, and have numpy output by default but can opt-in to sharded output
+Exceptions: The two below accept numpy or tensor input (a tensor is converted to numpy at entry, for robustness) and ALWAYS return numpy.  They have no `output_sharded` option: both are host-side drivers whose purpose is to keep the full volume off the devices, and a device-form output at exit would undo that.
 ```
 split_sino_recon, recon_plastic_metal
 ```
@@ -39,8 +39,8 @@ Internal pre-processing:  sinograms are sharded by view across all devices and p
 | `prox_map` | prox_input, sinogram | numpy / tensor / Shards                                                                                   | (numpy recon, dict)                                                                | (device-form recon, dict) |
 | `direct_recon` / `fbp_recon` / `fdk_recon` | sinogram | numpy / tensor / Shards                                                                                   | numpy recon                                                                        | device-form recon         |
 | `denoise` | image | numpy / tensor / Shards                                                                                   | (numpy image, dict)                                                                | (device form, dict)       |
-| `split_sino_recon` | sinogram | **host only** (`np.asarray` at entry)                                                                     | (numpy recon, dict) — no `output_sharded` kwarg at all                             | —                         |
-| `recon_plastic_metal` | sinogram | **host only** (`np.asarray` at entry)  | (numpy recon, dict) | (device-form, dict)       |
+| `split_sino_recon` | sinogram | numpy / tensor (tensor converted to numpy at entry)                                                       | (numpy recon, dict) — no `output_sharded` kwarg                                    | —                         |
+| `recon_plastic_metal` | sinogram | numpy / tensor (tensor converted to numpy at entry)  | (numpy recon, dict) — no `output_sharded` kwarg | —                         |
 
 ## Secondary/internal functions
 
