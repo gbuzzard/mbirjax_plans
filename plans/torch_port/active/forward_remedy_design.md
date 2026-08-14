@@ -3,10 +3,9 @@
 **Status.** GATES PASSED AND THE DEFAULT FLIPPED (2026-08-11, morning).
 The combined gate campaign the §13 ruling called for ran as job mg11 and
 authorized the flip on both geometries.  Findings §1.10 carries the
-readings, and the flip is implemented and staged in the library.  The
-increments below record their own completion.  The floors re-measure of
-increment 9 waits for the flip's commit, because the refresh script stamps
-the commit it measured.
+readings, and the flip is implemented and staged in the library.  Every
+increment below is complete.  That includes increment 9's floors
+re-measure, which ran on the committed flip as job 15172987.
 
 **Prior status.** RULED (Greg, 2026-08-10, evening).  Shape C is adopted.  The
 value bar is ruled: the shipped kernel-parity floor governs acceptance, and
@@ -767,7 +766,7 @@ mg11 supplied the re-read: all 22 arms sat inside the band, from 1.003 to
 1.158, and the library's own `last_memory_ledger` agreed with the harness's
 independently built ledger on every arm.
 
-**Increment 9, half complete: the floors refresh and the record corrections.**
+**Increment 9, complete: the floors refresh and the record corrections.**
 Run `dev_scripts/refresh_widening_floors.py` and paste its block.  Correct the
 two documented band-length numbers, which are the 47 to 66 percent and the 8
 percent readings quoted from the `_slice_band_length` docstring in the user
@@ -776,9 +775,13 @@ source").  Both are pre-kernel measurements, as the plan's lever table already
 notes (`plans/torch_port/active/multigpu_plan.md`, the streaming row).  mg10
 now supplies the kernel-era replacement for both, at §2.1's table.  The record
 corrections landed 2026-08-11, in the docstring, in both documentation pages,
-and in the two plan records.  The floors refresh waits for the flip's commit:
-the refresh script stamps the commit it measured, so it runs on the committed
-flip, on a four-GPU node, as the next cluster step.
+and in the two plan records.  The floors refresh ran on the committed flip,
+`4a222c7`, as job 15172987: a four-GPU node, 33 minutes, with its block pasted
+into `_widening_floors.py` and the staleness note clean at that commit.
+Findings §1.12 records which floors moved.  Commits after `4a222c7` have since
+changed the projection-cost code, so the note names drifted inputs again.  That
+drift is new measurement debt, tracked as item A1 of `plans/open_items.md`, and
+not unfinished work of this increment.
 
 **Increment 10, complete: the parallel band knob, documented.**  Record
 `forward_project_slice_band` as a memory lever with §2.1's measured cost, which

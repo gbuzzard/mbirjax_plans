@@ -75,18 +75,21 @@ Recorded at `mbirtorch/mbirtorch/_widening_floors.py` (the MAINTENANCE
 paragraph of the module docstring) and
 `plans/torch_port/active/multigpu_findings.md` §1.12.
 
-### A2
+### A2: COMPLETE (2026-08-13)
 
-**Increment 9 of the forward remedy reads half complete, and its refresh has
-run.**  `forward_remedy_design.md` §9 says the floors refresh "waits for the
+**Increment 9 of the forward remedy read half complete, and its refresh had
+run.**  `forward_remedy_design.md` §9 said the floors refresh "waits for the
 flip's commit," and `multigpu_findings.md` §1.12 reports that refresh
-completed on `4a222c7`.  The design note's status header carries the same
-stale sentence.  Increment 6 and increment 11 were both marked complete on
-2026-08-11, so increment 9 is now the only one that reads incomplete.  Only
-the record is out of date, not the work.  A one-line correction closes it.
+completed on `4a222c7`.  The design note's status header carried the same
+stale sentence.  Only the record was out of date, not the work.
 
-Recorded at `plans/torch_port/active/forward_remedy_design.md:8` and
-`:770`, against `plans/torch_port/active/multigpu_findings.md` §1.12.
+Closed by correcting both places in
+`plans/torch_port/active/forward_remedy_design.md`.  Increment 9 now reads
+complete, and its entry records the run that closed it: job 15172987, a
+four-GPU node, 33 minutes, block pasted and the staleness note clean at
+`4a222c7`.  The entry also separates the drift that has appeared since from
+this increment's work, because commits after `4a222c7` moved the
+projection-cost code again.  That later drift is [A1](#a1).
 
 ## B. Device policy across entry points
 
