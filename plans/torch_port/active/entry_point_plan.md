@@ -31,10 +31,11 @@ The work has eight increments, each reviewed before the next starts.
  - Increment 1 implements the once-per-model rule in
    `_apply_device_policy`.  No entry point function changes in this increment.
  - Increments 2 through 4 add the call to `_apply_device_policy` to the functions that lack
-   it: direct reconstructions, `generate_demo_data`, and four helpers
-   that allocate full-size arrays.  One helper, `gen_weights`, first
-   needs a per-shard form, because its arithmetic cannot accept a
-   sharded sinogram today.
+   it: direct reconstructions, `generate_demo_data`, and three helpers
+   that allocate full-size arrays.  A fourth, `gen_weights`, lost its
+   model argument in the prerelease merge and settles nothing; it
+   instead rejects a device-form sinogram, keeping weights a
+   pre-placement step.
  - Increment 5 develops a policy for `QGGMRFDenoiser.denoise` and then implements it.  
  - Increment 6 updates the preprocessing defaults.
  - Increment 7 ports the sharded phantom build from mbirjax, which demo
@@ -184,14 +185,18 @@ contract for future geometries.
 
 ### 2.5 The full-array allocators
 
-Four helpers settle an unsettled model before they allocate:
+Three helpers settle an unsettled model before they allocate:
 
 * `compute_hessian_diagonal` (A8) — a full sinogram of ones,
   back-projected into a full volume.
 * `prepare_sino_for_devices` (A9) — the whole sinogram.
-* `gen_weights` with a model (F1) — a full sinogram-sized weights array.
 * `gen_weights_mar` (F2) — a full forward projection, on its `init_recon`
   branch only.  It settles only on that branch.
+
+`gen_weights` (F1) left this list in the prerelease merge: it no longer
+takes a model (weights are computed where the input is), so it has
+nothing to settle.  What remains of F1 is the device-form rejection in
+the prerequisites below.
 
 Today each of these runs on the lead device of a model that has not spread
 across devices, which doubles peak lead-device memory at production scale.
@@ -199,14 +204,17 @@ Settling first places the arrays on the final layout.  It also makes
 preparing and then reconstructing safe, which resolves row A9's contested
 status.
 
-Increment 5 carries two prerequisites and two documentation changes:
+Increment 4 carries two prerequisites and two documentation changes:
 
-* `gen_weights` needs a per-shard form.  Its arithmetic cannot accept a
-  sharded sinogram today.
+* `gen_weights` must reject a device-form (`Shards`) sinogram, which its
+  elementwise arithmetic cannot accept today: its array module resolves
+  to numpy and the result is silently wrong.  Weights are computed
+  before placement; `prepare_sino_for_devices(sinogram, weights)` places
+  both.
 * `split_sino_recon` must gather a device-form sinogram or weights at
   entry, because it host-slices its inputs.
-* The four helper docstrings state that the call may change the model's
-  layout and may raise the preflight's error.
+* The three settling helpers' docstrings state that the call may change
+  the model's layout and may raise the preflight's error.
 * The `configure_devices` docstring states that pinning after a helper has
   settled invalidates that helper's returned `Shards`.
 
@@ -296,9 +304,13 @@ one device over a narrower range of sizes than the survey reports.
 
 `generate_demo_data` (E1) joins the reconstruction category.  It calls the
 policy on the model it builds, and its `devices=` argument stays an
-explicit pin routed through `configure_devices`.  A caller who hits the
-preflight cost of §2.3 on a large generation uses that same argument to
-name the layout.
+explicit pin routed through `configure_devices`.  The internal model
+settles with the capacity preflight skipped, because it exists only for
+one projection and has no reconstruction lifetime to size for -- the
+model is deleted before the function returns.  The floors still choose
+the count, and a genuine overflow surfaces as the allocator's error.
+(Ruling restored 2026-08-15: the 2026-08-13 condensation dropped it
+while §9.3 still cited it.)
 
 The vcls single-view sibling (G1) is deferred with the rest of category G.
 The provisional answer is to keep its pin and record the reason in its
@@ -322,7 +334,7 @@ increment:
 | D4 | `correct_zinger_pixels`, `BH_correction` | existing `devices=` default becomes the permitted devices (§7) | 6 |
 | D7 | `recon_plastic_metal` | the device count stops changing between beam-hardening passes; no edit to the driver | 1 |
 | E1 | `generate_demo_data` | policy call on its internal model; `devices=` stays an explicit pin | 3 |
-| F1 | `gen_weights` (with a model) | per-shard form, then settles an unsettled model before sharding | 4 |
+| F1 | `gen_weights` | rejects device-form input, naming the weights-then-prepare order; the prerelease removed its model argument, so no settle | 4 |
 | F2 | `gen_weights_mar` | settles an unsettled model on its projecting branch | 4 |
 
 Every row not listed keeps the survey's column-six ruling, and category G
@@ -461,7 +473,7 @@ exists.  One does not:
 | `generate_demo_data` (increment 3) | `forward_project(..., output_sharded=True)`, the core sharded projector path |
 | `compute_hessian_diagonal`, `prepare_sino_for_devices` (increment 4) | `_shard_sinogram` and the banded `sparse_back_project` |
 | `gen_weights` (increment 4) | **none today.**  Increment 4 writes it, which is why that step comes first. |
-| `gen_weights_mar` (increment 4) | `forward_project` only.  The weights themselves are host NumPy (`vcd_utils.py:355`), so settling helps the projection and nothing after it. |
+| `gen_weights_mar` (increment 4) | `forward_project` only.  The weights themselves are host NumPy (`vcd_utils.py:350`), so settling helps the projection and nothing after it. |
 | `QGGMRFDenoiser.denoise` (increment 5) | `_denoise_sharded` (`denoising.py:321`), added by the 2026-08 prerelease |
 | the five preprocessing functions (increment 6) | `map_view_batches` splits the views across devices (`preprocess/pipeline.py:52`) |
 | the phantom build (increment 7) | **none today.**  Increment 7 ports the sharded and blocked builds from mbirjax. |
@@ -481,7 +493,7 @@ also remove the unconditional split branch in `recon_plastic_metal`
 size.  Splitting changes the reconstruction and not only its placement,
 so that choice needs its own design and an explicit caller opt-in.
 
-### 9.1 Increment 1 — the settled state
+### 9.1 Increment 1 — the settled state: COMPLETE
 
 Increment 1 changes `_apply_device_policy` and the helpers it calls.  No
 function gains or loses a policy call.  §2.2 states the rule this
@@ -590,7 +602,7 @@ edit: it constructs a new model, which starts unsettled, so the halves of
 Multi-device cases take the suite's `unpinned` fixture, because
 `tests/conftest.py` pins the suite to one device.
 
-### 9.2 Increment 2 — the direct reconstructions
+### 9.2 Increment 2 — the direct reconstructions: COMPLETE
 
 Increment 2 gives `ParallelBeamModel.fbp_recon` (`parallel_beam.py:335`),
 `MultiAxisParallelModel.fbp_recon` (`multiaxis_parallel.py:386`), and
@@ -660,14 +672,17 @@ large for a full `recon` still runs a direct reconstruction, where today
 it is refused.  A `recon` on that same model is then refused with the
 preflight's message, not by the allocator.
 
-### 9.3 Increment 3 — `generate_demo_data` calls the policy
+### 9.3 Increment 3 — `generate_demo_data` calls the policy: COMPLETE
 
 Increment 3 settles the internal generation model before it projects
 (`utilities.py`), with the capacity preflight skipped per §4.3.
 
 **Step 1: call the policy after the model is built.**  The generation
-model is constructed at `utilities.py:1626-1723` and pinned at `:1732`
-when the caller passed `devices=`.  After that block, the function calls
+model is constructed in the per-geometry branch block ending near
+`utilities.py:1737` and pinned at `:1741-1742` when the caller passed
+`devices=`.  After that block, the function sets
+`ct_model_for_generation.skip_memory_preflight = True` (the §4.3 skip;
+the floors still order the candidates) and calls
 `ct_model_for_generation._apply_device_policy()`.  The call is
 unconditional: on a pinned model the policy's explicit-layout branch
 returns at once, so no branch is needed here.
@@ -676,8 +691,11 @@ returns at once, so no branch is needed here.
 through `configure_devices`, and a pinned layout still wins.
 
 **Step 3: tests.**  With a faked multi-device count and no `devices=`, the
-forward projection at `:1779` runs on the settled layout rather than on
+forward projection at `:1790` runs on the settled layout rather than on
 the lead device.  With `devices=`, the pin is what the projection uses.
+And the skip is asserted directly: with poisoned per-device budgets that
+no plan fits, the generation still runs -- the capacity check was
+skipped, not passed.
 
 ### 9.4 Increment 4 — the full-array allocators settle first
 
@@ -685,44 +703,66 @@ Increment 4 has a strict internal order.  Two existing gaps must be closed
 before the settle is added, because settling is what first routes real
 callers into them.
 
-**Step 1: give `gen_weights` a per-shard form** (`vcd_utils.py:203`).
-Today the function places the sinogram with `ct_model._shard_sinogram` and
-then selects its array module with `xp = torch if isinstance(sinogram,
-torch.Tensor) else np`.  A `Shards` object is neither, so `xp` becomes
-numpy: `'transmission'` raises a `TypeError` and `'unweighted'` returns a
-zero-dimensional object array.  The fix builds the weights per shard and
-returns `Shards` when the placement has more than one device.  The
-single-device and host paths keep their present behavior exactly.
+This section was reconciled on 2026-08-15 against the merged prerelease
+tree (commit `afb2832`), which reshaped its subjects: `gen_weights` lost
+its model argument, `split_sino_recon` moved to a `TomographyModel`
+method, and `recon_plastic_metal` (now also a method) coerces its inputs
+to host numpy at entry, so the prepared-then-split pair no longer arises
+inside the library.
+
+**Step 1: make `gen_weights` reject a device-form input**
+(`vcd_utils.py:203`).  The function is elementwise and model-free since
+the prerelease: numpy in, numpy out; tensor in, a tensor on the same
+device out.  A device-form (`Shards`) sinogram -- a
+`prepare_sino_for_devices` output -- is neither, so its array module
+resolves to numpy and the result is silently wrong (`'unweighted'`
+returns a zero-dimensional object array).  Ruling (Greg, 2026-08-15):
+reject it with a named error rather than compute on it.  Weights belong
+before placement -- compute them from the host sinogram, then place both
+at once with `prepare_sino_for_devices(sinogram, weights)`, which exists
+for exactly this -- and sharding is not this function's business.  The
+error message states that order.  A per-shard form was considered and
+declined: it would teach a pure elementwise helper about placements, and
+the shard-compute-gather alternative does device work to produce a host
+result the caller would then re-place.  No settle: there is no model
+here.  This also removes increment 4's last dependence on the padding
+decision, which the padding plan's interaction section records.
 
 **Step 2: let `split_sino_recon` accept device-form inputs**
-(`cone_beam.py:1048-1049`).  It host-slices `sino[:, lo:hi, :]` and
-`weights[:, lo:hi, :]`, and `Shards` does not support subscripting.  The
-fix gathers a device-form sinogram or weights at entry.  Without it, a
-prepared sinogram followed by `split_sino_recon` would raise, and
-`recon_plastic_metal` reaches exactly that pair on cone models.
+(`cone_beam.py:821`, the one implementation; the base method at
+`tomography_model.py:350` only raises).  It host-slices
+`sino[:, lo:hi, :]` and `weights[:, lo:hi, :]` at `cone_beam.py:1053-1054`,
+and `Shards` does not support subscripting.  The fix gathers a
+device-form sinogram or weights at entry.  `recon_plastic_metal` no
+longer reaches this pair -- it coerces to host at entry -- but its
+coercion has the same device-form blindness: `np.asarray` on a `Shards`
+builds an object array, so its entry takes the same gather.
 
-**Step 3: add the settle to the four helpers.**  Each settles an unsettled
-model before it allocates:
+**Step 3: add the settle to the three helpers that hold a model.**  Each
+settles an unsettled model before it allocates:
 
-* `compute_hessian_diagonal` (`tomography_model.py:1992`)
-* `prepare_sino_for_devices` (`tomography_model.py:1576`)
-* `gen_weights` (`vcd_utils.py:203`), only when `ct_model` is given
-* `gen_weights_mar` (`vcd_utils.py:303`), only on the `init_recon` branch
+* `compute_hessian_diagonal` (`tomography_model.py:1914`)
+* `prepare_sino_for_devices` (`tomography_model.py:1539`)
+* `gen_weights_mar` (`vcd_utils.py:294`), only on the `init_recon` branch
   that forward-projects; the Otsu branch does no device work and does not
   settle
 
-**Step 4: update the docstrings.**  The four helpers state that the call
-may change the model's device layout and may raise the preflight's error.
-`gen_weights` also loses its claim that the result "stays where the input
-is", which a settle can now change.  `configure_devices` states that
-pinning after a helper has settled invalidates the `Shards` that helper
-returned.
+**Step 4: update the docstrings.**  The three settling helpers state that
+the call may change the model's device layout and may raise the
+preflight's error.  `gen_weights` states that weights are computed where
+the input is, that a device-form input is rejected, and the supported
+order: weights first, then `prepare_sino_for_devices(sinogram, weights)`.
+`configure_devices` states that pinning after a helper has settled
+invalidates the `Shards` that helper returned.
 
 **Step 5: tests.**  Assert on the returned arrays, not only on the model's
-layout.  A placement-only assertion would pass while
-`gen_weights('unweighted')` returned a zero-dimensional array, which is
-the silent failure step 1 removes.  Cover the prepared-then-split pair
-from step 2.  Multi-device cases take the `unpinned` fixture.
+layout.  A `Shards` into `gen_weights` raises, and the message names the
+weights-then-prepare order (today `'unweighted'` returns a
+zero-dimensional object array -- the silent failure the rejection
+removes); the supported order round-trips.  Cover the
+prepared-then-split pair from step 2 on the public method, and a
+`Shards` into `recon_plastic_metal`.  Multi-device cases take the
+`unpinned` fixture.
 
 ### 9.5 Increment 5 — the denoiser
 

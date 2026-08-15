@@ -61,12 +61,17 @@ coverage turns `0 * inf` into NaN.  The lessons file also records the
 general rule that assumptions about shard shapes appear only at device
 counts that do not divide the axis.
 
-The cost also appears in work that is planned and not yet written.  The
-per-shard `gen_weights` of the entry-point plan's increment 4 must
-re-zero its padded entries.  Three of its four weight types write
-non-zeros exactly where the invariant requires zeros: `exp(-0) = 1` for
-the transmission forms, ones for `'unweighted'`, and `1 / 0.1` for
-`'emission'`.
+The cost also appeared in planned work, and one piece of it has since
+been ruled away rather than paid: increment 4's `gen_weights` was first
+planned as a per-shard form, which under the pad would re-zero its
+padded entries (three of its four weight types write non-zeros exactly
+where the invariant requires zeros: `exp(-0) = 1` for the transmission
+forms, ones for `'unweighted'`, and `1 / 0.1` for `'emission'`).  On
+2026-08-15 Greg ruled that `gen_weights` rejects device-form input
+instead, so no code ever computes weights on a padded shard.  The
+inertness invariant still taxed the design either way: the re-zero
+obligation is what the per-shard option would have cost, and rejection
+was chosen partly because that cost falls away with it.
 
 ## 2. What the pad buys
 
@@ -186,17 +191,29 @@ by rounding up, which stays the largest shard under the new split and
 so remains a valid upper bound.  The per-slice crop of the iteration
 statistics becomes a no-op rather than a wrong one.
 
+Two other paddings in the package share the word and nothing else, and
+both stay.  The Triton kernels pad the PIXEL axis to their tile size
+inside the kernel, with the padded lanes masked to contribute nothing
+(the poison-the-padding tests gate this).  And `projectors.py` pads a
+narrow pixel batch up to a model's `min_compiled_pixel_width`
+(`forward_at_min_pixel_width` / `back_at_min_pixel_width`,
+`projectors.py:130-212`): a measured inductor miscompilation of the
+one-pixel parallel-beam specialization, worked around by never
+compiling that width -- parallel beam declares 2, the base declares 1
+and the wrappers pass through.  Neither has anything to do with the
+sharded-axis pad this plan removes.
+
 ## 5. Sequencing and the decision
 
-The decision belongs before increments 4, 5, and 7 of the entry-point
-plan are written.  Three pieces of that plan otherwise get written to
-the pad and rewritten later.
- - Increment 4's per-shard `gen_weights` must re-zero padding that the
-   removal then deletes.
+The decision belongs before increments 5 and 7 of the entry-point plan
+are written.  Two pieces of that plan otherwise get written to the pad
+and rewritten later.  (Increment 4 was a third until 2026-08-15, when
+its `gen_weights` step was ruled a device-form rejection rather than a
+per-shard form; increment 4 is now independent of this decision.)
  - Increment 5's denoiser ledger prices padded shard lengths.
  - Increment 7 ports mbirjax's phantom build, and three of its five
    steps are written to the pad: the zero tail, the crop, and the
-   exactly-zero test.  This is the largest of the three rewrites.  The
+   exactly-zero test.  This is the larger of the two rewrites.  The
    phantom build is also self-contained, so if the decision is to
    remove, that increment can build uneven slice bands from the start.
 
@@ -221,10 +238,15 @@ suite green.  P3 lands as a single commit: the split is one contract
 held by every caller at once, so the suite is red between its first edit
 and its last, and the green boundary is the increment, not the step.
 
-Every `file:line` reference below is against commit `0089d2b`, the tree
-this plan was written from.  P1's edits shift later line numbers in
-`tomography_model.py` and `_sharding.py`, so locate each site by the
-symbol named beside it and read the number as a hint, not an address.
+Every `file:line` reference below is against commit `afb2832`
+(entry-point increments 1-3 landed, prerelease merged; re-verified
+2026-08-15 -- the merge shortened comments across `tomography_model.py`,
+so references were re-anchored wholesale).  P1's edits shift later line
+numbers in `tomography_model.py` and `_sharding.py` again, so locate
+each site by the symbol named beside it and read the number as a hint,
+not an address.  The padding API and its consumer set were re-inventoried
+on the merged tree and are unchanged in structure: same four `Placement`
+members, same consumer files, no new consumers.
 
 ### P1 — Make the seam tolerate uneven and empty shards
 
@@ -309,14 +331,14 @@ move in the same commit:
 
 | File | Sites |
 |---|---|
-| `tomography_model.py` | `_banded_setup` `:520-521`, and the `view_spans` 3-tuple it returns, which becomes a 2-tuple at its consumers `:565, :580, :598, :615, :647, :751, :897, :952, :965`; the row count at `:742`; the padded branches at `:643`, `:890`, `:984-986`; `_check_no_empty_shard` `:1080-1083`; the interface masks `:1125-1131`; `_layout_is_valid` `:1471-1472`; `_sino_row_padding` `:1623-1626`; `_split_to_shards` `:1711-1737`; `_constant_recon` `:1801`; `_gather_shards` `:1906`; `_sino_ones_device_form` `:1962`; the all-padding skip branches `:573-585` and `:935-942`, which lose their input |
-| `_memory_ledger.py` | `plan_from_model` `:969-977` |
+| `tomography_model.py` | `_banded_setup` `:647-648`, and the `view_spans` 3-tuple it returns, which becomes a 2-tuple at its consumers `:681, :696, :714, :731, :760, :792, :866, :914-918, :927-931`; the row count at `:783`; the padded branches at `:753`, `:859`, `:943-947`; `_check_no_empty_shard` `:1015-1018`; the interface masks `:1047-1053`; `_layout_is_valid` `:1371-1372`; `_sino_row_padding` `:1534-1537`; `_split_to_shards` `:1603-1629`; `_constant_recon` `:1693`; `_gather_shards` `:1788`; `_sino_ones_device_form` `:1828`; the all-padding skip branches `:689-701` and `:897-904`, which lose their input |
+| `_memory_ledger.py` | `plan_from_model` `:1065-1073` |
 | `cone_beam.py` | the damping cache key `:456`, the ones-fill `:475`, the split at `:479` |
-| `parameter_handler.py` | `_device_report` `:141-147` |
-| `utilities.py` | the crop predicates `:168` and `:360` |
-| `preprocess/mar.py` | `:55`, `:70`, `:87`, the masks `:256` and `:808`, the real-pixel count `:812` |
+| `parameter_handler.py` | `_device_report` `:144-150` |
+| `utilities.py` | the crop predicates `:168` and `:358` |
+| `preprocess/mar.py` | `:54`, `:69`, `:86`, the masks `:258` and `:810`, the real-pixel count `:814` |
 | `preprocess/segmentation.py` | `:20` |
-| `preprocess/utilities.py` | `:777` |
+| `preprocess/utilities.py` | `:767` |
 
 Two sites are exceptions to the "drop the argument" rule.
 `cone_beam.py:479` keeps an explicit size, because its placement may
@@ -331,16 +353,16 @@ replaced, because with no padding every entry is real.
 
 Step 3, the inertness machinery.  Delete the padded-slice re-zero in the
 sharded back projection.  Delete the qGGMRF interface masks and their
-cache end to end: the builder `_qggmrf_interface_masks` (`:1104-1136`),
+cache end to end: the builder `_qggmrf_interface_masks` (`:1035`),
 the two consumers that fetch the masks and pass one per device
-(`tomography_model.py:2671-2714` and `denoising.py:365-402`), and the
+(`tomography_model.py:2383-2413` and `denoising.py:370-407`), and the
 kernel's `interface_mask` parameter (`qggmrf.py:78`, applied at
 `:142-146`); the halo exchange itself stays as P1 left it.  Delete
 `_sino_row_padding` and the row work at its three call sites: the
-`row_pad` argument of `_shard_sinogram` (`:1571`) and the `row_pad`
+`row_pad` argument of `_shard_sinogram` (`:1502`) and the `row_pad`
 parameter of `_split_to_shards` it feeds, the row crop in
-`_gather_sinogram` (`:1769`), and the row fill in
-`_sino_ones_device_form` (`:1959`).  Delete the axis crop in
+`_gather_sinogram` (`:1661`), and the row fill in
+`_sino_ones_device_form` (`:1825`).  Delete the axis crop in
 `_gather_shards`.  In `_split_to_shards`, the comparison against the
 padded length collapses because the two lengths are now equal; keep the
 shape validation and its message, and drop only the clause that offers
@@ -352,10 +374,13 @@ Step 4, the ledger.  `plan_from_model` builds its per-device blocks from
 the new split, and the pairs of padded length and real count collapse to
 one number: `view_blocks` and `slice_blocks` become lists of per-device
 block lengths.  The reads follow mechanically -- the block-length reads
-(`[0]`) at `_memory_ledger.py:273`, `:294`, `:297`, `:300`, `:323`, and
-`:422`, and the real-count reads (`[1]`) at `:303`, `:306`, `:431`, and
-`:565`, where a positive real count becomes a positive length.
-`sino_rows` loses its padded branch (`:976-978`).
+(`[0]`) at `_memory_ledger.py:278`, `:304`, `:307`, `:310`, `:333`,
+`:432`, and `:670`, and the real-count reads (`[1]`) at `:313`, `:316`,
+`:441`, and `:575`, where a positive real count becomes a positive
+length.  The read at `:670` is entry-point increment 2's direct plan
+(the filter row batch), which joined the readers after this plan was
+first written; the collapse covers it the same way.  `sino_rows` loses
+its padded branch (`:1072-1074`).
 
 Step 5, the empty-shard rule.  `_check_no_empty_shard` and
 `_layout_is_valid` express the same rule against the new split, which
@@ -366,8 +391,8 @@ the campaign and needs the ruling of §3.
 Step 6, the tests that assert the deleted API.  These land in the same
 commit, because they cannot run against it: the direct assertions in
 `tests/test_sharding.py`, and the five fixtures that reach it --
-`make_plan` and `_measured_arm_ledger` in `tests/test_memory_ledger.py`,
-and the three pad-building helpers in
+`make_plan` (`:23`) and `_measured_arm_ledger` (`:1190`) in
+`tests/test_memory_ledger.py`, and the three pad-building helpers in
 `tests/test_sharded_segmentation.py`: `_as_shards` (`:32`),
 `_view_sharded` (`:114`), and the local `as_shards` inside
 `test_sharded_save_and_export_stream_by_slab` (`:333`).  The first of
@@ -406,19 +431,22 @@ auto-regularization statistics (`tests/test_params_and_paths.py:192` and
 they drive survive the split as dead code, so they retire here rather
 than in the split commit -- and the branches go with them: the helical
 tail zeroing (`cone_beam.py:736-739`) and the auto-regularization row
-crop (`tomography_model.py:2161-2169`).  The poison-the-padding tests of
+crop (`tomography_model.py:2003-2011`).  The poison-the-padding tests of
 the Triton suites are about the kernels' pixel-tile padding, which is
 unrelated to the sharding pad; they stay.
 
-Two bookkeeping steps close P4.  First the re-bless.  P1 and P3 between
-them edit four hashed cost inputs of the widening floors --
-`_sharding.py`, which is hashed whole, and the three sharded driver
-methods -- so the staleness note fires from P1 on; it warns and passes
-by design, and deferring the re-bless to here reddens nothing.  The
-hashes are re-blessed with `refresh_widening_floors.py --bless`, and the
-justification is that every measured floor cell divides on both axes at
-the counts it was measured at, so the new split is identical there and
-the recorded timings cannot move.  Second, the ledger-calibration arms
+Two bookkeeping steps close P4.  First the re-bless.  The staleness
+note already fires on the merged tree: the prerelease comment-shortening
+changed the source text of all three sharded driver methods, whose
+hashes cover comments.  P1 adds `_sharding.py` to the stale set and P3
+re-edits the drivers; the note warns and passes by design throughout, so
+deferring the one re-bless to here reddens nothing.  The hashes are
+re-blessed with `refresh_widening_floors.py --bless`, and the
+justification covers both causes: comments do not run, and every
+measured floor cell divides on both axes at the counts it was measured
+at, so the new split is identical there and the recorded timings cannot
+move.  (If the pre-existing drift is re-blessed before this campaign
+starts, P4's re-bless simply repeats on the campaign's own edits.)  Second, the ledger-calibration arms
 include one four-device arm measured on a padded split, whose modeled
 peaks move by about one part in 128; its floor and band assertions are
 re-read against the new split.
@@ -444,24 +472,28 @@ end on §3's example: five views and five slices over four devices.
 
 ### Interaction with the entry-point increments
 
-Three of the entry-point increments write code whose form depends on
-this decision:
- - Increment 4 gives `gen_weights` a per-shard form.  Under the pad it
-   must re-zero three of its four weight types; without the pad it must
-   not.
+Two of the entry-point increments write code whose form depends on this
+decision:
  - Increment 5 builds the denoiser's ledger, which prices per-device
    block lengths.
  - Increment 7 ports the phantom build.  Three of its five steps are
    written to the pad: the zero tail, the crop, and the test that the
    tail is exactly zero.
 
+Increment 4 left this list on 2026-08-15: its `gen_weights` step is now
+a device-form rejection rather than a per-shard form, so no weight is
+ever computed on a shard, padded or not, and the increment reads the
+same either way.
+
 The recommendation is to run this campaign between entry-point
-increments 3 and 4.  Increment 1 is implemented, and increment 3 is
-unaffected.  Increment 2 is nearly unaffected: it adds a direct-recon
-ledger plan, and those new charges are written against the same
-per-device block pairs that P3 step 4 collapses, so they follow that
-step mechanically.  Running P1 through P5 at that point means increments
-4, 5, and 7 are written once, against the final form.
+increments 3 and 4, and that point is now: increments 1 through 3 are
+implemented (commits `0089d2b`, `0754d49`, `afb2832`), and increment 4
+has not started.  Increment 2's direct-recon ledger plan landed and
+reads the same per-device block pairs that P3 step 4 collapses, so its
+charges follow that step mechanically (its filter-batch read is named in
+step 4).  Running P1 through P5 now means increments 5 and 7 are written
+once, against the final form -- and increment 4 may run before or after
+the campaign, whichever scheduling suits.
 
 Two alternatives are worth naming.  Running the campaign after all eight
 increments costs the three rewrites above, of which the phantom port is
