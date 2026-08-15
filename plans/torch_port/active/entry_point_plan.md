@@ -161,18 +161,18 @@ choosing the count for a full `recon`; §9.2 specifies the change.
 
 ### 2.4 Which functions call the policy
 
-| Function | Today | After this plan |
-|---|---|---|
-| `recon` (A1), `prox_map` (A2) | through `vcd_recon` | unchanged |
-| `vcd_recon` (A3) | calls the policy | unchanged |
-| `ConeBeamModel.fdk_recon` (B4) | calls the policy | unchanged |
-| `ParallelBeamModel.fbp_recon` (B1) | no call | calls the policy (increment 2) |
-| `MultiAxisParallelModel.fbp_recon` | no call | calls the policy (increment 2) |
-| `TranslationModel.fdk_recon` | no call | calls the policy (increment 2) |
-| `split_sino_recon` halves (B7) | through each half's `recon` | unchanged |
+| Function | Today | After this plan                                                         |
+|---|---|-------------------------------------------------------------------------|
+| `recon` (A1), `prox_map` (A2) | through `vcd_recon` | unchanged                                                               |
+| `vcd_recon` (A3) | calls the policy | unchanged                                                               |
+| `ConeBeamModel.fdk_recon` (B4) | calls the policy | unchanged                                                               |
+| `ParallelBeamModel.fbp_recon` (B1) | no call | calls the policy (increment 2)                                          |
+| `MultiAxisParallelModel.fbp_recon` | no call | calls the policy (increment 2)                                          |
+| `TranslationModel.fdk_recon` | no call | calls the policy (increment 2)                                          |
+| `split_sino_recon` halves (B7) | through each half's `recon` | unchanged                                                               |
 | `recon_plastic_metal` (D7) | late, once per pass | through its initial `direct_recon`, once per model (increments 1 and 2) |
-| `generate_demo_data` (E1) | no call | calls the policy (increment 4) |
-| `QGGMRFDenoiser.denoise` (C1) | no call | calls the policy (increment 6) |
+| `generate_demo_data` (E1) | no call | calls the policy (increment 4)                                          |
+| `QGGMRFDenoiser.denoise` (C1) | no call | calls the policy (increment 5)                                          |
 
 Three notes on that table.  `MultiAxisParallelModel` and
 `TranslationModel` subclass `TomographyModel` directly, so the calls added
@@ -275,7 +275,7 @@ The denoiser cannot call the policy as sized today, for three reasons:
 * It names no floor family, so the parallel floors would govern it.
 * The ledger would charge projector terms the denoiser never allocates.
 
-Increment 6 therefore builds a denoiser ledger and measures denoiser
+Increment 5 therefore builds a denoiser ledger and measures denoiser
 floors before adding the call.  `median_filter3d` (C2) stays exempt.  It
 is single-device by construction and bounds itself through
 `max_block_gb`.
