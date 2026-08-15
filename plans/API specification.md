@@ -61,19 +61,44 @@ Internal pre-processing:  sinograms are sharded by view across all devices and p
 | Function | Input                   | Output                  |
 |---|-------------------------|-------------------------|
 |`get_sino_and_model`| string = path   | numpy array, ct model   |
-|`load_sino_and_params`| string = path | numpy arrays, dict |
+|`load_scans_and_params`| string = path | numpy arrays, dict |
 
-## Internal functions without a model:  all numpy array to numpy array
-`scan_to_sino`, `compute_sino_transmission`, `correct_det_rotation`, `downsample_view_data`, `correct_zinger_pixels`, `BH_correction` — everything that routes through `map_view_batches`.
+## Internal functions without a model
+
+These functions take only arrays and scalars — no `TomographyModel` argument.  All functions take numpy arrays as input and produce numpy arrays as output. However, internally they may divide the views across the GPUs for parallel processing.
+
+| Function | Input | Output |
+|---|---|---|
+| `scan_to_sino` | numpy | numpy |
+| `compute_sino_transmission` | numpy | numpy |
+| `correct_det_rotation` | numpy | numpy |
+| `downsample_view_data` | numpy | numpy |
+| `correct_zinger_pixels` | numpy | numpy |
+| `BH_correction` | numpy | numpy |
 
 
-## Internal functions with a model: three sub-patterns
+## Internal functions with a model
+
+These functions take a `TomographyModel` argument because they need the scanner geometry (typically to forward- or back-project).
 
 | Function | Primary input | Output |
 |---|---|---|
-| `segment_plastic_metal` | numpy / tensor / Shards (recon volume) | **masks in the same form as the input** — the true transformer, and the array-forms rule's first application |
-| `apply_cylindrical_mask` | numpy / tensor / Shards | same form as input (since `a5b04ce`) |
-| `correct_sino_plastic_metal` | numpy / tensor / Shards (via `prepare_sino_for_devices`) | **always host numpy** — gathered at exit, because its reductions are host-combined |
-| `estimate_sino_view_offset` | numpy / tensor | numpy shifts (not array-shaped, so it owes only the acceptance half) |
+| `correct_sino_plastic_metal` | numpy / tensor / Shards (via `prepare_sino_for_devices`) | always host numpy |
+| `estimate_sino_view_offset` | numpy / tensor | numpy shifts (scalars per view) |
 | `align_sino_views` | numpy / tensor | always numpy |
+| `gen_weights_mar` | numpy | numpy |
+
+## Internal functions on reconstruction volumes (no model)
+
+| Function | Primary input | Output |
+|---|---|---|
+| `segment_plastic_metal` | numpy / tensor / Shards (recon volume) | masks in the same form as the input |
+| `apply_cylindrical_mask` | numpy / tensor / Shards | same form as the input |
+
+# Utilities
+
+| Function | Input | Output |
+|---|---|---|
+| `gen_weights` | numpy / tensor sinogram | weights in the same form and place as the input (numpy in, numpy out; tensor in, tensor out on the same device).  No model argument. |
+| `median_filter3d` | numpy / tensor | same form as the input |
 
