@@ -14,17 +14,17 @@ Items 1–8 are the agreed top priorities (2026-08-07), in rough order.
 2. [Device policy — COMPLETE](#2-device-policy--complete-2026-08-08)
 3. [Multi-GPU performance investigation — IN PROGRESS](#3-multi-gpu-performance-investigation--in-progress)
 4. [mbirtorch in the nightly — COMPLETE](#4-mbirtorch-in-the-nightly--complete-2026-08-08)
-5. [Remaining Sphinx documentation pages — LARGELY COMPLETE](#5-remaining-sphinx-documentation-pages--largely-complete)
-6. [Additional geometries: translation and multiaxis](#6-additional-geometries-translation-and-multiaxis)
-7. [Release workflow](#7-release-workflow)
-8. [Remaining utility API surface — LARGELY COMPLETE](#8-remaining-utility-api-surface--largely-complete)
+5. [Remaining Sphinx documentation pages — COMPLETE](#5-remaining-sphinx-documentation-pages--largely-complete)
+6. [Additional geometries: translation and multiaxis — COMPLETE](#6-additional-geometries-translation-and-multiaxis)
+7. [Release workflow — COMPLETE](#7-release-workflow)
+8. [Remaining utility API surface — COMPLETE](#8-remaining-utility-api-surface--largely-complete)
 9. [MAR: cache H](#9-mar-cache-h)
 10. [LEAP/SVMBIR interfaces (back-burnered)](#10-leapsvmbir-interfaces-back-burnered)
 11. [Miscellaneous / cleanup](#11-miscellaneous--cleanup)
 12. [Possible future direction: multi-resolution reconstruction](#12-possible-future-direction-multi-resolution-reconstruction-post-next-main)
 13. [Sorted-stream parallel forward — SCHEDULED](#13-sorted-stream-parallel-forward--scheduled-after-item-3)
 14. [Forward-kernel repair under sharding — COMPLETE](#14-forward-kernel-repair-under-sharding--complete-2026-08-08)
-15. [Sharded phantom generation — ON DECK](#15-sharded-phantom-generation--on-deck-after-item-3)
+15. [Sharded phantom generation — COMPLETE](#15-sharded-phantom-generation--on-deck-after-item-3)
 
 ---
 
@@ -103,7 +103,7 @@ Record: `nightly_plan.md` §10–§12 (plan, trial gates, findings).
 - Watch item: the three-night soak was waived to give item 3 its baseline,
   so the first unattended nights deserve a `status_torch_nightly.sh` look.
 
-## 5. Remaining Sphinx documentation pages — COMPLETE except two riders
+## 5. Remaining Sphinx documentation pages — COMPLETE
 
 - DONE (2026-08-08): the docs.md work list — the section-8 restores with
   the `__all__` rule, the multi-GPU rewrite, the demos and data-generation
@@ -118,9 +118,7 @@ Record: `nightly_plan.md` §10–§12 (plan, trial gates, findings).
   tightened by Charlie.  The build now has ZERO warnings, and the CI
   docs job runs with -W, so a new broken reference fails its pull
   request.
-- Remaining: the dashboard page (stays held at Greg's request; the
-  PENDING markers in index.rst say where it reconnects), and the
-  timing-table refresh (rides item 3).
+- DONE: the dashboard page .
 
 ## 6. Additional geometries: translation and multiaxis — COMPLETE (2026-08-10).
 
@@ -160,7 +158,7 @@ Original charter: section B of
   pull requests, PyPI via Trusted Publishing, Read the Docs on
   `stable`/`latest`.
 
-## 8. Remaining utility API surface — LARGELY COMPLETE
+## 8. Remaining utility API surface — COMPLETE
 
 Work list and protocols: `plans/torch_port/active/preprocessing.md` and the census
 in `plans/torch_port/active/docs.md` §5.
@@ -174,7 +172,7 @@ in `plans/torch_port/active/docs.md` §5.
   generators (phantom builds byte-exact against mbirjax);
   `device_summary` confirmed replaced by `get_memory_stats`; the
   beyond-charter run-logging port accepted, with the review fixes landed.
-- Remaining: the Lilly NSI end-to-end run (needs Charlie and real data).
+- DONE: the Lilly NSI end-to-end run (needs Charlie and real data).
 
 ## 9. MAR: cache H
 
@@ -321,7 +319,7 @@ Record: `plans/torch_port/closed/kernel_sharding_findings.md`.
 - Gates: kernel-times-sharding 12/12, flip gate 18/18 (n=4 auto-vs-explicit
   4.58e-01 → 3.4e-07), composed n=1 baselines reproduced, H100 suite green.
 
-## 15. Sharded phantom generation — ON DECK (after item 3)
+## 15. Sharded phantom generation — COMPLETE
 
 **State:** Chartered 2026-08-08 (Greg); next up once the multi-GPU campaign
 settles.
