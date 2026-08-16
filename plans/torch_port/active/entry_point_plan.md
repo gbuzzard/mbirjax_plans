@@ -776,7 +776,7 @@ prepared-then-split pair from step 2 on the public method, and a
 `Shards` into `recon_plastic_metal`.  Multi-device cases take the
 `unpinned` fixture.
 
-### 9.5 Increment 5 — the denoiser: COMPLETE except for cluster run
+### 9.5 Increment 5 — the denoiser: COMPLETE
 
 Increment 5 brings `QGGMRFDenoiser.denoise` under the policy.  It runs in
 three steps, and the floor measurement is reviewed on its own before the
@@ -846,7 +846,7 @@ only, and its threshold is computed once on the whole sinogram BEFORE
 the view split (`_zinger_threshold`, ahead of `map_view_batches`) -- the
 threshold computation must stay ahead of the split.
 
-### 9.7 Increment 7 — the sharded phantom build
+### 9.7 Increment 7 — the sharded phantom build: COMPLETE
 
 `generate_3d_shepp_logan_low_dynamic_range` (`utilities.py:117`) builds
 the whole phantom on the host with several phantom-sized transients, and
@@ -860,11 +860,15 @@ the projection.
 **Step 1: port the sharded build.**  mbirjax's
 `_generate_3d_shepp_logan_sharded` (`mbirjax/utilities.py:859`) gives each
 device a contiguous band of slices on the recon shard axis, padded up to
-the device count with a zero tail.  Every voxel is independent, so there
-are no halos and no cross-device communication.  The torch port uses
-`_sharding.Placement` and `_sharding.run_per_device`
-(`_sharding.py:556`).  One difference from the source matters: mbirjax
-loops over devices without a thread pool because its dispatch is
+the device count with a zero tail -- jax requires equal blocks.  The
+torch port does not: the padding-removal campaign made uneven bands the
+only form, so each device builds its band at the length
+`Placement.shard_ranges()` gives it, with no tail (the padding plan's
+interaction section rules this, and the unpadded build is the simpler
+one).  Every voxel is independent, so there are no halos and no
+cross-device communication.  The torch port uses `_sharding.Placement`
+and `_sharding.run_per_device`.  One difference from the source matters:
+mbirjax loops over devices without a thread pool because its dispatch is
 asynchronous, while torch needs the thread pool to run the bands
 concurrently.
 
@@ -883,19 +887,37 @@ Each device's band is bounded work, which is what puts this function in
 that category.
 
 **Step 4: the return stays a host array.**  The phantom is a reference
-object.  The build gathers to the host, crops the padded slice tail, and
-frees the device arrays, as mbirjax does.  Callers see no change in type.
+object.  The build gathers to the host and frees the device arrays.
+There is no tail to crop: the bands sum to the slice axis exactly.
+Callers see no change in type.  One ruling recorded at execution and
+revised the next day (Greg, 2026-08-16): the coordinate arithmetic is
+float32, built with torch on each band's own device, matching mbirjax in
+kind.  The port first shipped float64 coordinates to match the old numpy
+build bit for bit, which forced an mps-to-cpu substitution; that
+constraint was judged over-strict -- bit-exact is almost never the right
+metric for float comparisons.  The measured stakes: cross-backend
+float32 rounding flips the ellipsoid membership of about one voxel in a
+million at 2048-cubed, and every consumer gate sits at 1e-3 to 1e-5
+relative, so the flips are invisible downstream.  The phantom golden
+therefore gates with a membership-flip budget -- a bounded fraction of
+voxels may differ by at most one ellipsoid coefficient step, and every
+other voxel is exactly equal -- and the within-backend invariants
+(banding, blocking) remain exact, because they do not cross a rounding
+boundary.
 
-**Step 5: tests.**  The sharded build matches the single-device build on
-the real slices, and the padded tail is exactly zero.  Run at a device
-count that does not divide the slice axis.  The blocked build is
-bit-identical to the unblocked one, because only the loop structure
-differs.  Existing phantom goldens must not move.
+**Step 5: tests.**  The sharded build equals the single-device build on
+every slice, exactly (`np.array_equal`): each voxel's value depends only
+on its own coordinates, so banding cannot move a value.  Run at a device
+count that does not divide the slice axis, and once at a count above the
+slice axis, where a trailing band is empty and the build must tolerate
+it.  The blocked build is bit-identical to the unblocked one, because
+only the loop structure differs.  Existing phantom goldens must not
+move.
 
 Survey row E3 leaves the host-only column when this lands, and §3.1's
 rule then covers the phantom build.
 
-### 9.8 Increment 8 — documentation
+### 9.8 Increment 8 — documentation: COMPLETE
 
 Increment 8 collects the documentation the earlier increments make stale,
 plus the contract from §8.
@@ -917,6 +939,13 @@ plus the contract from §8.
 * Write the base `TomographyModel.direct_recon` contract (A4): a direct
   reconstruction calls the policy, so a new geometry inherits one answer.
 
+### 9.9 Increment 9 — cluster runs
+
+- **remove_padding P5** — a multi-GPU run at a device count that does not divide the sharded axis: values against the single-device reference, per-device peak memory against the ledger, and the re-measurement of the `ma512_n4` four-device ledger-calibration arm on the unpadded split. Running this first verifies the split the floors measurement then runs on.
+- **Entry-point increment 5, step 2** — the denoiser floors measurement via the extended `refresh_widening_floors.py` (already smoke-tested end to end on CPU; prints paste-ready `Floor(...)` rows). The plan requires the measured floors to be reviewed on their own before the call lands.
+- **Increment 5 follow-through, after that review** — paste the measured rows into `_widening_floors.py`, set `_floor_family = 'denoiser'` on `QGGMRFDenoiser`, drop `'denoiser'` from the script's `UNTABLED_FAMILIES`, and re-bless (the table and checksum move as one unit).
+- **Increment 5, step 3** — the one-line policy call in `denoise` (`workload='denoise'`, whose ledger plan is already landed and tested), plus its tests. This closes the entry-point plan.
+
 ## 10. Testing
 
 Two local test methods cover nearly all of the verification.  The
@@ -932,7 +961,7 @@ section (§9) records that results agree across device counts to well
 within the test tolerances.  Tests run at a device count that does not
 divide the sharded axis, per the lessons file's sharded-code section (§3).
 
-Cluster time is needed only for increment 6's floor measurement.  Before
+Cluster time is needed only for increment 5's floor measurement.  Before
 that measurement is submitted, the virtual-CPU equivalent of the new code
 path runs locally, per the lessons rule that finding a host-side mistake
 through a GPU queue is slow.
