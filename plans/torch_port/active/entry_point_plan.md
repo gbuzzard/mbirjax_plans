@@ -211,8 +211,9 @@ Increment 4 carries two prerequisites and two documentation changes:
   to numpy and the result is silently wrong.  Weights are computed
   before placement; `prepare_sino_for_devices(sinogram, weights)` places
   both.
-* `split_sino_recon` must gather a device-form sinogram or weights at
-  entry, because it host-slices its inputs.
+* `split_sino_recon` and `recon_plastic_metal` must reject a device-form
+  sinogram or weights at entry: both are host-first, and a silent gather
+  would leave the caller's device copy resident through the call.
 * The three settling helpers' docstrings state that the call may change
   the model's layout and may raise the preflight's error.
 * The `configure_devices` docstring states that pinning after a helper has
@@ -363,7 +364,7 @@ explicit and covers the other geometries.
 ### 7.1 The decision
 
 The public function surface stays as it is, and five functions get the
-permitted-devices default (Greg, 2026-08-13).  This is increment 7:
+permitted-devices default (Greg, 2026-08-13).  This is increment 6:
 
 * `compute_sino_transmission`, `correct_det_rotation`, and
   `downsample_view_data` gain the `devices=` parameter that
@@ -392,7 +393,7 @@ Three facts led to the decision:
   docstring directs users to call it themselves (`preprocess/nsi.py:617`).
 * The change is small.  `map_view_batches` (`preprocess/pipeline.py:52`)
   runs on whatever device list it receives and consults no ledger, floors,
-  or pin.  Increment 7 is therefore a signature and documentation change,
+  or pin.  Increment 6 is therefore a signature and documentation change,
   not a driver rewrite.
 * A preprocessing class was rejected for now.  It would diverge from
   mbirjax's released surface and break public API, while `devices=` on the
@@ -697,7 +698,7 @@ And the skip is asserted directly: with poisoned per-device budgets that
 no plan fits, the generation still runs -- the capacity check was
 skipped, not passed.
 
-### 9.4 Increment 4 — the full-array allocators settle first
+### 9.4 Increment 4 — the full-array allocators settle first: COMPLETE
 
 Increment 4 has a strict internal order.  Two existing gaps must be closed
 before the settle is added, because settling is what first routes real
@@ -728,21 +729,32 @@ result the caller would then re-place.  No settle: there is no model
 here.  This also removes increment 4's last dependence on the padding
 decision, which the padding plan's interaction section records.
 
-**Step 2: let `split_sino_recon` accept device-form inputs**
-(`cone_beam.py:821`, the one implementation; the base method at
-`tomography_model.py:350` only raises).  It host-slices
-`sino[:, lo:hi, :]` and `weights[:, lo:hi, :]` at `cone_beam.py:1053-1054`,
-and `Shards` does not support subscripting.  The fix gathers a
-device-form sinogram or weights at entry.  `recon_plastic_metal` no
-longer reaches this pair -- it coerces to host at entry -- but its
-coercion has the same device-form blindness: `np.asarray` on a `Shards`
-builds an object array, so its entry takes the same gather.
+**Step 2: make `split_sino_recon` and `recon_plastic_metal` reject
+device-form inputs** (`cone_beam.py:816`, the one implementation; the
+base method at `tomography_model.py:349` only raises;
+`recon_plastic_metal` at `tomography_model.py:395`).  Both are
+host-first by design: the split's halves build their own models and
+settle their own layouts, and the plastic-metal driver splits on the
+host so the full sinogram is never device-resident.  Neither can use
+the parent's device form, so the only thing either could do with a
+`Shards` is gather it -- and a silent gather leaves the caller's
+reference holding the full device-form sinogram resident through the
+call, defeating the memory purpose of the split.  Ruling (Greg,
+2026-08-15, revising the same day's first reading): reject with a named
+error stating the remedy -- pass the host sinogram; a prepared array
+serves `recon` on this model's layout.  The rule this generalizes: a
+function that would immediately gather a `Shards` rejects it instead,
+while functions that consume the device form on the model's own layout
+(`recon`, the direct reconstructions) accept it through the
+placement-identity check.  Without the rejection the failure is silent
+or obscure: `np.asarray` on a `Shards` builds a zero-dimensional object
+array, and the split's shape validation raises an unnamed assertion.
 
 **Step 3: add the settle to the three helpers that hold a model.**  Each
 settles an unsettled model before it allocates:
 
-* `compute_hessian_diagonal` (`tomography_model.py:1914`)
-* `prepare_sino_for_devices` (`tomography_model.py:1539`)
+* `compute_hessian_diagonal` (`tomography_model.py:1759`)
+* `prepare_sino_for_devices` (`tomography_model.py:1457`)
 * `gen_weights_mar` (`vcd_utils.py:294`), only on the `init_recon` branch
   that forward-projects; the Otsu branch does no device work and does not
   settle
@@ -764,7 +776,7 @@ prepared-then-split pair from step 2 on the public method, and a
 `Shards` into `recon_plastic_metal`.  Multi-device cases take the
 `unpinned` fixture.
 
-### 9.5 Increment 5 — the denoiser
+### 9.5 Increment 5 — the denoiser: COMPLETE except for cluster run
 
 Increment 5 brings `QGGMRFDenoiser.denoise` under the policy.  It runs in
 three steps, and the floor measurement is reviewed on its own before the
@@ -799,25 +811,25 @@ about the other.  The plan assumes their device residencies are
 sequential.  A script that needs both resident at once should pin both
 with `configure_devices`.
 
-### 9.6 Increment 6 — the preprocessing surface
+### 9.6 Increment 6 — the preprocessing surface: COMPLETE
 
 Increment 6 gives five preprocessing functions the permitted-devices
 default, per §7.1.
 
 **Step 1: factor out the default.**  `scan_to_sino` resolves the default
-inline (`preprocess/utilities.py:435-447`): all visible CUDA devices,
+inline (`preprocess/utilities.py`, inside `scan_to_sino` at `:404`): all visible CUDA devices,
 capped by `MBIRTORCH_NUM_DEVICES`, or the default device when there are
 none.  Five more call sites need the same rule, so it moves into a small
 shared helper that `scan_to_sino` then calls.
 
 **Step 2: add the parameter to three functions.**
-`compute_sino_transmission` (`:38`), `correct_det_rotation` (`:235`), and
-`downsample_view_data` (`:373`) gain `devices=None` and pass it to
+`compute_sino_transmission` (`:38`), `correct_det_rotation` (`:228`), and
+`downsample_view_data` (`:364`) gain `devices=None` and pass it to
 `map_view_batches`.
 
 **Step 3: change the default for two functions.**
-`correct_zinger_pixels` (`:1533`) and `BH_correction`
-(`preprocess/mar.py:154`) already accept `devices=`.  Only their
+`correct_zinger_pixels` (`:1509`) and `BH_correction`
+(`preprocess/mar.py:146`) already accept `devices=`.  Only their
 resolution of `None` changes, from one device to the permitted devices.
 
 **Step 4: nothing in the driver changes.**  `map_view_batches`
@@ -828,7 +840,11 @@ receives.
 with no cross-view reduction, so results do not depend on the device
 count and the preprocess goldens must not move.  A test asserts that
 agreement across device counts, which is a stronger check than the
-reconstruction path can make.
+reconstruction path can make.  Two facts carry the per-view claim and
+were verified 2026-08-15: the zinger fill reads 3x3 in-view neighbors
+only, and its threshold is computed once on the whole sinogram BEFORE
+the view split (`_zinger_threshold`, ahead of `map_view_batches`) -- the
+threshold computation must stay ahead of the split.
 
 ### 9.7 Increment 7 — the sharded phantom build
 

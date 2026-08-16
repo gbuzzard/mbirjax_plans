@@ -248,7 +248,7 @@ not an address.  The padding API and its consumer set were re-inventoried
 on the merged tree and are unchanged in structure: same four `Placement`
 members, same consumer files, no new consumers.
 
-### P1 — Make the seam tolerate uneven and empty shards
+### P1 — Make the seam tolerate uneven and empty shards: COMPLETE
 
 P1 changes no split and no result.  It adds the handling the new split
 will need while the pad still guarantees the old shapes, so each branch
@@ -282,7 +282,7 @@ Tests construct the empty and uneven cases directly, by building a
 `Placement` and per-device tensors in the test rather than through a
 model.  That is what makes P1 testable before the split changes.
 
-### P2 — Convert the sharded value gates to the relative form
+### P2 — Convert the sharded value gates to the relative form: COMPLETE
 
 The sharded-versus-single comparisons use fixed absolute tolerances
 today, which the lessons file rejects for computed floats.  P2 converts
@@ -304,12 +304,20 @@ bytes out, and a tolerance there would mask corruption.  Constructed-zero
 assertions also stay exact for now; they are deleted with their subject
 in P3, not loosened here.
 
+One residue is recorded for the later increments.  P2's inventory found
+six `np.allclose` calls at the DEFAULT tolerances (test_sharding.py
+lines 53, 132, 143, 164, 183, 440 after P2): five are data-movement
+identities the exact-equality rule also covers, and one is a
+two-partial sum.  P3 rewrites several of those lines with their
+subject; whichever survive, P4's coverage pass takes the movement
+identities to exact equality and the sum to the relative form.
+
 P2 comes before the split so that P3's value drift is read against a
 correct ruler.  It also stands on its own: the conversion is right
 whether or not the pad is removed, so P2 can land even if the decision
 goes the other way.
 
-### P3 — Change the split
+### P3 — Change the split: COMPLETE
 
 One commit, six steps.
 
@@ -404,7 +412,7 @@ outside those files breaks with them:
 clause, which step 2 deletes with `_device_report`'s padding lines; drop
 that assertion and keep the layout assertion beside it.
 
-### P4 — Replace the retired coverage and re-bless the bookkeeping
+### P4 — Replace the retired coverage and re-bless the bookkeeping: COMPLETE
 
 P3 deletes assertions.  P4 replaces the coverage they carried, which is
 the larger job: the fixtures of step 6 feed roughly sixty tests between
@@ -431,9 +439,24 @@ auto-regularization statistics (`tests/test_params_and_paths.py:192` and
 they drive survive the split as dead code, so they retire here rather
 than in the split commit -- and the branches go with them: the helical
 tail zeroing (`cone_beam.py:736-739`) and the auto-regularization row
-crop (`tomography_model.py:2003-2011`).  The poison-the-padding tests of
-the Triton suites are about the kernels' pixel-tile padding, which is
-unrelated to the sharding pad; they stay.
+crop (`tomography_model.py:2003-2011`).  P3's execution surfaced two
+more members of the same class, retired here the same way: the
+`num_real_slices` parameter of `apply_cylindrical_mask`
+(`preprocess/utilities.py`), whose only in-package caller no longer
+passes it, and the real-count plumbing of
+`get_forward_model_loss(num_real_elements=)` and
+`_vcd_iteration_stats(num_real_elements, real_sino_size)`, which the
+library now always feeds `None` and full sizes; the two tests that
+drive that plumbing (`tests/test_params_and_paths.py:213` and `:238`)
+retire with it.  The poison-the-padding tests of the Triton suites are
+about the kernels' pixel-tile padding, which is unrelated to the
+sharding pad; they stay.  One member of the class remains by a scope
+ruling at P4 time: `subsample_views`'s `num_real_views` parameter, whose
+only caller now passes a count equal to the array's own view axis, so
+the restriction is a no-op -- and the two deleted auto-regularization
+tests were its only non-default coverage.  Retired 2026-08-15 in the
+vocabulary rename that followed P4 (commit `0cba12a`, which also renamed
+`real_size` to `axis_len` and `real_sino_size` to `total_sino_size`).
 
 Two bookkeeping steps close P4.  First the re-bless.  The staleness
 note already fires on the merged tree: the prerelease comment-shortening

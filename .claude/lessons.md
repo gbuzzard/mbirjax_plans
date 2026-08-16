@@ -59,6 +59,12 @@ short jax/perf tips in `claude_prompt.md`.
   from global `np.random`; unseeded, a sharded-vs-n=1 fingerprint showed ~1e-4 reldiff (100× the
   float floor) purely from different partitions.  `np.random.seed(k)` before each call isolates the
   dimension under test; otherwise you are comparing noise.
+- **A library reduction can be silently WORSE than the naive one — gate it at PRODUCTION size**
+  (torch, mbirtorch).  `torch.linalg.vector_norm(x, ord=1)` accumulates float32 sequentially where
+  `torch.sum` is pairwise: vs a float64 reference it drifts 2.1e-3 at 384^3 and 5.6e-2 at 640^3,
+  where `sum(abs)` and a ~16 MiB-chunked sum both stay ~1e-7.  Small goldens show only 1.3e-6, so a
+  1e-3 gate passes and the error ships; it is also ~34× slower on MPS.  Fix that bounds the memory
+  without the accuracy loss: chunked `torch.sum` (`mbirtorch/denoising.py::image_ell1`).
 
 ## 3. Writing sharded / jitted code
 

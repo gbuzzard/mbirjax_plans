@@ -63,7 +63,7 @@ Internal pre-processing:  sinograms are sharded by view across all devices and p
 |`get_sino_and_model`| string = path   | numpy array, ct model   |
 |`load_scans_and_params`| string = path | numpy arrays, dict |
 
-## Internal functions without a model
+## Secondary/internal functions without a model
 
 These functions take only arrays and scalars — no `TomographyModel` argument.  All functions take numpy arrays as input and produce numpy arrays as output. However, internally they may divide the views across the GPUs for parallel processing.
 
@@ -77,7 +77,7 @@ These functions take only arrays and scalars — no `TomographyModel` argument. 
 | `BH_correction` | numpy | numpy |
 
 
-## Internal functions with a model
+## Secondary/internal functions with a model
 
 These functions take a `TomographyModel` argument because they need the scanner geometry (typically to forward- or back-project).
 
