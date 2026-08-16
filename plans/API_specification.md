@@ -90,10 +90,7 @@ Each issue below names a place where the code does not yet follow the rules
 above, with a proposed solution.  The detailed tables mark the affected rows
 as "open issue N".
 
-**Issue 1: `interpolate_defective_pixels` accepts only a torch tensor.**
-A numpy input crashes, which violates the preprocessing rule (numpy in, numpy
-out).  Proposal: accept numpy or tensor, convert at entry, and return the form
-that was given.
+**Issue 1 (FIXED 2026-08-16): `interpolate_defective_pixels` accepted only a torch tensor.**
 
 **Issue 2: `stitch_arrays` mishandles mixed inputs.**
 When the input tensors sit on different devices, it silently moves them all to
@@ -175,47 +172,50 @@ strings, dicts, and models.
 
 ## 3. Preprocessing
 
-Numpy in, numpy out throughout; GPU use is internal.
+Numpy in, numpy out throughout; GPU use is internal.  The functions that use
+internal GPU batching accept two optional arguments: `batch_size` (views per
+GPU call) and `devices` (which GPUs to use; `None` means all permitted).  The
+"GPU batching" column below says which functions those are.
 
 ### Scanner readers (nsi, zeiss, zeiss_tct, pymbir)
 
-| Function | Input | Output |
-|---|---|---|
-| `get_sino_and_model` | string = path | numpy sinogram, model (zeiss_tct also returns numpy weights) |
-| `load_scans_and_params` | string = path | numpy scan arrays, parameter dict |
+| Function | Input | Output | GPU batching |
+|---|---|---|---|
+| `get_sino_and_model` | string = path | numpy sinogram, model (zeiss_tct also returns numpy weights) | yes, internally (no `devices=` argument today) |
+| `load_scans_and_params` | string = path | numpy scan arrays, parameter dict | no |
 
 ### Sinogram computation and correction
 
-| Function | Input | Output |
-|---|---|---|
-| `scan_to_sino` | numpy scans | numpy sinogram |
-| `compute_sino_transmission` | numpy scans | numpy |
-| `correct_det_rotation` | numpy | numpy |
-| `downsample_view_data` | numpy scans | numpy |
-| `crop_view_data` | numpy scans | numpy |
-| `correct_zinger_pixels` | numpy | numpy |
-| `correct_background_offset` | numpy | numpy |
-| `interpolate_defective_pixels` | tensor only today (open issue 1) | tensor |
-| `remove_all_stripe` / `remove_stripe_fw` / `remove_sino_offset` | numpy | numpy |
-| `detect_blank_margins` | numpy | margin counts (ints) |
+| Function | Input | Output | GPU batching |
+|---|---|---|---|
+| `scan_to_sino` | numpy scans | numpy sinogram | yes |
+| `compute_sino_transmission` | numpy scans | numpy | yes |
+| `correct_det_rotation` | numpy | numpy | yes |
+| `downsample_view_data` | numpy scans | numpy | yes |
+| `crop_view_data` | numpy scans | numpy | no |
+| `correct_zinger_pixels` | numpy | numpy | yes |
+| `correct_background_offset` | numpy | numpy | no |
+| `interpolate_defective_pixels` | numpy | numpy | no |
+| `remove_all_stripe` / `remove_stripe_fw` / `remove_sino_offset` | numpy | numpy | no (CPU threads for the stripe removals) |
+| `detect_blank_margins` | numpy | margin counts (ints) | no |
 
 ### Beam hardening and metal
 
-| Function | Input | Output |
-|---|---|---|
-| `BH_correction` | numpy | numpy |
-| `fit_beam_hardening_curve` / `fit_inverse_beam_hardening_curve` | numpy | numpy coefficients |
-| `apply_beam_hardening_curve` / `apply_inverse_beam_hardening_curve` | numpy | numpy |
-| `segment_plastic_metal` | numpy / tensor / Shards (recon volume) | masks in the same form as the input |
-| `multi_threshold_otsu` | numpy / tensor / Shards | thresholds (python floats) |
-| `correct_sino_plastic_metal` | model + numpy / tensor / Shards | always numpy |
+| Function | Input | Output | GPU batching |
+|---|---|---|---|
+| `BH_correction` | numpy | numpy | yes |
+| `fit_beam_hardening_curve` / `fit_inverse_beam_hardening_curve` | numpy | numpy coefficients | no |
+| `apply_beam_hardening_curve` / `apply_inverse_beam_hardening_curve` | numpy | numpy | no |
+| `segment_plastic_metal` | numpy / tensor / Shards (recon volume) | masks in the same form as the input | no; follows the input's placement |
+| `multi_threshold_otsu` | numpy / tensor / Shards | thresholds (python floats) | no; follows the input's placement |
+| `correct_sino_plastic_metal` | model + numpy / tensor / Shards | always numpy | no; uses the model's GPU layout |
 
 ### Model-using corrections
 
-| Function | Input | Output |
-|---|---|---|
-| `estimate_sino_view_offset` | model + numpy / tensor | numpy shifts (scalars per view) |
-| `align_sino_views` | model + numpy / tensor | numpy |
+| Function | Input | Output | GPU batching |
+|---|---|---|---|
+| `estimate_sino_view_offset` | model + numpy / tensor | numpy shifts (scalars per view) | no; uses the model's GPU layout |
+| `align_sino_views` | model + numpy / tensor | numpy | no; uses the model's GPU layout |
 
 ## 4. Utilities
 
