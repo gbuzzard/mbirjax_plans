@@ -65,6 +65,16 @@ short jax/perf tips in `claude_prompt.md`.
   where `sum(abs)` and a ~16 MiB-chunked sum both stay ~1e-7.  Small goldens show only 1.3e-6, so a
   1e-3 gate passes and the error ships; it is also ~34× slower on MPS.  Fix that bounds the memory
   without the accuracy loss: chunked `torch.sum` (`mbirtorch/denoising.py::image_ell1`).
+- **torch.compile'd bodies at UNEVEN shard splits differ across device counts at ~6e-4 max-relative
+  — gate such comparisons at 1e-3, and a single application, not just iterated runs** (torch,
+  mbirtorch, GPU only; measured 2026-08-16, mg15c/mg15d).  A second distinct block length makes a
+  compiled body recompile, and the second compilation's reductions contract in a different order;
+  the compiled-vs-compiled difference matches the eager-vs-compiled one (6.4e-4 at the 512-class
+  multiaxis adjoint), is DETERMINISTIC (same-count repeats read exactly 0), shows no boundary
+  concentration, and is absent with compile off (6e-7), at even splits, and for hand-written Triton
+  kernels (7e-7).  Tell: uneven-count arms all ~6e-4 from each other AND from n=1, even-count pairs
+  at 1e-7.  CPU is clean at every count, so only a GPU run shows it.  Full record:
+  `plans/torch_port/active/multigpu_findings.md` §1.16.
 
 ## 3. Writing sharded / jitted code
 

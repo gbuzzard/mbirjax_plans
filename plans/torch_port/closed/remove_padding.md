@@ -1,8 +1,10 @@
 # Design note: removing the sharding pad
 
 Written 2026-08-14, from a code review with Greg; revised the same day
-on a three-seat review (accuracy, reasoning, style).  Status: proposed,
-not decided.
+on a three-seat review (accuracy, reasoning, style).  Status: decided
+and implemented.  P1 through P4 landed 2026-08-15 (commits 672edbd,
+943ffc4, f243417, and the rename 0cba12a); P5 ran 2026-08-16 and the
+campaign is complete.
 
 ## Summary
 
@@ -474,7 +476,7 @@ include one four-device arm measured on a padded split, whose modeled
 peaks move by about one part in 128; its floor and band assertions are
 re-read against the new split.
 
-### P5 — Verify on the cluster
+### P5 — Verify on the cluster: COMPLETE
 
 The virtual-CPU instrument covers the split and the values locally, at a
 device count that does not divide the axis.  P5 adds what a laptop
@@ -482,6 +484,30 @@ cannot show: a multi-GPU run at a non-dividing count, checking values
 against the single-device reference and per-device peak memory against
 the ledger.  Re-verifying the four-device ledger arm from P4 belongs to
 this run.
+
+P5 ran 2026-08-16 as four jobs on gautschi (mg15 and its probes mg15b,
+mg15c, mg15d), and the split is verified.  The forward projections
+reproduce the single-device reference at every non-dividing count
+(5.4e-7 to 1.6e-5 against a 1e-4 gate).  The memory ledger's floor held
+on every device, and the re-measured `ma512_n4` row is landed in
+`tests/test_memory_ledger.py`.  Data placement was confirmed four
+independent ways: a device-count matrix, a block-boundary error
+profile, an eager-mode adjoint at 6e-7 on the uneven split itself, and
+this note's own P2 tree, which reproduced the padded behavior for the
+ablation.
+
+One finding exceeded §3's prediction that values move only in the last
+floating-point digits.  On the torch-body geometry, cross-count
+comparisons at uneven splits read about 6e-4 max-relative on a single
+back projection.  The mechanism is the compile path §2 predicted as a
+speed cost.  An uneven split hands each compiled body a second block
+length, and the second compilation orders its reductions differently.
+The difference between the two compiled orderings is the same scale
+as the eager-against-compiled difference every compiled run already
+carries.
+The effect is deterministic, absent from the Triton geometries, absent
+at even splits, and absent with compilation off.  The full record,
+with the remedy options, is `active/multigpu_findings.md` §1.16.
 
 One local case belongs with P4, because no existing test can reach the
 layouts the widened rule admits: a layout the old rule refuses cannot

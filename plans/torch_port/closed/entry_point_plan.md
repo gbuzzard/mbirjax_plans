@@ -45,6 +45,9 @@ The work has eight increments, each reviewed before the next starts.
 
 ## Scope and status
 
+**This plan is COMPLETE as of 2026-08-16.**  Every increment has landed,
+and §9.9 records the closing cluster runs and their review.
+
 This plan sets one device policy across the package's entry points.  It
 records three things: the principles Greg decided on 2026-08-13, the
 rulings those principles give on the survey's five design questions, and
@@ -939,12 +942,49 @@ plus the contract from §8.
 * Write the base `TomographyModel.direct_recon` contract (A4): a direct
   reconstruction calls the policy, so a new geometry inherits one answer.
 
-### 9.9 Increment 9 — cluster runs
+### 9.9 Increment 9 — cluster runs: COMPLETE
 
-- **remove_padding P5** — a multi-GPU run at a device count that does not divide the sharded axis: values against the single-device reference, per-device peak memory against the ledger, and the re-measurement of the `ma512_n4` four-device ledger-calibration arm on the unpadded split. Running this first verifies the split the floors measurement then runs on.
-- **Entry-point increment 5, step 2** — the denoiser floors measurement via the extended `refresh_widening_floors.py` (already smoke-tested end to end on CPU; prints paste-ready `Floor(...)` rows). The plan requires the measured floors to be reviewed on their own before the call lands.
-- **Increment 5 follow-through, after that review** — paste the measured rows into `_widening_floors.py`, set `_floor_family = 'denoiser'` on `QGGMRFDenoiser`, drop `'denoiser'` from the script's `UNTABLED_FAMILIES`, and re-bless (the table and checksum move as one unit).
-- **Increment 5, step 3** — the one-line policy call in `denoise` (`workload='denoise'`, whose ledger plan is already landed and tested), plus its tests. This closes the entry-point plan.
+All four items ran on 2026-08-16, and this closes the entry-point plan.
+
+- **remove_padding P5**: COMPLETE.  Four jobs (mg15, mg15b, mg15c,
+  mg15d) verified the unpadded split on real GPUs at non-dividing
+  counts: forward projections at 5.4e-7 to 1.6e-5 against the
+  single-device reference, the ledger floor holding on every device,
+  and the `ma512_n4` arm re-measured and landed.  One finding is
+  recorded: torch-body geometries at uneven splits carry a
+  deterministic compiled-reduction difference of about 6e-4
+  max-relative between device counts, isolated by ablation to
+  torch.compile and absent from the Triton geometries.  The record is
+  `multigpu_findings.md` §1.16 and the padding note's P5 section.
+- **Increment 5, step 2**: COMPLETE.  The full floors refresh (mg16,
+  job 15304592) re-measured the four existing rows — all unchanged —
+  and probed the denoiser family at the 512-, 768- and 1024-class
+  cells.  Sharded denoising lost everywhere, 0.44x to 0.65x, so both
+  denoiser rows are sentinels.  The mechanism is in the absolute
+  times: a three-iteration denoise of a billion voxels takes 2.2
+  seconds on one H100, so the per-subset host syncs dominate and a
+  split has nothing to amortize.  The record is `multigpu_findings.md`
+  §1.17.
+- **Increment 5 follow-through**: COMPLETE.  The measured rows were
+  reviewed (arm validity, spreads, mechanism, and agreement of the
+  four re-measured rows with the 2026-08-13 table) and pasted with
+  hand-written notes; the re-bless cleared the three drifted
+  cost-input hashes with a real measurement behind it;
+  `QGGMRFDenoiser` declares `_floor_family = 'denoiser'`; the script's
+  `UNTABLED_FAMILIES` is empty again.
+- **Increment 5, step 3**: COMPLETE.  `denoise` calls
+  `self._apply_device_policy(workload='denoise', init_recon=init_image)`
+  before it places the image, and the device report moved after the
+  call.  The call needed a sizing rule inside the policy, not just one
+  line.  The policy priced every candidate as a full `recon`, and a
+  recon plan on a projector-less denoiser raises.  The policy now
+  prices the largest workload the model can ever run, which is
+  `'denoise'` for a denoiser and `'recon'` for everything else, at
+  six sites including the calibration builds.  Six new tests cover the settle, the
+  denoiser-plan pricing, the sigma_noise recompile interaction, the
+  explicit override, the calibration mode, and the sentinel floors
+  holding an automatic denoiser at one device.  The local suite is
+  green at 589 passed.
 
 ## 10. Testing
 
