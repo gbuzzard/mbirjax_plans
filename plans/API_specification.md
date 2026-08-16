@@ -1,4 +1,4 @@
-# TOP-LEVEL OVERVIEW
+# OVERVIEW
 
 ## Recon-related functions
 
@@ -25,7 +25,7 @@ Scalars returned to users are python floats (note compute_scaling_factor returns
 Internal pre-processing:  sinograms are sharded by view across all devices and processed in parallel. 
 
 
-# MORE DETAILED DESCRIPTIONS
+# DETAILED DESCRIPTIONS
 
 # Recon-related functions
 
