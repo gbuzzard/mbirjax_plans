@@ -175,7 +175,8 @@ stale, not wrong when written.
 
 `sum_band_to_owner` now forms the running total for a band on the
 slice-owner and adds each arriving partial one bounded row slab at a
-time.  A slab is at most `REDUCE_SLAB_BYTES`, which is 64 MiB.  At the
+time.  A slab is at most `REDUCE_SLAB_BYTES`, 64 MiB when this note
+was computed and 256 MiB since the 2026-08-17 sweep.  At the
 widest instant the owner holds its shard-sized output, one band-sized
 partial of its own that the driver keeps alive across the reduce, and
 one slab per peer.  At the default band, which is the whole shard,

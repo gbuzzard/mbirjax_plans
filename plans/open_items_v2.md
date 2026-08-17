@@ -122,8 +122,8 @@ the tiling work.
 * The verdicts are recorded in `two_k_design.md` §6 and
   multigpu_findings.md §1.20.
 
-**A4. OPEN, one ruling left: the default.  Sweep the forward
-pixel-batch size at large scale.**  The
+**A4. CLOSED 2026-08-17, by ruling.  Sweep the forward pixel-batch
+size at large scale.**  The
 default stays at 8192 deliberately: the sweep that favored 16384 to
 32768 (by 4 to 15 percent) ran at the 1024 class and never bracketed
 the optimum, and the batch's cross-device transient grows with the
@@ -137,8 +137,10 @@ remains:**
   2 to 3 percent, so the knee is bracketed at or just above 32768.
 * Memory does not constrain the choice: the transferred cylinders
   stay under 1.5 GiB at the largest batch.
-* Remains: Greg's ruling on moving the default to 32768, a reviewed
-  change that re-anchors the affected nightly rows.
+* Ruled (Greg, 2026-08-17): the default moved to 32768.  The change
+  is staged in mbirtorch with the sweep recorded in the constant's
+  comment and the suite green; the nightly re-anchors on the next
+  measured tip.
 
 **A5. OPEN, back burner.  Two-dimensional tiling and the cache
 directions.**  Blocking
@@ -281,8 +283,12 @@ case:**
   automatic multiaxis reconstruction there widens into a slowdown.
 * Translation reads flat from two to four devices, so the reuse is
   harmless for it.
-* Remains: measure these geometries' own thresholds, or hold
-  multiaxis to two devices until then.  The decision is Greg's.
+* Ruled (Greg, 2026-08-17): multiaxis holds to two devices.  It now
+  declares its own floor family, whose four-device row is a sentinel
+  built on the measured 0.41x; the change is staged in mbirtorch.
+  Translation keeps the parallel floors, where the reuse is harmless.
+* Remains: measure the family's own thresholds, which replaces the
+  carried two-device row and the sentinel.
 
 **C3. The scan preprocessing pipeline's concurrency is unmeasured on
 GPUs.**  The multi-device path is correctness-gated only; whether it
@@ -300,9 +306,9 @@ against transfer cost; no sweep has run.
 **Update (2026-08-17, afternoon).  Measured; this can close:**
 * The whole 16-to-256 MiB range moves the back projection by 0.8
   percent at the 2048 class, outside the repeat spread but small.
-* 256 MiB is marginally best; the 64 MiB default is defensible; no
-  structural work is warranted.  The one open question is whether to
-  bump the constant, and it is cosmetic.
+* 256 MiB is marginally best, and no structural work is warranted.
+* Ruled (Greg, 2026-08-17): the constant moved to 256 MiB, staged in
+  mbirtorch with the measurement in its comment.
 
 **C5. OPEN, inputs accumulating for the next calibration pass.  The
 back-projection batch memory charge is conservative.**  The
