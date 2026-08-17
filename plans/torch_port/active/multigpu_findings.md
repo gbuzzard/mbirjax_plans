@@ -1047,6 +1047,87 @@ image can no longer fit on one device.  The losing ratio rises with size, so a
 ladder above a billion voxels may yet find an admission point;
 `largest_tested` records where this refresh stopped.
 
+### 1.18 The column gather wins on translation and multiaxis
+### (mg18, 2026-08-17)
+
+Measured 2026-08-17, job 15307729 on h014, 1 hour 34 minutes, on the
+synced 78b4f78 tree.  The rows are
+`plans/experiments/torch_port/rows/mg18_ab_h014_20260816_231137.jsonl`,
+and the run detail is in `mg18_column_gather_ab.md` beside the
+script.
+
+This is the measurement the forward-remedy record reserved for the
+two geometries without hand-written kernels.  Translation and
+multiaxis still run the banded multi-device forward, and the recorded
+rule is that a geometry switches to the column gather only on its own
+measurement.  mg18 compared the two drivers at each geometry's
+production cell, mg8's ma1024 and tct2k, at two and four devices,
+with values gated before timing.  No default was flipped: each arm
+forced its driver on its own model instance and recorded the driver
+the model reported.
+
+The reading is valid on the arm witnesses.  All 24 arms ran and none
+was refused.  Every arm realized its pinned count, bound torch bodies
+in both directions, and ran the driver it claimed.  Both cells split
+both sharded axes evenly at both counts.  The drift witnesses read
+0.0 percent on both geometries, and the warm-repeat floors read
+1.8e-6 on multiaxis and 3.2e-7 on translation.
+
+The values gate passed on every arm.  Every distance to the
+one-device reference sat between 9e-7 and 2.5e-5 against the 1e-3
+gate, inside the registered e-5-to-e-6 expectation.  The
+banded-to-gather distances at a fixed count read the same class, and
+the composed reconstructions agreed across drivers at 2.8e-6 to
+2.6e-5.
+
+The gather is faster everywhere measured.  The table gives the ratio
+of the banded median to the gather median at the shipped batch of
+8192; above 1.00 means the gather is faster.  The 32768-batch arms
+are in the rows.
+
+| geometry | reading | n=2 | n=4 |
+|---|---|---|---|
+| multiaxis | forward | 1.27x | 1.86x |
+| multiaxis | composed | 1.13x | 1.20x |
+| translation | forward | 1.86x | 25.4x |
+| translation | composed | 1.37x | 1.94x |
+
+Three further readings give the ratios their meaning.  First, the
+gather repairs the translation four-device forward outright.  The
+banded walk took 3.69 s where one device takes 0.36 s, and the
+gather takes 0.10 to 0.15 s, so under the gather this forward gains
+from added devices for the first time.  Second, the multiaxis
+forward now scales: 17.6 s at two devices and 9.0 s at four under
+the gather, against the banded walk's 22.3 and 16.6.  Third, the
+multiaxis composed anti-scaling is not the forward's.  The composed
+wall still rises from 394 s at two devices to 951 s at four with the
+forward fixed, so the rise lives in the back projection or the
+phases around it, which this change does not touch.
+
+Memory moved with the speed at the shipped batch.  The gather's
+per-device peaks sat below the banded walk's on every batch-8192
+arm, with the largest saving on the translation four-device forward,
+26.5 GiB to 10.6.  The 32768 batch raised the multiaxis four-device
+peak to 23.2 GiB against the banded walk's 11.8 and bought no speed
+over 8192 there, so the shipped 8192 default keeps its reasons.
+
+The recommendation is to switch both geometries' defaults to the
+column gather.  Translation wins at every count and its four-device
+pathology disappears; multiaxis wins at every count.  The flip is a
+reviewed change: it sets `column_gather_geometry = True` on the two
+classes, brings the parity suites along, and re-raises the question
+of these geometries' own widening floors, which today reuse
+parallel's (item C2) and were measured here to scale differently.
+The decision is Greg's.
+
+RULED (Greg, 2026-08-17): use the gather.  The flip landed the same
+day: both classes now declare `column_gather_geometry = True` with
+the measurement in their comments, the suite passes in all three
+environment states, the pinned banded-path calibration rows keep the
+form they were measured on, and the floors staleness machinery
+confirms no cost input moved.  The staged change awaits Greg's
+commit.  The C2 question stays open.
+
 ### 2.1 The torch-body charge (mg8)
 
 Measured 2026-08-10, job 15149052 on h014, on the verified 1a2deb0

@@ -64,14 +64,22 @@ campaign costs weeks.
 
 ## A. Large-scale reconstruction (2048-class and larger)
 
-**A1. The 2048-class design work has not started, and it waits on
-nothing.**  At (2048, 2016, 1984) the volume is 31.7 GB and the
-sinogram 32.8 GB, so single-device iterative reconstruction is
-impossible and this is a feasibility question, not a tuning question.
-The entry point is a capacity table computed from the corrected memory
-charges; the table picks the first tiling approach.
+**A1. Determine the memory needs and bottlenecks for 2048-class
+reconstructions on multiple GPUs.**  At (2048, 2016, 1984) no single
+GPU can hold a reconstruction, so the first question is which device
+counts can, and which memory term limits each count.  The deliverable
+is a capacity table computed from the library's memory ledger.
 *(open_items C1; multigpu_plan.md item 6; greg_notes.md the "2K+"
 group.)*
+**Update (2026-08-16, evening).  This completes the item:**
+* The capacity table is computed and opens
+  `torch_port/active/two_k_design.md`.
+* Three GPUs fit with little margin, and four or more fit
+  comfortably.
+* The bottleneck at every workable count is a set of six per-device
+  arrays whose sizes all fall with the device count.  No tiling is
+  needed for capacity.
+* The table is a model.  Validating it at the 2048 class is item A3.
 
 **A2. Restructure how partial back-projections are combined.**  When
 several GPUs back-project, one GPU collects and adds the partial
@@ -81,6 +89,16 @@ that scale; a tree-shaped or in-place combination is the one
 identified change that would let memory scale down with the device
 count.  Greg's top memory pick.
 *(open_items C2; greg_notes.md item 8; multigpu_findings.md §6.5.)*
+**Update (2026-08-16, evening).  The item is answered; one ruling
+remains:**
+* The combining step was restructured on 2026-08-11, after the notes
+  above were written.  Its cost now falls with the device count.
+* The capacity table shows the combining step is no longer the memory
+  ceiling at any count up to eight, so no further restructuring has a
+  capacity case.
+* Ruled (Greg, 2026-08-17): the landed restructure is accepted, and
+  this item is closed.  The slab-size sweep (C4) rides the 2048-class
+  baseline runs.
 
 **A3. Validate the memory estimate at the 2048 class.**  Every
 calibration so far ran at the 1024 class.  The first composed
@@ -114,17 +132,28 @@ pays at three or more.  Nobody owns finding out why, and no landed
 change addresses it.
 *(open_items E1; greg_notes.md item 7; multigpu_findings.md §6.2.)*
 
-**B2. The kernel-width puzzle.**  A projection-kernel launch covering
-a half-width block costs the same as one covering full width, so a
-narrow call wastes half its cost.  The mechanism is unknown
-(occupancy, launch overhead, and memory latency are the candidates),
-and the cheap discriminating run is specified but has never run:
-parallel beam on one device with the slice band forced to half width.
-The answer also decides how promising in-kernel sorted accumulation is
-(B3): launch-overhead-bound means sorting fixes nothing;
-collision-bound means sorting is the remedy aimed at the cause.
-*(open_items E2; greg_notes.md item 5 and the addendum;
-closed/forward_remedy_design.md §12.)*
+**B2. The kernel-width puzzle.**  A parallel projection-kernel launch
+at half width costs the same as one at full width, so a narrow call
+wastes half its cost.  The open question is why the kernel is less
+efficient at narrow widths, and the answer decides how promising
+in-kernel sorted accumulation (B3) is.
+*(multigpu_findings.md §1.9; closed/forward_remedy_design.md §12
+question 1 and §13.)*
+**Update (2026-08-16, evening).  The discriminating run is done; the
+mechanism question remains:**
+* The discriminating run this item asked for already ran, on
+  2026-08-10.  The sources written that night did not record it, so
+  this file first listed it as never run.
+* Its answer: the cost step comes from the kernel width, not from the
+  device count.  That answer led to the parallel column-gather
+  default that shipped on 2026-08-11.
+* The same data rules out launch overhead as the mechanism.  Grid
+  occupancy and memory collisions remain, and a profiler probe is
+  specified to separate them.
+* For B3: sorted accumulation is still a possible remedy, and its
+  value depends on the occupancy-versus-collision answer.
+* Remaining: the mechanism probe, in the kernel campaign after the
+  2048-class runs.
 
 **B3. In-kernel sorted or segmented accumulation.**  Sorting each
 call's detector writes so the scattered additions become ordered,
@@ -143,6 +172,22 @@ geometry switches only on its own measurement.  One two-run job per
 geometry would settle whether they get the same 1.2 to 1.6x the
 switch gave cone.
 *(open_items D2; greg_notes.md item 3.)*
+**Update (2026-08-17, early morning).  Measured; the switch awaits
+review:**
+* The comparison ran at both production cells, at two and four
+  devices.  Values passed everywhere, at the e-5 class against a
+  1e-3 gate.
+* The gather is faster everywhere measured.  Multiaxis: 1.3x to 1.9x
+  on the forward and 1.1x to 1.2x composed.  Translation: 1.9x to
+  38x on the forward and 1.4x to 1.9x composed.  At four devices the
+  banded translation forward ran ten times slower than one device,
+  and the gather removes that pathology.
+* Memory fell too at the shipped batch, most at the translation
+  four-device forward (26.5 GiB down to 10.6).
+* Ruled (Greg, 2026-08-17): use the gather.  The flip is implemented
+  and staged in mbirtorch, with the suite green and the parity tests
+  extended; it awaits Greg's commit.  The floors question (C2) stays
+  open.  → multigpu_findings.md §1.18.
 
 ## C. Measurement and calibration gaps
 
@@ -428,6 +473,13 @@ the pointer is to the closing record.
   second bullet): superseded by the ruling that data crosses from
   generation to reconstruction through host memory.  →
   `closed/entry_point_plan.md` §8, increment 7.
+* **B2's discriminating arm**: found on 2026-08-16 to have already
+  run on 2026-08-10.  The B2 entry above now records the answer, and
+  only the mechanism question remains.  → multigpu_findings.md §1.9.
+* **A2's memory premise**: the combining restructure landed on
+  2026-08-11, between the sources and this compilation.  The A2
+  entry above records the update.  →
+  `torch_port/active/two_k_design.md` §3.
 
 ## What this file does not cover
 

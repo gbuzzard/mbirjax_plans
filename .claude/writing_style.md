@@ -4,6 +4,11 @@ Goal: writing that is easy to parse on first read.  Optimize reader effort,
 not word count.  This style is inspired by Michael Alley's *The Craft of
 Scientific Writing*.
 
+Use ordinary, unambiguous words and simple sentence structure.  
+Avoid great detail unless it adds to actionable information. 
+If detail from a run might be useful, save it in comments in the 
+script or in a .md file with the same base name and directory as the script. 
+
 Where it applies.  Apply this style most strictly to durable records: findings
 pages, reports, figure captions, and plan documents.  Apply it equally to the
 summary that closes a chain of work — the message that explains what was found

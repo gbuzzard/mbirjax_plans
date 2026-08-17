@@ -10,6 +10,26 @@ what is done onto what remains.  `multigpu_findings.md` is the live
 record of results; this plan remains the contract for terms,
 protocols, and triggers.
 
+## Banded-Walk vs Column Gather for Forward Projection
+
+Both drivers solve the same problem: a multi-device forward projection. The volume is split by slice, so each GPU owns a block of slices. The sinogram is split by view, so each GPU also owns a block of views. Every view depends on every slice, so voxel data must cross devices before any GPU can produce its views. The two drivers differ only in how that data moves and in what shape the projector is called.
+
+**The banded walk** visits the slice-owners one at a time. Each owner's slice band is copied to every view-owner, and each view-owner projects that band over its own views. With n devices, each view-owner therefore makes n calls, each covering all pixels but only a 1/n-thick band of slices.
+
+The cost problem is that a band call does not cost 1/n of a full call. For cone, translation, and multiaxis, one slice band projects onto many detector rows, so each band call pays costs that span the whole detector no matter how thin the band is. For parallel, the kernel runs about twice as efficiently on full-width blocks as on narrower ones, and the bands are narrow. Both effects make the per-call cost nearly flat while the call count grows with the device count. That is why the banded forward got slower as GPUs were added: multiaxis ran 347 s on one device and 1180 s on four, and the translation forward at four devices ran ten times slower than on one.
+
+**The column gather** walks the pixel axis instead. Each view-owner takes a batch of 8192 pixel columns, gathers those columns at full height from every slice-owner, and makes one call per batch that covers its views and the whole slice range. The next batch's gather is issued ahead of the current projection and moves on separate copy streams, so transfer hides behind compute.
+
+This wins because it splits the work along the axis where cost actually divides. Every call is full-height, so the kernel runs in its efficient regime and the detector-spanning fixed costs are paid once per batch rather than once per band. The resident transfer is three batch-sized cylinders, about 0.2 GiB at the 2048 class, instead of a full volume shard, so peak memory drops as well. Values are unchanged as an operator; only the float summation grouping moves, at the 1e-6 class.
+
+**Where the alternative is better or still needed.** On speed, no measured configuration favors the banded walk at more than one device, on any of the four geometries. But it is not dead code, for five reasons:
+
+- **The back projection still uses the banded structure.** The gather is a forward driver only. The back must reduce partial results onto slice-owners, which is a band-by-band combine, and no column form of it exists. So the "alternative" remains the shipped adjoint.
+- **Extremely tall volumes.** The gathered cylinder spans the whole slice axis, so its size grows with total slices and does not fall with the device count. The banded copy is one shard's band and does fall. At today's shapes this is 0.2 GiB against tens of GiB of headroom; at some hypothetical very long helical volume the pixel batch would have to shrink, and the band knob would be the cleaner memory lever.
+- **Tightest value reproducibility.** For parallel, the banded walk preserves the single-device summation structure exactly, so it sits nearer the one-device reference (about 3e-7 against the gather's 1.5e-6). Both are far inside every gate, but for order-sensitive debugging the banded path is the cleaner reference, which is one reason `forward_column_gather = False` and the environment variable were kept.
+- **Unmeasured platforms.** The comparison was measured on H100s. CPU multi-device is a correctness harness rather than a production path, so it was never timed, and this codebase has seen kernels whose CPU and GPU rankings reverse. If a CPU multi-device forward ever mattered, it would get its own measurement before trusting either driver there.
+- **A future geometry.** The base class still defaults to the banded walk, so a geometry added later runs it until it has been measured — the same rule translation and multiaxis just satisfied.
+
 ## 0. Where the campaign stands (2026-08-16)
 
 This campaign measured how mbirtorch reconstructions perform on one,
@@ -41,9 +61,10 @@ assigned by dependency rather than by start time.
    accumulation increments followed, and item 13 was re-gated and
    closed.  Findings §1.7 through §1.15 and
    `forward_remedy_design.md`.
-6. **The 2K design work.**  NOT STARTED.  Design the reconstruction
-   path for 2048-class problems, starting from the capacity table
-   computed with the corrected memory charges.
+6. **The 2K design work.**  STARTED 2026-08-16.  The capacity table
+   is computed and opens `two_k_design.md`.  Three devices fit with
+   little margin and four fit comfortably.  The combining-step ruling
+   in that note is with Greg, and the baseline runs follow it.
 7. **Close-out.**  PARTLY DONE.  The documentation pass and the
    refresh script's end-to-end proof have happened.  What remains is
    the cadence decision for the nightly's multi-GPU rows and the
