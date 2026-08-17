@@ -33,40 +33,41 @@ speed floors).
 
 ---
 
-## Suggested execution order for A and B
+## Suggested execution order (updated 2026-08-17, for the next session)
 
-The order below came out of a discussion with Greg on 2026-08-16.  The
-principle is cheap diagnostics and desk work first, expensive remedies
-last, and it cuts across the two categories.
+The 2026-08-16 list ran to completion in one day; its five steps and
+their outcomes are in the item entries below.  The principle stands:
+cheap diagnostics and desk work first, expensive remedies last.  The
+2048-class attribution is now in hand, and it points the expensive
+work at one place, the cone back projection.
 
-1. **A1, the capacity table.**  Desk work on charges already in the
-   memory ledger; nothing in B can invalidate it, and it decides
-   whether A2 is a feasibility prerequisite or an optimization.
-2. **B2's discriminating run, and B4.**  Nearly free on any cluster
-   session, and B2's answer compounds later.  Neither gates A.
-3. **A2, decided — and landed if the table confirms it binds — before
-   any baselines.**  The baselines should measure the memory structure
-   that will ship.
-4. **A3 and A4 together**: the first composed 2048-class runs, with
-   the batch sweep riding the same jobs, instrumented to read the back
-   projection's share of time.  That reading diagnoses B1 at the scale
-   that matters.
-5. **Only then B3, A5, and any B1 remedy**, gated on what the
-   baselines show.
+1. **Read the nightly.**  The batch default, the slab constant, the
+   multiaxis hold, and the banded-forward removal merge together, and
+   the first nightly on that tip is the free regression check on all
+   of them.
+2. **B1's attribution probe.**  One job inside the cone back
+   projection at the 2048 class: per-band call and kernel-grid
+   accounting, the workers against the combining step, so the remedy
+   design rests on measured shares rather than on the recorded
+   hypothesis.
+3. **The back-remedy design note.**  The forward remedy's pattern:
+   the candidate structures (a cylinder-transfer counterpart for the
+   back, a band-sized kernel grid, and sorted accumulation inside the
+   kernel, with the mg20 counters as inputs), the 2048-class
+   arithmetic, and the gates.  Desk work ending in a ruling request;
+   no implementation.
+4. **C2's measurement.**  Extend the floors refresh to multiaxis and
+   translation and replace the carried row and the sentinel with
+   measured thresholds.  This can share a cluster window with step 2.
+5. **B2's padding increment**, small and reviewed, with the back
+   kernel's width sensitivity measured alongside.
+6. **Riders as time allows**: the cross-framework re-anchor (C1,
+   now also stale for the batch default), the user-docs timing table
+   (F1), and the ledger calibration pass (C5).
 
-**Progress note (2026-08-17, evening):** steps 1 through 4 are done.
-Step 5 is scoped by the baseline readings: the kernel campaign starts
-at the cone back projection (B1), the width mechanism is closed (B2),
-and sorted accumulation (B3) points at the back.
-
-Three reasons the expensive B work waits.  The 1024-class evidence
-already refuted cache-residency effects at that size, so the
-kernel-interior bets need 2048-class attribution to justify them.
-B1's anomaly is specific to two devices, and memory forces 2048-class
-runs to four or more devices, so it may not bind at scale.  And the
-invalidation asymmetry favors baselines first: re-running baselines
-after a kernel change costs GPU-days, while a mistargeted kernel
-campaign costs weeks.
+The back-remedy implementation follows the ruling on step 3's note,
+not this list.  The device-policy test-helper repair runs as its own
+task and needs no step here.
 
 ## A. Large-scale reconstruction (2048-class and larger)
 
