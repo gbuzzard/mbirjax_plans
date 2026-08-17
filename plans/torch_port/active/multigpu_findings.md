@@ -1128,6 +1128,178 @@ form they were measured on, and the floors staleness machinery
 confirms no cost input moved.  The staged change awaits Greg's
 commit.  The C2 question stays open.
 
+### 1.19 The width mechanism is the compiler's divisibility
+### specialization (mg20, 2026-08-17)
+
+Measured 2026-08-17 in two jobs on one H100 each: 15316533 (h007, the
+timing leg) and 15316589 (the counter leg, after a path fix put
+Nsight Compute on the batch environment's PATH).  The rows are
+`plans/experiments/torch_port/rows/mg20_width_h007_20260817_092645.jsonl`
+and the second job's sibling; the run detail is in
+`mg20_width_mechanism.md` beside the script.
+
+This is the mechanism probe behind the kernel-width puzzle: why a
+parallel forward launch at width 504 costs twice per slice what a
+launch at width 1008 costs.  The probe varied one thing per arm.
+Alongside the four widths of the original discrimination, it ran a
+two-piece arm at widths 512 and 496, both divisible by 16 and
+together within 1.6 percent of 504's work; an arm at width 504 inside
+a 1008-wide allocation; and two strided arms doing 512 columns of
+work over row strides of 1008 and 2016, using the shipped kernel with
+a truncated launch grid.
+
+The reading is valid on the anchors.  The four original widths
+reproduced the earlier per-slice ratios to within 0.01 (2.02, 2.05,
+and 1.79 against 2.00, 2.04, and 1.81), every arm's values sat at
+5e-7 to 7e-7 against the full-width reference, and the timing spreads
+were below one percent.
+
+The mechanism is the compiler's divisibility-by-16 specialization of
+the kernel's width argument.  The evidence, each varied alone:
+
+| arm | width argument | divisible by 16 | per-slice vs width 1008 |
+|---|---|---|---|
+| w1008 | 1008 | yes | 1.00 |
+| w504 | 504 | no | 2.02 |
+| w512_496 | 512 and 496 | yes | 0.91 and 1.00 |
+| w504_alloc1008 | 504 | no | 2.02 |
+| w512_stride1008 | 1008 | yes | 1.00 |
+| w512_stride2016 | 2016 | yes | 1.01 |
+
+A width the compiler can prove divisible by 16 runs at full
+efficiency at any width tested, and a width it cannot runs at about
+half, wherever the data lives and whatever the allocation.  The
+contiguous arms launch the same total blocks across their pieces, so
+machine filling by block count cannot explain the step.
+
+The counters name the path the cost takes.  The unspecialized
+compilation uses more registers, which caps occupancy at 5 blocks per
+multiprocessor against the specialized 8, reading 60 percent against
+90.  The L2 hit rate is HIGHER at the narrow widths (90.7 against
+80.2 percent), so cache residency is innocent, and the earlier
+candidates are settled: not launch overhead, not occupancy as a
+block-count question, not memory layout, but register pressure and
+access width from the missing specialization.
+
+One correction to the earlier record rides along.  The
+"per launch" figures in §1.9 are means over a reconstruction's 680
+calls at four pixel counts, not costs of one full-pixel launch; the
+probe reproduced that mixture from its own pixel ladder.  Every
+per-slice ratio and every decision built on them is unchanged.
+
+The remedy this implies is recorded, not implemented: a call site
+that hands the kernel a width not divisible by 16 pays about two
+times, and padding the width argument to the next multiple of 16 is
+near free.  The production gather calls at the standard cells are
+already divisible (1008 and 2016), so this is a robustness increment
+for arbitrary user shapes, not a production speedup at today's cells.
+Whether the back kernel carries the same property is unmeasured.
+
+For the sorted-channel question the counters cut both ways, and they
+do not decide it.  The atomic write path generates 192 times the
+ideal L2 sector traffic at every width, which is the inefficiency
+sorting would attack; but the DRAM write traffic is already near one
+times the output slab, and the fast widths carry the same 192 without
+penalty, so the counters do not show the write path binding time at
+this kernel's operating point.  The question stays open, gated on the
+2048-class attribution and on the cache-effects reading Greg
+registered.
+
+### 1.20 The first 2048-class reconstructions: the ledger holds, the
+### batch knee brackets, and the cone back projection becomes the
+### target (mg19, 2026-08-17)
+
+Measured 2026-08-17, job 15314401 on h003, 3.3 hours on four H100s,
+on the flipped 7cd32ed tree.  The rows are
+`plans/experiments/torch_port/rows/mg19_baselines_h003_20260817_082830.jsonl`;
+the run detail is in `mg19_two_k_baselines.md` beside the script.
+These are the first composed reconstructions ever run at the
+2048-class cell, cone and parallel, eighteen arms.
+
+The reading is valid on the arm witnesses.  Every arm ran, every
+values leg passed (4.0e-6 to 9.6e-6 against a 1e-4 gate), the Triton
+kernels bound in both directions on every arm, and the repeat pairs
+put the forward-busy spread at 0.13 percent.  Both two-device arms
+were REFUSED by the memory preflight, which is the capacity table's
+two-device verdict confirmed on hardware.
+
+**The memory model validates at the 2048 class.**  Every
+modeled-over-measured ratio sits inside the (1.00, 1.30) band and
+none sits under the floor:
+
+| arm | ratios per device | modeled GiB | measured GiB |
+|---|---|---|---|
+| cone n=3 | 1.182 to 1.183 | 66.7 | 56.5 |
+| cone n=4 | 1.103 to 1.180 | 51.1 | 43.1 to 46.3 |
+| parallel n=3 | 1.182 to 1.183 | 66.7 | 56.4 |
+| parallel n=4 | 1.103 to 1.180 | 51.1 | 43.1 to 46.3 |
+
+The capacity table's verdicts therefore hold where they matter: two
+devices refuse, three devices fit and ran, four devices fit with
+room.
+
+**The component split, from the per-call device brackets.**  The
+walls below are the warm repeats where one exists; a starred wall is
+the first arm at its call shapes and carries compilation in its
+"other" column.
+
+| geometry | n | wall s | forward busy s | back busy s | other s | back share of wall |
+|---|---|---|---|---|---|---|
+| cone | 3 | 459* | 203 | 137 | 119* | 0.30 |
+| cone | 4 | 420 | 151 | 228 | 40 | 0.54 |
+| parallel | 3 | 299* | 193 | 32 | 75* | 0.11 |
+| parallel | 4 | 216 | 142 | 36 | 38 | 0.17 |
+
+Two attributions follow.  Parallel at production scale is
+forward-dominated, at about two thirds of the wall.  Cone at four
+devices is BACK-dominated, at more than half the wall, and the back
+projection's busy time RISES from 137 s at three devices to 228 s at
+four.  The two-device cone back anomaly of §6.2 is therefore not a
+two-device curiosity: the cone back projection anti-scales with the
+device count at the 2048 class, and it is now the largest single
+component of a production cone reconstruction.  A mechanism
+consistent with the numbers, recorded as a hypothesis: the banded
+back walks one band per slice-owner, each band call pays the cone
+kernel's full-detector-row grid, so total back grid work grows with
+the count — the same cost structure the forward had before the
+cylinder transfer replaced it.  The kernel campaign's first target is
+the cone back projection, and the sorted-accumulation question (B3)
+lands there, where the scatter is largest.
+
+**The pixel-batch sweep brackets its knee.**  Read on forward busy
+seconds, which carry almost no compilation:
+
+| batch | cone fwd busy s | parallel fwd busy s |
+|---|---|---|
+| 8192 (shipped) | 151.6 / 151.4 | 142.1 / 142.1 |
+| 16384 | 135.2 | 127.1 |
+| 32768 | 127.9 | 120.5 |
+| 65536 | 125.8 | 116.8 |
+
+Doubling from 8192 buys 11 percent, the next doubling 5 percent, and
+the last 2 to 3 percent, so the knee sits at or just above 32768.
+The transferred-cylinder residents stay under 1.5 GiB at 65536
+against 43-plus GiB peaks, so memory does not constrain the choice at
+this scale.  A recommendation is recorded: move the default to 32768,
+as a reviewed change that re-anchors the affected rows.  The 1024
+class measured the same direction (mg11), so one default serves both.
+
+**The combining-slab rider.**  Back-projection busy on the busiest
+device: 227.9 and 228.2 s at the shipped 64 MiB (spread 0.31 s),
+227.2 s at 16 MiB, 226.1 s at 256 MiB.  Both moves sit outside the
+repeat spread, so the slab size is measurable, and its whole range is
+0.8 percent of the back projection.  The open slab item can close on
+this reading: 256 MiB is marginally best, the default is defensible,
+and no structural work is warranted.
+
+One value note for the record.  The parallel three-against-four
+composed fingerprints read 2.9e-4 max-relative, while every
+same-count repeat reads under 9e-7 and cone's cross-count pairs read
+2.4e-6.  The three-device view split is uneven, and the compiled
+torch code around the projectors carries the documented
+reduction-order latitude there (§1.16), so the reading sits inside
+the 1e-3 envelope that property set.
+
 ### 2.1 The torch-body charge (mg8)
 
 Measured 2026-08-10, job 15149052 on h014, on the verified 1a2deb0

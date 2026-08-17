@@ -1,7 +1,7 @@
 # The 2048-class design note
 
-**Status: ACTIVE.  The combining-step ruling is in (§3.5, accepted);
-the 2048-class baseline runs are next (§5).**
+**Status: ACTIVE.  The combining-step ruling is in (§3.5, accepted),
+the baseline runs have run, and the table is validated (§6).**
 Opened 2026-08-16.  The capacity table in §2 was computed by
 `plans/experiments/torch_port/mg17_capacity_table.py`, job 15307591 on
 h001, on the synced 78b4f78 tree; the rows are
@@ -319,3 +319,23 @@ comparisons read against the repeated arm's spread.  A preflight
 refusal at three devices would itself be a model-edge finding: it is
 recorded, and only then may one repeat with the preflight skipped
 obtain the measured peak, with the skip on the row.
+
+## 6. What the baselines read (2026-08-17)
+
+The runs happened and the full record is findings §1.20.  The
+verdicts, one line each:
+
+* **The table is validated.**  Every 2048-class calibration ratio
+  sits between 1.10 and 1.19, inside the band and never under, and
+  both two-device arms were refused by the preflight as §2 predicts.
+* **The batch knee brackets at or just above 32768.**  Forward busy
+  falls 17 to 18 percent from batch 8192 to 65536, with the last
+  doubling worth 2 to 3 percent.  The recommendation is a reviewed
+  default change to 32768.
+* **The combining slab closes.**  Its whole 16-to-256 MiB range moves
+  the back projection by 0.8 percent; 256 MiB is marginally best and
+  the default is defensible.
+* **The next target is the cone back projection.**  It is more than
+  half of a four-device cone wall and its busy time rises from three
+  devices to four.  The kernel campaign starts there, and the
+  sorted-accumulation question moves there with it.
