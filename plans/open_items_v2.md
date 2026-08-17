@@ -1,6 +1,7 @@
-# Open items — 2026-08-16
+# Open items — v2
 
-**Compiled 2026-08-16** from three sources: `plans/open_items.md` (the
+**Compiled 2026-08-16, statuses updated 2026-08-17** from three
+sources: `plans/open_items.md` (the
 2026-08-11 compilation), `plans/current_plans.md`, and
 `plans/torch_port/active/greg_notes.md`.  Every item was cross-checked
 against the work that has landed since its source was written, so items
@@ -53,6 +54,11 @@ last, and it cuts across the two categories.
 5. **Only then B3, A5, and any B1 remedy**, gated on what the
    baselines show.
 
+**Progress note (2026-08-17, evening):** steps 1 through 4 are done.
+Step 5 is scoped by the baseline readings: the kernel campaign starts
+at the cone back projection (B1), the width mechanism is closed (B2),
+and sorted accumulation (B3) points at the back.
+
 Three reasons the expensive B work waits.  The 1024-class evidence
 already refuted cache-residency effects at that size, so the
 kernel-interior bets need 2048-class attribution to justify them.
@@ -64,8 +70,8 @@ campaign costs weeks.
 
 ## A. Large-scale reconstruction (2048-class and larger)
 
-**A1. Determine the memory needs and bottlenecks for 2048-class
-reconstructions on multiple GPUs.**  At (2048, 2016, 1984) no single
+**A1. CLOSED 2026-08-16.  Determine the memory needs and bottlenecks
+for 2048-class reconstructions on multiple GPUs.**  At (2048, 2016, 1984) no single
 GPU can hold a reconstruction, so the first question is which device
 counts can, and which memory term limits each count.  The deliverable
 is a capacity table computed from the library's memory ledger.
@@ -81,7 +87,8 @@ group.)*
   needed for capacity.
 * The table is a model.  Validating it at the 2048 class is item A3.
 
-**A2. Restructure how partial back-projections are combined.**  When
+**A2. CLOSED 2026-08-17, by ruling.  Restructure how partial
+back-projections are combined.**  When
 several GPUs back-project, one GPU collects and adds the partial
 results, holding about 37 GB at the 2048 class.  That cost does not
 fall as GPUs are added, which makes it the per-GPU memory ceiling at
@@ -100,21 +107,41 @@ remains:**
   this item is closed.  The slab-size sweep (C4) rides the 2048-class
   baseline runs.
 
-**A3. Validate the memory estimate at the 2048 class.**  Every
+**A3. CLOSED 2026-08-17.  Validate the memory estimate at the 2048
+class.**  Every
 calibration so far ran at the 1024 class.  The first composed
 2048-class runs both check the estimate where it matters and anchor
 the tiling work.
 *(open_items C4; greg_notes.md item 9.)*
+**Update (2026-08-17, afternoon).  This completes the item:**
+* The first 2048-class reconstructions ran, cone and parallel, at
+  three and four devices.  Every calibration ratio sits between 1.10
+  and 1.19, inside the band and never under the floor.
+* Both two-device arms were refused by the preflight, which is the
+  capacity table's two-device verdict confirmed on hardware.
+* The verdicts are recorded in `two_k_design.md` §6 and
+  multigpu_findings.md §1.20.
 
-**A4. Sweep the forward pixel-batch size at large scale.**  The
+**A4. OPEN, one ruling left: the default.  Sweep the forward
+pixel-batch size at large scale.**  The
 default stays at 8192 deliberately: the sweep that favored 16384 to
 32768 (by 4 to 15 percent) ran at the 1024 class and never bracketed
 the optimum, and the batch's cross-device transient grows with the
 slice count, so the large-scale sweep is the one that should set the
 default.
 *(open_items C3; greg_notes.md item 4; current_plans.md item 11.)*
+**Update (2026-08-17, afternoon).  Measured; the default ruling
+remains:**
+* The sweep ran at production scale.  Forward busy time falls 17 to
+  18 percent from batch 8192 to 65536, and the last doubling is worth
+  2 to 3 percent, so the knee is bracketed at or just above 32768.
+* Memory does not constrain the choice: the transferred cylinders
+  stay under 1.5 GiB at the largest batch.
+* Remains: Greg's ruling on moving the default to 32768, a reviewed
+  change that re-anchors the affected nightly rows.
 
-**A5. Two-dimensional tiling and the cache directions.**  Blocking
+**A5. OPEN, back burner.  Two-dimensional tiling and the cache
+directions.**  Blocking
 both axes of a call's working set so it stays resident in cache is the
 next idea after the one-dimensional pixel blocking that already
 landed.  The 1024-class measurements mostly refuted cache-residency
@@ -122,40 +149,63 @@ effects at that size, so the honest sequence is the 2048 baselines
 first; tiling is the main lever if those runs show cache-boundedness
 or a memory squeeze.  Phase-blocked accumulation is the entry-level
 version of the same idea.
+**Update (2026-08-17):** the baselines ran and found no memory
+squeeze at three or more devices, so tiling has no capacity case.
+The speed case now routes through the cone back projection (B1); this
+item stays behind the kernel campaign.
 *(open_items E3; greg_notes.md the closing addendum.)*
 
 ## B. Speed investigations at current sizes
 
-**B1. The cone back projection takes longer on two devices than on
-one.**  Its GPU time reads 30.3 s at two devices, and splitting only
+**B1. OPEN, the kernel campaign's first item.  The cone back
+projection takes longer on two devices than on one.**  Its GPU time reads 30.3 s at two devices, and splitting only
 pays at three or more.  Nobody owns finding out why, and no landed
 change addresses it.
 *(open_items E1; greg_notes.md item 7; multigpu_findings.md §6.2.)*
+**Update (2026-08-17, afternoon).  The anomaly generalizes, and this
+is now the top speed target:**
+* At the 2048 class the cone back projection's busy time RISES from
+  137 s at three devices to 228 s at four, and it is more than half
+  of a four-device cone wall.
+* A mechanism hypothesis is recorded: each band call pays the cone
+  back kernel's full-detector-row grid, one band per slice-owner, so
+  total back work grows with the device count — the cost structure
+  the forward had before the cylinder transfer replaced it.
+* Remains: design the back-projection counterpart of the cylinder
+  transfer, or a kernel-level fix, as the kernel campaign's first
+  item.  → multigpu_findings.md §1.20.
 
-**B2. The kernel-width puzzle.**  A parallel projection-kernel launch
+**B2. OPEN, one small increment left: pad widths to multiples of 16.
+The kernel-width puzzle.**  A parallel projection-kernel launch
 at half width costs the same as one at full width, so a narrow call
-wastes half its cost.  The open question is why the kernel is less
-efficient at narrow widths, and the answer decides how promising
-in-kernel sorted accumulation (B3) is.
-*(multigpu_findings.md §1.9; closed/forward_remedy_design.md §12
-question 1 and §13.)*
-**Update (2026-08-16, evening).  The discriminating run is done; the
-mechanism question remains:**
-* The discriminating run this item asked for already ran, on
-  2026-08-10.  The sources written that night did not record it, so
-  this file first listed it as never run.
-* Its answer: the cost step comes from the kernel width, not from the
-  device count.  That answer led to the parallel column-gather
-  default that shipped on 2026-08-11.
-* The same data rules out launch overhead as the mechanism.  Grid
-  occupancy and memory collisions remain, and a profiler probe is
-  specified to separate them.
-* For B3: sorted accumulation is still a possible remedy, and its
-  value depends on the occupancy-versus-collision answer.
-* Remaining: the mechanism probe, in the kernel campaign after the
-  2048-class runs.
+wastes half its cost.
+**Known (mechanism found 2026-08-17):**
+* The cost step comes from the kernel width, not from the device
+  count.  The column-gather remedy followed from that answer and has
+  shipped on all four geometries.
+* The mechanism is the compiler's divisibility-by-16 specialization
+  of the kernel's width argument.  Widths divisible by 16 run at full
+  efficiency wherever the data lives; widths that are not run at
+  about half, through higher register use that caps occupancy.
+  Cache residency, allocation size, and layout were each varied alone
+  and are innocent.
+* Production gather calls at the standard cells already use
+  divisible widths (1008 and 2016), so nothing ships slow today.
+**Remains:**
+* A small robustness increment: pad the width argument to the next
+  multiple of 16 at kernel entry, so arbitrary user shapes cannot pay
+  the two-times penalty.  Whether the back kernel carries the same
+  property is unmeasured.
+* For B3: the counters show the atomic write path generating 192
+  times the ideal L2 sector traffic at every width, which is what
+  sorting would attack, but the fast widths carry it without penalty
+  and DRAM writes are already near ideal.  B3 stays open, and the
+  2048-class attribution now points it at the cone BACK projection,
+  which dominates a four-device cone wall (B1's update).
+*(multigpu_findings.md §1.9, §1.19, and §1.20.)*
 
-**B3. In-kernel sorted or segmented accumulation.**  Sorting each
+**B3. OPEN, now pointed at the cone back kernel.  In-kernel sorted or
+segmented accumulation.**  Sorting each
 call's detector writes so the scattered additions become ordered,
 collision-free segments.  The cheap per-call form was re-tested on
 2026-08-11 and stands rejected: it wins over the plain torch scatter
@@ -165,7 +215,8 @@ belongs to a kernel campaign and is coupled to B2's answer.
 *(open_items E4; greg_notes.md item 6 and the addendum;
 current_plans.md item 13; multigpu_findings.md §1.14.)*
 
-**B4. Time translation and multi-axis on the newer forward path.**
+**B4. CLOSED 2026-08-17.  Time translation and multi-axis on the
+newer forward path.**
 Both geometries still run the older slice-band forward, whose cost
 structure is what made cone slow, and the recorded rule is that a
 geometry switches only on its own measurement.  One two-run job per
@@ -184,10 +235,28 @@ review:**
   and the gather removes that pathology.
 * Memory fell too at the shipped batch, most at the translation
   four-device forward (26.5 GiB down to 10.6).
-* Ruled (Greg, 2026-08-17): use the gather.  The flip is implemented
-  and staged in mbirtorch, with the suite green and the parity tests
-  extended; it awaits Greg's commit.  The floors question (C2) stays
-  open.  → multigpu_findings.md §1.18.
+* Ruled (Greg, 2026-08-17): use the gather.  The flip landed as
+  mbirtorch commit 7cd32ed, with the suite green and the parity tests
+  extended.  Today's manual nightly and the 2048-class baselines are
+  the confirmation runs.  The floors question (C2) stays open, and
+  the banded forward path's removal is B5.  →
+  multigpu_findings.md §1.18.
+
+**B5. OPEN, implementation done, merge left.  Remove the banded
+forward path, and rename the survivor to cylinder transfer.**  With the gather the measured
+winner on all four geometries, the banded multi-device forward is
+unused code behind a switch that CI must keep green and production
+never runs.  Greg ruled on 2026-08-17 to remove it.
+* Done: the removal and the cylinder-transfer rename are implemented,
+  gated (suite green, byte-identical defaults, grep-clean), and
+  committed on the worktree branch.  The confirmation runs passed:
+  the manual nightly on the flipped tree and the 2048-class
+  baselines.
+* Remains, for Greg: merge the branch, then run the floors re-bless
+  (one command; the staleness note names the inputs).  A pre-existing
+  device-policy test fragility is tracked as its own task chip.
+* Details: `torch_port/active/banded_forward_removal.md`, including
+  the old-to-new name mapping.
 
 ## C. Measurement and calibration gaps
 
@@ -198,11 +267,22 @@ change that made the column-gather forward projection the default.
 One run per geometry re-anchors them.
 *(open_items F1 and F2; active/execution_overview.md §5.2, §5.3.)*
 
-**C2. Translation and multi-axis have no device-count thresholds of
-their own.**  Neither has been timed above one device, so both reuse
-parallel-beam's thresholds, the most permissive measured set.  This is
-also an input to the threshold-simplification decision (E3).
+**C2. OPEN, a decision plus one measurement.  Translation and
+multi-axis have no device-count thresholds of their own.**  Both reuse parallel-beam's thresholds, the most
+permissive measured set.  This is also an input to the
+threshold-simplification decision (E3).
 *(open_items D1; multigpu_plan.md §0a item 9.)*
+**Update (2026-08-17).  Now measured, and the reuse is harmful in one
+case:**
+* The 2026-08-17 comparison timed both geometries at two and four
+  devices.  Multiaxis composed time still rises from two devices to
+  four (394 s to 951 s at its production cell, on the gather), while
+  parallel's thresholds admit four devices at that size.  An
+  automatic multiaxis reconstruction there widens into a slowdown.
+* Translation reads flat from two to four devices, so the reuse is
+  harmless for it.
+* Remains: measure these geometries' own thresholds, or hold
+  multiaxis to two devices until then.  The decision is Greg's.
 
 **C3. The scan preprocessing pipeline's concurrency is unmeasured on
 GPUs.**  The multi-device path is correctness-gated only; whether it
@@ -212,18 +292,27 @@ closed: splitting never paid.)
 *(open_items F5;
 closed/preprocess_sharding_translation_multiaxis.md:171.)*
 
-**C4. The combining-step slab size is a reasoned default, not a
-measured one.**  The 64 MiB slab used when moving partial results
+**C4. CLOSED 2026-08-17, measured.  The combining-step slab size was
+a reasoned default, not a measured one.**  The 64 MiB slab used when moving partial results
 between devices was chosen by an argument about launch overhead
 against transfer cost; no sweep has run.
 *(open_items F3; mbirtorch `_sharding.py`, REDUCE_SLAB_BYTES.)*
+**Update (2026-08-17, afternoon).  Measured; this can close:**
+* The whole 16-to-256 MiB range moves the back projection by 0.8
+  percent at the 2048 class, outside the repeat spread but small.
+* 256 MiB is marginally best; the 64 MiB default is defensible; no
+  structural work is warranted.  The one open question is whether to
+  bump the constant, and it is cosmetic.
 
-**C5. The back-projection batch memory charge is conservative.**  The
+**C5. OPEN, inputs accumulating for the next calibration pass.  The
+back-projection batch memory charge is conservative.**  The
 estimate counts four slabs where only three are live at once, about
 0.8 GB high at parallel 1024 on two devices.  The 2026-08-16 gate run
 added related readings: cone and parallel at three devices over-read
 the declared band's top (up to 1.417 against 1.30).  Both are inputs
-to the next calibration pass.
+to the next calibration pass.  The 2048-class runs added a third
+input: every ratio there sits between 1.10 and 1.19
+(multigpu_findings.md §1.20).
 *(open_items F7; closed/backloop_attribution.md §5;
 multigpu_findings.md §1.16.)*
 
