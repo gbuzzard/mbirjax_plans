@@ -920,6 +920,133 @@ to a person — is what carried the result.  Increment 6 closes with
 this measurement, and with it every implementation increment of the
 forward remedy is complete.
 
+### 1.16 The padding-removal gate on real GPUs, and a compiled-reduction
+### finding (mg15, mg15b, mg15c, mg15d, 2026-08-16)
+
+Measured 2026-08-16 in four jobs: 15304566 (h016, the gate), 15304687
+(h014, the reconstruction adjudication), 15304817 (h007, the adjoint
+matrix), and 15304868 (h014, the compile ablation).  The rows are the
+four `mg15*` files under `plans/experiments/torch_port/rows/`.  This
+is the padding-removal design note's P5: the local virtual-CPU tests
+had already verified the unpadded split's values, and these jobs add
+what a laptop cannot show — real multi-GPU runs at device counts that
+do not divide the sharded axes.
+
+The gate ran three legs at the 512-class cell.  The forward-projector
+leg passed on every arm: cone and parallel read 5.7e-7 and 5.4e-7 at
+three devices, where both axes split unevenly, and multiaxis read
+1.6e-5 at four, all against a 1e-4 gate.  The memory leg passed on
+every device of every arm, with the lowest modeled-over-measured
+ratio at 1.016.  The same job re-measured the one ledger-calibration
+arm whose split the removal changed, and the replacement `ma512_n4`
+row now sits in `tests/test_memory_ledger.py` with its provenance.
+Five readings sat above the 1.30 band top, all on the cone and
+parallel three-device arms, the largest at 1.417.  An over-charge is
+a warning rather than a failure, and it is recorded here as
+calibration context for the next ledger pass.
+
+One reading failed: the multiaxis four-device reconstruction differed
+from its single-device reference by 2.97e-2 against a 1e-2 backstop.
+Three probes adjudicated it.  mg15b added the adjoint instrument the
+gate lacked and read 6.29e-4 on a single back projection, with
+same-count reconstruction repeats at 2e-6 to 3.4e-6, decay to
+1.68e-2 at ten iterations, and no error concentration at the block
+boundaries.  mg15c then measured the full count matrix.  One and two
+devices agree at 7.0e-7.  Three devices, where the views split
+unevenly, and four devices, where the slices do, each sit near
+6.29e-4 from every other count, and the same-count repeats read
+exactly zero.  The same job ran the padded
+672edbd tree, which read 5.98e-7 at four devices, and the cone and
+parallel adjoints, which read 7.1e-7 and 6.9e-7 at their uneven
+splits.  These results localize the effect precisely: it is
+deterministic, it appears only on the torch-body geometry, only at
+uneven splits, and only on the unpadded tree.
+
+mg15d isolated the mechanism with one variable.  With
+`compile_mode='off'` the same uneven four-device adjoint reads
+5.98e-7; with the default compilation it reads 6.29e-4; and an
+eager-against-compiled comparison at a fixed count reads 6.41e-4.
+These results identify torch.compile as the mechanism.  They also
+give the scale its meaning: a compiled body's reductions contract in
+a different order than eager's, and that reordering moves this body's
+output by about 6e-4 max-relative at this size.  An even split compiles one static shape
+per device instance, and all such instances agree to 1e-7.  An uneven
+split hands each instance a second block length, the second
+compilation orders its reductions differently, and cross-count
+comparisons then read the compiled-against-compiled analogue of the
+eager-against-compiled difference.  The design note's own review
+predicted this compile path, as a speed cost; the value consequence
+is what these jobs measured.  Two of the probes' verdict lines misread their own data before a
+person read the numbers.  mg15b's boundary diagnostic would have
+convicted a correct split, because differences of any origin are
+seeded at the shard seams and spread inward with iterations.  mg15d's
+positive control chose the eager-against-compiled difference as its
+noise floor, and that difference has the same mechanism and magnitude
+as the effect under test.  Both corrections are written into the
+probes.
+
+The verdict on P5: the split is correct.  Data placement is verified
+by the matrix, the boundary profile, the padded-tree ablation, and an
+eager adjoint at 6e-7 on the very split in question.  What changed
+with the removal is numerical identity, not placement: torch-body
+geometries at uneven splits now carry a deterministic
+compiled-reduction difference of about 6e-4 max-relative (5.6e-6
+normalized RMS) between device counts, which amplifies to the 1e-2
+scale over three VCD iterations and decays with further iterations.
+The Triton geometries are unaffected.  Three remedies are recorded
+for a later decision: accept the property and gate cross-count
+torch-body comparisons at the 1e-3 full-pipeline level; mark the band
+dimension dynamic unconditionally so every count runs the same
+compiled code; or pad compile shapes alone.  The first is in effect
+implicitly, and no landed gate is threatened by it.
+
+Two harness lessons from these jobs are worth keeping.  A projection
+taken before a reconstruction runs on the model's construction
+placement, because the environment pin acts only through the device
+policy, so a value instrument must run after the settle or it
+compares a volume against itself.  And an adjudication probe needs a
+positive control plus a null reference measured in the same run,
+because three of this campaign's four diagnostic instruments would
+otherwise have printed confident wrong verdicts.
+
+### 1.17 The floors refresh seeds the denoiser family with sentinels
+### (mg16, 2026-08-16)
+
+Measured 2026-08-16, job 15304592 on h016, 31.7 minutes, on the same
+verified dba9652 tree as mg15.  The rows are
+`plans/experiments/torch_port/rows/mg16_floors_h016_20260816.jsonl`.
+This is the entry-point plan's increment 5 measurement: the full
+widening-floors refresh, extended with the denoiser family's first
+probes.  Running it after mg15's gate meant the split it measured on
+had just been verified on the same hardware.
+
+The four existing rows did not move.  Cone admits two devices at the
+512-class (1.29x) and four at the 1024-class (1.71x); parallel admits
+two at the 512-class (1.26x) and four at the 768-class (1.02x).
+These margins match the 2026-08-13 refresh within the run spreads.
+This stability was expected: every measured floor cell divides evenly
+at its measured counts, so the pad removal left those splits
+unchanged.  The refresh also re-blessed the three cost-input hashes
+the prerelease merge had drifted, with a real measurement behind the
+re-bless.
+
+The denoiser family produced no admission size at all.  Two devices
+lost at every probe cell, reading 0.58x at the 512-class and 0.65x at
+the 1024-class; four devices read 0.44x to 0.59x.  The spreads sat
+between 0.6 and 2.3 percent, and every arm realized its pinned count,
+so the readings are believed.  The mechanism is visible in the
+absolute times: a three-iteration denoise of a billion voxels takes
+2.2 seconds on one H100, so the sweep is dominated by its per-subset
+host synchronizations and a split has nothing to amortize.  Both rows
+therefore entered the table as sentinels, the first shipped sentinel
+rows since the mechanism was built.  The consequence is the design
+outcome of entry-point increment 5.  An automatic denoiser stays on
+one device at every measured size, and the run log names the sentinel
+when devices sit idle.  Only capacity widens the layout, when an
+image can no longer fit on one device.  The losing ratio rises with size, so a
+ladder above a billion voxels may yet find an admission point;
+`largest_tested` records where this refresh stopped.
+
 ### 2.1 The torch-body charge (mg8)
 
 Measured 2026-08-10, job 15149052 on h014, on the verified 1a2deb0

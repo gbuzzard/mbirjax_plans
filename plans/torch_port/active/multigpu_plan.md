@@ -10,214 +10,93 @@ what is done onto what remains.  `multigpu_findings.md` is the live
 record of results; this plan remains the contract for terms,
 protocols, and triggers.
 
-## 0. Where the campaign stands (2026-08-10)
+## 0. Where the campaign stands (2026-08-16)
 
-This section is the campaign's dashboard, added at the second
-checkpoint.  Steps 1 through 4 below are complete.  What remains is
-steps 5 through 7, plus the implementation of the ruling that spans the
-public surface.
+This campaign measured how mbirtorch reconstructions perform on one,
+two, and four GPUs, explained the gaps it found, and landed the
+improvements that were worth their cost.  Its main products are in the
+library: the automatic choice of how many GPUs a reconstruction uses,
+which combines measured problem-size thresholds with a memory
+estimate; a faster multi-device forward projection; and the scripts
+that re-measure the thresholds when the code behind them changes.
+Every measured result lives in `multigpu_findings.md`.  Items 1
+through 5 below are complete.  Items 6 through 9 remain, and §0a
+holds the detail useful for executing them.
 
-**Complete.**  Every increment through 3 is done, and every result
-set those increments produced has been read.  Every instrument the
-plan defines has run.  Increment 0 staged the harnesses and ran the
-local shard check.  Increment 1 delivered the gate readout and the
-ledger calibration, and its checkpoint was ruled and endorsed.
-Increment 2 delivered the value comparison and the crossover ladder,
-plus the two-probe shape addendum.  Increment 3 delivered the
-attribution sweeps for both charters.  Increment 4 has landed both of
-its library changes, the guard and the back-loop pair.
+**Remaining.**  The items keep their original numbers, which were
+assigned by dependency rather than by start time.
 
-The guard's design questions are all answered.  The metric is
-sinogram elements, by measurement.  The floors are per geometry and
-per count, under the floor_4 crossover rule.  No preference rule is
-needed.  The cadence decision is made.  The forward's flatness is
-attributed to kernel-busy time by the mg9 instrument, and the
-earlier attribution to count-invariant data movement is refuted
-(findings §1.7).  The back loop's over-charge is attributed to a
-phantom sum, and its one real avoidable residency is confirmed.
+1. **The guard, with its refresh script.**  COMPLETE.  The automatic
+   device count is held to measured per-geometry speed thresholds,
+   with a refresh script and a staleness check.  Findings §6.1.
+2. **The cone small-cell batch probe.**  COMPLETE.  The shrinking
+   batch costs only percent-scale time, so no knob changed.
+   Findings §1.6.
+3. **The back-loop pair.**  COMPLETE.  Both memory releases landed
+   and were verified on the cluster at all ten cells.  Findings §2.
+4. **The value-row read.**  COMPLETE.  The cross-framework value
+   comparison (goal 3) is ruled met.  Findings §4.
+5. **The forward remedy.**  COMPLETE.  The cone column gather became
+   the default after its gates passed, the copy-stream and fused
+   accumulation increments followed, and item 13 was re-gated and
+   closed.  Findings §1.7 through §1.15 and
+   `forward_remedy_design.md`.
+6. **The 2K design work.**  NOT STARTED.  Design the reconstruction
+   path for 2048-class problems, starting from the capacity table
+   computed with the corrected memory charges.
+7. **Close-out.**  PARTLY DONE.  The documentation pass and the
+   refresh script's end-to-end proof have happened.  What remains is
+   the cadence decision for the nightly's multi-GPU rows and the
+   campaign's entry in `current_plans.md`.
+8. **Move the floors refresh into the nightly.**  PLAN WRITTEN, NOT
+   IMPLEMENTED.  Re-measurement is a manual script-and-paste today;
+   `floors_refresh_automation.md` holds the plan for making the
+   nightly run it.
+9. **Simplify the floors once the dust settles.**  NOT STARTED.
+   Replace exact measured crossovers with fewer, coarser thresholds
+   that survive shape and hardware variation, at the possible expense
+   of some performance.
 
-One gap is provisionally accepted rather than open.  Cone 1024 above
-one device stays uncovered in the value comparison.  Findings §4
-prices the full comparable re-run at eleven GPU-hours and a partial
-one, production and jax arms only, at about 2.5 GPU-hours.  The
-acceptance was re-examined at step 4's read and confirmed
-(2026-08-10): every measured column sits at or below its registered
-class, so the tail is not load-bearing and no partial re-run is
-scheduled.
+One ruling recorded here in earlier versions is now implemented and
+closed: every public entry point that shards data ahead of a
+reconstruction takes the same automatic device policy.  The
+entry-point plan carried it out and closed on 2026-08-16
+(`entry_point_plan.md`).
 
-**Remaining.**  The seven steps keep their original numbers, which
-were assigned by dependency rather than by start time.  Four are
-complete, and each is reduced here to its result and a pointer.  Each
-of the other three opens with a summary, and its execution detail
-follows.  The seven steps are these:
+## 0a. Execution detail for the open items
 
-1. **The guard, with its refresh script.**  COMPLETE.  The guard
-   holds the automatic device count to measured speed floors, one per
-   geometry and per count, indexed on sinogram elements.  A refresh
-   script re-measures those floors, and a hash test fails as soon as
-   the projection code behind them changes.  The implementation was
-   hardened by panel review.  The guard, the script, and its 36 tests
-   are committed and pushed.  `mbirtorch/_widening_floors.py`
-   documents the floor family, the unlisted-geometry fallback, and
-   the maintenance rules, and findings §6.1 carries the ruling behind
-   them.
+**Item 6, the 2K design.**  The capacity table is the entry point: it
+computes per-device memory needs for 2048-class problems from the
+corrected charges, and the first tiling design is chosen from it.
 
-   The hash tripwire has already proved itself.  It fired on step 3's
-   edits, legitimately, and was acknowledged through the documented
-   `--bless --accept-stale` path.  The floors refresh has since run,
-   and the debt is cleared.  That refresh also tripped the cone n=2
-   sentinel, which findings §6.1 records.
+**Item 7, close-out.**  Two parts remain:
 
-   Two obligations outlive the implementation.  Every nightly row is
-   env-pinned and therefore bypasses the guard, so one unpinned
-   auto-assert nightly row is proposed to Greg separately.  An
-   unlisted geometry falls back to the parallel floors, which leaves
-   item 6's translation and multiaxis models still owing floors of
-   their own.
-2. **The cone small-cell batch probe.**  COMPLETE.  The probe
-   confirmed, at its registered magnitude, that cone's realized batch
-   falls with the device count wherever the transient budget is not
-   clamped at its ceiling.  The effect's measured cost is
-   percent-scale, so no knob change is warranted and the cone floors
-   stand.  The probe's call-count columns are an input to step 5.
-   The job is 15078246, and findings §1.6 carries it.
-3. **The back-loop pair.**  COMPLETE.  The code landed and is pushed.
-   The cluster verification then returned four green signatures: the
-   standing 2-GPU kernel gate at 12 of 12, post-release peaks clear of
-   the ledger floor at all ten cells, release savings sitting on their
-   registrations, and the residency signature read exactly as
-   registered.  The pre-release pad is retired, replaced by
-   closed-form terms that carry no fitted constant.  The step's last
-   task closed with that read.  §6.5's seam return condition is
-   measured-met at 1K, and the decision it raises is Greg's.
-   Findings §2 carries the read and the retired pad, findings §6.1
-   carries the floors refresh this step's edits triggered, and the
-   verification rows are archived in
-   `plans/experiments/torch_port/rows/`.
-4. **The value-row read.**  COMPLETE.  The measured rows were read
-   against their registered expectations, and goal 3 is ruled met.
-   The read closed the findings page's last OPEN section, confirmed
-   the cone 1024 tail's acceptance, and answered §8's cone depth-10
-   question in the negative.  Neither the partial re-run nor the
-   deferred deep-class arms are therefore scheduled.  Findings §4
-   carries it.
-5. **Charter A, step two.**  MEASURED; THE REMEDY IS CHOSEN AND NOT
-   YET IMPLEMENTED.  The remedy memo's validating instrument ran on
-   2026-08-10 (mg9) and answered the open mechanism question: the
-   forward's flat span is kernel-busy time, at 97 to 98 percent of
-   the per-device bracket at every count, while the band broadcast
-   moves at 197 to 257 GB/s and costs under 0.2 s.  The serialization
-   remedies A2 and A3 are declined, because their entire target is
-   under one second.  The per-launch remedy A4 is selected.  Its 2K
-   residency gate was later dissolved by the revision recorded below.
-   One new fact came with the reading: parallel at four devices
-   already halves the span and scales the reconstruction 1.70x, so
-   parallel's flatness is confined to the one-to-two leg, while cone
-   stays flat at every count.  Findings §1.7 and the memo's §7 carry
-   the read.
+* The cadence decision.  Report the per-night cost of the multi-GPU
+  nightly rows at both candidate cadences, using §1.4's refreshed
+  figures; the nightly's own trial run is the authoritative cost.
+  Confirm or revisit the full-cadence choice.
+* Update the campaign's entry in `current_plans.md` (item 3).
 
-   The remaining work follows.  The design note was written, the mg10
-   sweep measured both shapes the same night, and the checkpoint RULED
-   (Greg, 2026-08-10, evening): the cone column gather is adopted, the
-   parallel fixed band is declined as a time remedy and kept as an
-   undefaulted memory knob, and the value bar is the shipped parity
-   floor with the measured e-6 class registered as the expectation.
-   `forward_remedy_design.md` carries the design, the rulings, and
-   the increments, which are now the step's work plan: the flag-gated
-   cone column gather with its ledger terms and tests, the batch
-   sweep above 8192 on the real implementation, gather overlap, the
-   value gates, the default flip behind them, and the floors refresh
-   the change trips.  Then re-gate item 13 on post-remedy numbers,
-   with mbirjax's light per-call sorted form as the first probe.  The item-13 entry gate is recorded from §1.5's
-   device-span share, 28.9 s of the 40.0 s reconstruction at parallel
-   1024; §1.3's parallel host-bracket shares are superseded for gate
-   purposes, and cone's stand.  The cone back's rise at two devices
-   reproduced at 30.33 s of device span and keeps its own variant of
-   the choice.
-6. **The 2K design work.**  NOT STARTED, and it now waits on nothing,
-   because step 3's charge re-derivation is done.  Charter C's
-   capacity table computes from the corrected charges, and the table
-   picks the first tiling leg.
-7. **Close-out.**  NOT STARTED, and its scope is unchanged.
-   Close-out has these parts.  The item-13 entry gate's record is
-   finalized from §1.5's device-span share.  The `usr_multi_gpu.rst`
-   pass covers the automatic-policy prose, the floor family and its
-   override, the guard's log line, and the two stale pre-kernel
-   numbers.  `current_plans.md` item 3 updates.  The refresh script
-   runs once end to end, which proves the mechanism.  The floors
-   refresh that cleared step 1's stale-hash debt has since run end to
-   end, and it is the candidate for that proof.  The cadence close-out
-   reports the refreshed per-night cost at both cadences from §1.4,
-   and the full-cadence decision is confirmed or revisited; the
-   nightly's own trial remains the authoritative figure.
+**Item 8, the nightly refresh.**  Two notes:
 
-8. **Move the floors refresh into the nightly.**  NOT STARTED.  The
-   refresh workflow is manual today: a hand-run script on a four-GPU
-   node and a paste into the floors module.  The automatic staleness
-   note is the only pressure in the meantime.  The step moves
-   re-measurement to the nightly, which detects cost-code drift, runs
-   the refresh in its four-GPU window, and publishes the paste-ready
-   table, with automatic landing as a later option once trusted.
-   This needs a short plan of its own, coordinated with the nightly's
-   owner (Greg's direction, 2026-08-10).
+* The plan is `floors_refresh_automation.md`.  It needs coordination
+  with the nightly's owner before implementation (Greg's direction,
+  2026-08-10).
+* A related standing proposal: one nightly row that does not pin its
+  device count and asserts the automatic choice.  Every current row
+  pins, so the automatic path is never exercised by the nightly.
 
-9. **Simplify the floors once the dust settles.**  NOT STARTED.  The
-   floors are measured at specific shapes, one GPU model, and one run
-   configuration, and that precision is fragile (Greg's concern,
-   2026-08-10).  After the tuning work lands, this step revisits the
-   approach with simplicity and robustness as the goals, at the
-   possible expense of some performance.  Fewer and coarser
-   thresholds that survive shape and hardware variation are preferred
-   to exact crossovers that do not.
+**Item 9, the simplification.**  Three inputs to the decision:
 
-**One ruling spans the public surface.**  It is recorded here rather
-than inside a step, because it outgrew the step that raised it.
-Greg's question of 2026-08-10 started at `direct_recon`.  A
-standalone `direct_recon` call never takes the automatic choice at
-all, because the policy's one call site is the vcd entry, so such a
-call neither widens nor meets the guard or the preflight.  The ruling
-is uniformity, and Greg broadened it the same day.  It now covers
-every public-facing entry that starts sharding in preparation for a
-reconstruction, of which `fbp_recon`, `fdk_recon`, preprocessing, and
-data generation are examples rather than the whole set.  Each such
-entry gets the same policy call, the same floors, and the same
-full-recon ledger plan, with no entry-specific tuning.
-
-One policy means one count.  The count chosen at a standalone entry
-is the count the follow-up reconstruction would choose, so an
-entry-then-recon sequence never re-shards between the calls.
-
-Two costs are accepted.  Near a knee, a standalone entry may run a
-count tuned for the composed run, worth a few percent of its small
-share of the time.  At extreme capacity, a standalone entry inherits
-the full-recon memory requirement and can refuse loudly where an
-entry-specific plan would have fit.  The preflight message's remedies
-and `configure_devices` are the escape.
-
-Implementation waits on a systematic list.  That list enumerates
-every public-facing entry the ruling covers, and it is being built
-before any code moves.  Five incoming prerelease commits port sharded
-cases of exactly this surface, covering preprocessing, the denoiser,
-export, and plastic-metal.  Each of the five is reviewed against this
-ruling.  The work then lands as its own reviewed change.
-
-The charter is `current_plans.md` item 3, and it sets four goals: the
-full n=1/2/4 gate readout with the repaired kernels; the attribution
-and tuning of any gap; the deferred cross-framework value comparison;
-and the forward-attribution number that gates item 13.  The campaign
-also owes two decisions.  The first is a work-size guard for the
-automatic widening path.  The second is the cadence of the nightly's
-n>1 rows.
-
-Five records are prior art.  The n=1 composed baselines and the
-arm-check discipline are in `kernel_batching_findings.md`.  The
-widening rule, the ledger, and the closing rulings are in
-`device_policy_design.md`, with the measurements in
-`device_policy_findings.md`.  The forward-kernel repair and the
-standing kernel-times-sharding gate are in
-`kernel_sharding_findings.md`.  The shared-sinogram value protocol is
-in `phase5_findings.md`.  The pre-kernel multi-device measurements are
-in `phase4_findings.md`.
+* The concern (Greg, 2026-08-10): the thresholds are measured at
+  specific shapes, one GPU model, and one run configuration, and that
+  precision is fragile.
+* The preference: fewer and coarser thresholds that survive shape and
+  hardware variation, over exact crossovers that do not.
+* Coverage today: translation and multi-axis parallel reuse the
+  parallel-beam thresholds; the denoiser's own rows (measured
+  2026-08-16) found no size at which splitting pays, so they hold it
+  to one device.
 
 **Terms.**  A CELL is one (geometry, sinogram size) coordinate.  The
 GATE CELLS are parallel and cone at (512, 448, 384) and

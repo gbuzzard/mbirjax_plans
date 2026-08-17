@@ -109,11 +109,10 @@ documentation site; the link was removed with the other old-package
 references.  Proposal: copy the derivation into this package's documentation,
 or restore a citation.  Waiting on Charlie's decision.
 
-**Issue 5: `denoise` does not yet join the automatic GPU choice.**
-The denoiser's memory model exists, but `denoise` never calls the device
-policy, so it runs on one device unless the caller names devices with
-`configure_devices`.  Proposal: measure the denoiser's speed thresholds and
-add the policy call (entry_point_plan.md, increment 5, step 3).
+**Issue 5 (FIXED 2026-08-16): `denoise` does not yet join the automatic GPU choice.**
+The thresholds were measured (both are sentinels: splitting never paid up to
+a billion voxels) and `denoise` now calls the device policy
+(entry_point_plan.md §9.9).
 
 **Issue 6: two helpers can refuse a problem they could handle.**
 `prepare_sino_for_devices` and `compute_hessian_diagonal` check memory
