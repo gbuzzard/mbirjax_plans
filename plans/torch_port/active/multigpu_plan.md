@@ -22,13 +22,9 @@ The cost problem is that a band call does not cost 1/n of a full call. For cone,
 
 This wins because it splits the work along the axis where cost actually divides. Every call is full-height, so the kernel runs in its efficient regime and the detector-spanning fixed costs are paid once per batch rather than once per band. The resident transfer is three batch-sized cylinders, about 0.2 GiB at the 2048 class, instead of a full volume shard, so peak memory drops as well. Values are unchanged as an operator; only the float summation grouping moves, at the 1e-6 class.
 
-**Where the alternative is better or still needed.** On speed, no measured configuration favors the banded walk at more than one device, on any of the four geometries. But it is not dead code, for five reasons:
+**Where the alternative is better or still needed.** 
 
 - **The back projection still uses the banded structure.** The gather is a forward driver only. The back must reduce partial results onto slice-owners, which is a band-by-band combine, and no column form of it exists. So the "alternative" remains the shipped adjoint.
-- **Extremely tall volumes.** The gathered cylinder spans the whole slice axis, so its size grows with total slices and does not fall with the device count. The banded copy is one shard's band and does fall. At today's shapes this is 0.2 GiB against tens of GiB of headroom; at some hypothetical very long helical volume the pixel batch would have to shrink, and the band knob would be the cleaner memory lever.
-- **Tightest value reproducibility.** For parallel, the banded walk preserves the single-device summation structure exactly, so it sits nearer the one-device reference (about 3e-7 against the gather's 1.5e-6). Both are far inside every gate, but for order-sensitive debugging the banded path is the cleaner reference, which is one reason `forward_column_gather = False` and the environment variable were kept.
-- **Unmeasured platforms.** The comparison was measured on H100s. CPU multi-device is a correctness harness rather than a production path, so it was never timed, and this codebase has seen kernels whose CPU and GPU rankings reverse. If a CPU multi-device forward ever mattered, it would get its own measurement before trusting either driver there.
-- **A future geometry.** The base class still defaults to the banded walk, so a geometry added later runs it until it has been measured — the same rule translation and multiaxis just satisfied.
 
 ## 0. Where the campaign stands (2026-08-16)
 
