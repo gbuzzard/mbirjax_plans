@@ -1205,6 +1205,14 @@ this kernel's operating point.  The question stays open, gated on the
 2048-class attribution and on the cache-effects reading Greg
 registered.
 
+CORRECTION (2026-08-18, mg28, §1.26): the "192 times the ideal" was
+a pricing error.  The formula omitted the launch's view axis, so the
+ideal was 128 times too small; the corrected ratio, measured
+directly, is 1.50.  The write path was never wasteful, and the
+paragraph's conclusion that it does not bind survives strengthened.
+The sorted-channel question is settled by §1.26: the kernel is
+load-bound on the per-view values reload, not write-bound.
+
 ### 1.20 The first 2048-class reconstructions: the ledger holds, the
 ### batch knee brackets, and the cone back projection becomes the
 ### target (mg19, 2026-08-17)
@@ -1622,6 +1630,139 @@ Greg's ruling, and he ruled the same day: B3 is closed, with the
 register-pressure retune recorded as the only measured headroom and
 not scheduled, and with the standing note that a performance item
 closed this way can rise again after further refactoring.
+
+### 1.25 The floors refresh on the padded tree: one cone floor drops
+### a class, and the multiaxis window appears (mg26, 2026-08-18)
+
+Measured 2026-08-18, job 15342578 on h009, 2 hours 57 minutes on four
+H100s, on the padded 64dedb8 tree.  The run detail is in
+`mg26_floors.md` beside the sbatch; the refreshed rows are pasted
+into `mbirtorch/_widening_floors.py` with current hashes and
+checksum, and the floors test passes on them.
+
+The movements match the band arithmetic stated before the run.  The
+padding changes a projection's cost only where a count produces a
+band not divisible by 16, so only specific cone and parallel cells
+could move, and the sentinel families could not.  That is what the
+run read.  Cone n=4 is the one floor that moved: its 768-class cell
+ran a non-divisible band 168 before the padding and read 0.87x, and
+padded it reads 1.14x, so the floor drops from the 1024-class to the
+768-class.  Cone n=2's losing cell rose from 0.76x to 0.87x without
+flipping, parallel's rows reproduced with a slightly widened n=4
+margin (1.06x, still the table's thinnest admission), and the
+multiaxis, translation, and denoiser sentinels reproduced within run
+noise.
+
+One reading is new rather than moved, and it worsens B6.  The
+refresh measured multiaxis n=2 at the 1024-class for the first time,
+and it LOSES at 0.80x -- above the 768-class cell that wins at
+1.46x.  The two-device multiaxis win is therefore a WINDOW in
+problem size, not a threshold, and a floor cannot express that: the
+pasted floor admits two devices at the 1024-class into a measured 20
+percent slowdown.  The row's note carries the warning, and the
+coarsening proposal asks whether the row should hold the family to
+one device until B6 finds the mechanism.
+
+The refresh also evidenced the family-scoped mode the coarsening
+proposal drafts.  `--bless` named the cost inputs that moved since
+mg22 as `triton_cone.py` and `triton_parallel.py` alone, which is
+the padding's exact footprint: a scoped refresh of cone and parallel
+would have measured everything this run's rows moved, at about a
+third of its 12 GPU-hours.
+
+### 1.26 The parallel forward counter run: load-bound on the
+### per-view values reload, and a correction to §1.19's write-path
+### pricing (mg28, 2026-08-18)
+
+Measured 2026-08-18, job 15344936 on h001, one H100, 78 seconds of
+wall, on the padded 64dedb8 tree.  The rows are
+`plans/experiments/torch_port/rows/mg28_pfwd_counters_h001_20260818_154504.jsonl`;
+the run detail is in `mg28_pfwd_counters.md` beside the script.
+This is B7's instrument, ordered by Greg the same day: mg25's
+counter harness pointed at the parallel forward kernel at the
+production width 1008, at the full pixel mask and at the 12,051-pixel
+subset the production schedule calls most often.
+
+The reading is valid on its anchor.  The timing leg reproduced
+mg20's full-pixel launch at 1.01x (864.5 ms against the recorded
+859.1), and both profiled variants collected the full 21-metric set
+on the first attempt.  The two variants read the same intensities,
+so the story holds at production granularity.
+
+**The kernel is load-bound on the per-view reload of the values
+block.**  Memory throughput reads 52 percent of speed of light
+against SM's 16, with 38 warps stalled on a long scoreboard per
+issue-active cycle -- against the cone back kernel's 0.5.  The load
+path's traffic names the mechanism: DRAM read is 130 times the
+values block's bytes per launch, which is the block re-fetched once
+per view of the 128-view batch (the 3.1 GB block cannot stay
+resident in a 50 MB L2 across concurrent programs), and the L1 load
+hit rate is 16 percent against the back kernel's 91.  The kernel's
+own docstring names this trade and the remedy shape: the values tile
+does not depend on the view, so moving the view axis from the grid
+into an in-program loop reads each tile once instead of once per
+view.  The counters point at exactly that specialization.
+
+**The atomic write path is nearly coalesced, and §1.19's "192x" was
+a pricing error.**  The atomic-path sectors read exactly 1.50 times
+the one-sector-per-eight-adds ideal at both variants.  mg20's
+write-path table priced the ideal from taps x pixels x width,
+omitting the launch's view axis; the issued count is view_batch
+times larger, and 192 divided by the 128-view batch is the 1.50
+measured here.  §1.19's conclusion that the write path was not
+binding survives the correction and is strengthened by it: the
+scatter the sorted-channel idea would reorder is already within 50
+percent of coalesced, DRAM write is 1.0x to 1.05x the output slab,
+and sectors per request read 3.95 against the coalesced 4.  What
+does not survive is the "192 times the ideal" characterization; the
+write path was never wasteful, only priced against the wrong
+denominator.
+
+Two consequences follow.  First, mbirjax's segmented-accumulation
+design difference is NOT where the parallel gap lives on the torch
+side: the write path has almost nothing to give.  The gap's measured
+mechanism is the values reload on the load path, and the candidate
+remedy is the view-loop respecialization of the kernel's grid, a
+kernel-campaign increment with a measured target (memory throughput
+at 52 percent driven by a 130x re-read that the loop removes by
+construction).  Second, the occupancy story is the reverse of the
+back kernel's: 89.5 percent achieved with 26 registers per thread,
+so there is no register headroom to chase here, and the stall
+profile says latency, not residency, is the cost.  The disposition
+-- whether to open the increment -- is Greg's; nothing is
+implemented or scheduled by this run.
+
+### Further plain-language explanation:
+
+### What this kernel does
+
+A forward projection takes the volume's voxel values and adds each voxel's contribution into the sinogram, view by view. For the 1024-class problem, the input is a big table of voxel values — 771,240 pixel columns × 1008 slices, about 3.1 GB — and one "launch" of the kernel processes 128 views at once. The GPU does this by creating tens of thousands of small independent work units. Today, each work unit is assigned one small tile of the input **and one specific view**: it reads its tile of voxel values, computes the geometry weights for its view, and adds the results into that view's sinogram.
+
+#### What the measurements say, in plain terms
+
+**The arithmetic units are idle; the memory system is the busy resource.** A GPU has two separate capacities: how fast it can do arithmetic, and how fast it can move data. During this kernel, the arithmetic units run at 16% of what they could do, while the data-moving machinery runs at about half of its capacity. Compare the cone back kernel we profiled this morning: 72% arithmetic. This kernel is not limited by math.
+
+**The threads spend their time waiting for data.** GPUs tolerate slow memory by keeping many thread groups ready, so while one group waits for its data, another computes. The profiler counts how many groups are parked waiting at any moment. In the back kernel that count was about 0.5 — essentially nobody waiting. Here it is 38. Nearly every thread group is standing in line for data almost all the time.
+
+**The data they wait for is data the kernel already read — 129 times before.** This is the decisive number. One launch reads 377 GB from the GPU's main memory, but the input table is only 3.1 GB. The same table is being fetched about 130 times per launch — essentially **once per view**. The reason is cache size: the GPU has about 50 MB of fast on-chip cache, which cannot hold a 3.1 GB table. So by the time the work units for view 2 want the table, view 1's traffic has already pushed it out, and everything comes from main memory again. Each processor's small private cache confirms it: only 16% of requests find their data already nearby (the back kernel: 91%).
+
+**The writes are fine, and the old record saying otherwise was an arithmetic mistake.** When many threads add into the same sinogram, they use a collision-safe add. Memory moves in fixed 32-byte packets, and a perfectly organized writer puts 8 useful numbers in every packet it touches. This kernel's writes use packets at two-thirds efficiency — 1.5 packets where a perfect writer would use 1. That is close to ideal. The August 17 record said the writes were "192× wasteful"; that number came from dividing the measured packet count by a baseline that forgot the launch does its work 128 times, once per view. 192 ÷ 128 = 1.5 — the writes were always nearly optimal. This matters because mbirjax's clever sorted-write design attacks exactly this write path, and our write path has almost nothing left to give. The gap is not there.
+
+So the one-sentence diagnosis: **the kernel re-reads its 3-GB input from slow memory once per view, 128 times per launch, and its threads spend most of their time waiting on those repeated reads.**
+
+#### The proposed remedy
+
+The fix exploits a symmetry specific to parallel-beam geometry: **a voxel's value does not depend on the view.** (Its detector position changes per view; the value itself doesn't.) The kernel's author left a note in the code anticipating exactly this: whether to exploit it "depends on whether the kernel is atomic-bound or load-bound, which is a measurement, not an argument." mg28 is that measurement, and it came back load-bound.
+
+The change: instead of creating a work unit per (tile, view) — which is what forces every view to re-read the table — create a work unit per tile only, and have each unit **loop over the 128 views internally**. The unit reads its tile of voxel values once, then for each view computes that view's weights and adds into that view's sinogram. The input is then read once per launch instead of once per view: the 377 GB of main-memory traffic becomes roughly 3 GB, plus the unchanged writes.
+
+What this does *not* change: the arithmetic is identical, the write pattern and count are identical, and the results should be identical to float precision. What it risks: each work unit now does 128× more work, so there are 128× fewer of them — but the arithmetic says ~48,000 units remain, and the GPU only needs about a thousand to be fully occupied, so parallelism survives comfortably. The genuine design work is deciding where the tile lives during the view loop (in the unit's registers if the tile is made small enough, otherwise in the near cache, which is still an on-chip re-read rather than a main-memory one) — that's ordinary kernel tuning, guided by the same counters.
+
+**What it's plausibly worth:** I won't promise a number — this is exactly the "measure, then specialize" the docstring ordered — but the arithmetic of the prize is simple. The forward is 29 s of the 40 s one-device wall, its dominant cost is the 130× redundant read traffic, and the remedy removes that redundancy by construction. If the forward merely halved, the wall would land near 26 s — which is mbirjax parity.
+
+One closing observation that makes the picture cohere: **cone beam cannot use this trick, and that's consistent with cone already matching mbirjax.** In cone geometry the slice a detector row sees *does* change with the view, so the cone forward's per-view re-reading is inherent to the physics, and both libraries pay it. Parallel beam has an exploitable invariance the current kernel leaves on the table — and mg28 measured that table-stakes to be nearly the whole gap.
+
+All of this is recorded in findings §1.26 with the plain-language mechanism, and B7 holds the increment awaiting your go/no-go.
 
 ## 3. The crossover ladder (mg4)
 
