@@ -1300,7 +1300,129 @@ torch code around the projectors carries the documented
 reduction-order latitude there (§1.16), so the reading sits inside
 the 1e-3 envelope that property set.
 
-### 2.1 The torch-body charge (mg8)
+### 1.21 The cone back anomaly is the width mechanism on the band
+### argument (mg21, mg21b, 2026-08-17)
+
+Measured 2026-08-17 in three jobs: 15327847 (mg21, four H100s on
+h017, 16 minutes), 15327968 (mg21b, one H100 on h007, 2 minutes),
+and 15328160 (the mg21b addendum, one H100 on h006, 3 minutes), on
+the merged 6d90601 tree.  The rows are
+`plans/experiments/torch_port/rows/mg21_back_attrib_h017_20260817_192528.jsonl`
+and `rows/mg21b_band_gpu_h007_20260817_194843.jsonl`; the run detail
+is in `mg21_back_attrib.md` beside the scripts.
+
+This is B1's attribution probe.  mg21 instrumented the sharded cone
+back projection at six places at the 2048-class cell and split each
+call's time into named parts: the two eager builders, the
+channel-major copy, the Triton kernel, the accumulation between body
+calls, the cross-device reduce, and whatever is left.  Both counts
+ran on mg19's staged sinogram, with values witnessed between counts
+at 1e-12 relative.
+
+**The kernel itself is what grows, and nothing else moves.**  On the
+busiest device, one full-pixel back projection reads:
+
+| part | n=3 s | n=4 s | ratio |
+|---|---|---|---|
+| kernel | 24.3 | 45.8 | 1.88 |
+| builders | 0.76 | 0.76 | 1.00 |
+| copy and other residual | 0.07 | 0.08 | 1.01 |
+| accumulation | 1.28 | 0.97 | 0.76 |
+| reduce | 0.06 | 0.07 | 1.13 |
+| whole pass | 26.5 | 47.7 | 1.80 |
+
+The subset variants read the same shape at every granularity the
+shipped schedule visits.  The recorded hypothesis is refuted twice
+over: the launch grid is band-sized rather than detector-sized
+(193023x11 at n=3, 193023x8 at n=4), and halving the band -- which
+doubles every per-band-call cost -- moved the total by 12 percent at
+n=3 and 2 percent at n=4.  Per unit of voxel work the n=4 kernel runs
+2.5 times slower than the n=3 kernel.
+
+**The mechanism is the compiler's divisibility specialization on the
+band argument, the same mechanism §1.19 measured on the parallel
+forward's width.**  At n=3 each band is 672 slices and 672 is
+divisible by 16; at n=4 each band is 504, which is not.  mg21b varied
+the band alone -- one device, one sinogram, one pixel set, eight
+bands interleaved -- with the prediction recorded first.  The five
+divisible bands share one rate (18,600 to 21,500 ns per view-slice)
+and the three non-divisible bands another (46,200 to 50,700), ratio
+2.44, with 496 and 512 fast on either side of 504.  The two runs
+close arithmetically: mg21's work falls to 0.75x while its time
+rises 1.88x, implying 2.51.  The addendum re-ran the sweep on a
+second node, where every rate reproduced within 0.03 percent, and
+moved the band START across the divisibility boundary at a fixed
+band of 512: rates within 0.4 percent, so the start does not matter
+and the band argument alone governs.
+
+Three consequences follow.  First, the cone back projection's
+anti-scaling is not structural: the banded walk, the combining step,
+and the per-call costs are all healthy, and the whole anomaly is
+which band lengths the device count happens to produce.  The
+1024-class record now reads as the same effect: one and three
+devices land on divisible bands (1008, 336) and two and four on
+non-divisible ones (504, 252), which is exactly where §1.7 and §6.2
+measured the back slow.  Second, the remedy is B2's padding
+increment, not a restructure: pad the kernel's band argument to the
+next multiple of 16 and discard the padded columns, since no equal
+division of 504 is divisible by 16 and the existing band knob can
+therefore never reach a fast band at the slow counts.  The projected effect at the
+2048 class is the n=4 kernel falling from 45.8 s to about 19 s per
+full-pixel pass, which restores monotone scaling (137 s of back busy
+at n=3 against about 100 at n=4, in place of today's 228).  Third,
+the back kernel's width sensitivity, which §1.19 left unmeasured, is
+now measured, and it is the dominant effect at production scale.
+
+The remedy design note carries the arithmetic, the gates, and the
+decision: `plans/torch_port/active/back_remedy_design.md`.
+
+### 1.22 The floors refresh on the merged tree: multiaxis measured,
+### translation seeded, and one new anomaly (mg22, 2026-08-17)
+
+Measured 2026-08-17, job 15327855 on h017, 3 hours 9 minutes, 50
+timed arms and 18 generators on the merged 6d90601 tree.  The arm
+records are under `results/mg22_floors/` on scratch (torch_p3); the
+run detail is in `mg22_floors.md` beside the sbatch file.  The paste
+landed the same evening: every row in
+`mbirtorch/_widening_floors.py` now carries this run's provenance,
+and the re-recorded hashes cleared the staleness note the 2026-08-17
+merge had left tripping.
+
+**The four existing projection floors did not move.**  Parallel and
+cone re-measured at their 2026-08-16 floors with nearly the same
+brackets, so neither the banded-forward removal, the 32768 pixel
+batch, nor the 256 MiB slab moved a crossover.  The denoiser rows
+stay sentinels (0.45x to 0.67x across the probes).
+
+**Multiaxis measured its own thresholds, and the two-device reading
+is not monotone.**  Two devices win at the 384-class (1.25x), lose
+at the 512-class (0.35x; 11.4 s at one device against 32.6 s at two,
+repeats tight, cross-count values at 3e-8), and win again at the
+768-class (1.46x).  A single threshold cannot admit the 384-class
+win without admitting the measured three-times regression above it,
+so the pasted floor sits at the 768-class.  Four devices lose at
+every probe against two (0.87x, 0.23x, 0.40x), so the n=4 row stays
+a sentinel, now from the full warm-median protocol.  The 512-class
+two-device slowdown and the 768-class four-device 0.23x are one
+unexplained anomaly shape, recorded here as an open question: it is
+not the cone back kernel's divisibility effect (multiaxis runs
+compiled torch bodies, and the fast and slow cells do not sort by
+band divisibility), and no probe has looked inside it yet.
+
+**Translation's first rows are both sentinels, and they fix a live
+mis-widening.**  On production-anchored cells up to the
+(256, 1900, 3000) production scan, two devices lose at every size
+(0.66x to 0.88x, rising with size) and four lose worse (0.15x to
+0.64x).  Until this run TranslationModel took the parallel floors,
+which admit two and four devices at those sizes -- an automatic
+production-scale translation reconstruction widened into a measured
+12 percent (n=2) or 56 percent (n=4) slowdown.  The class now
+declares `_floor_family = 'translation'`, and the sentinels hold it
+to one device until a refresh finds an admission size; the rising
+two-device trend says one may sit just above the largest size
+tested.
+
+
 
 Measured 2026-08-10, job 15149052 on h014, on the verified 1a2deb0
 tree.  The rows are

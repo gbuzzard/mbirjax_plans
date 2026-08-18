@@ -1,6 +1,6 @@
 # Removing the banded forward path
 
-**Status: IMPLEMENTATION IN A WORKTREE, opened 2026-08-17.**  Greg
+**Status: COMPLETED, 2026-08-17.**  Greg
 ruled to remove the banded multi-device forward after weighing its
 four retention arguments against maintenance cost and readability.
 The merge waits on today's confirmation runs: the manual nightly on

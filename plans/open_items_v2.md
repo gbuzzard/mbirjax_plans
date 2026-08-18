@@ -45,20 +45,72 @@ work at one place, the cone back projection.
    multiaxis hold, and the banded-forward removal merge together, and
    the first nightly on that tip is the free regression check on all
    of them.
+   **DONE (2026-08-17, evening).**  The merge pushed at 18:14, after
+   both of the day's runs, so this session triggered the manual
+   nightly on tip 6d90601 (job 15327323).  The suite is green (636
+   passed) and main was skipped as unchanged.  The gate line is FAIL,
+   and the failures are the priced cost of the batch ruling: six hard
+   memory rows, all forward-phase, each matching the transferred
+   cylinders' growth from batch 8192 to 32768 (about 3 resident
+   batches times the batch increase times the slice count).  Speed
+   moved the other way, with new records on the cone forward and
+   composed rows.  Three warn-level time rows at the 512 cell at four
+   devices share a constant +34 ms offset of unknown cause; a forced
+   repeat is chained after this session's jobs to classify it as node
+   noise or real.
+   **Classified (later the same evening; forced repeat, job
+   15327860): node noise.**  The forced re-measure of greg_dev shows
+   no time warnings at all, and main -- whose code has not changed
+   since 2026-08-12 -- shows the same class of +26 to +37 ms offsets
+   against its own baseline in the same session.  The six memory
+   rows reproduce identically to a tenth of a megabyte, so they are
+   the deterministic, priced cost of the batch ruling; they will
+   re-alert on each re-measure of this tip and self-heal when the
+   next tip is measured.  Greg received the alert emails from both
+   runs; all trace to the same known cause.  The floors re-bless did NOT run at merge time: the
+   staleness note trips with the five predicted entries.  It is
+   advisory (pinned runs bypass the guard), and step 4's refresh is
+   the measured clearing act.
 2. **B1's attribution probe.**  One job inside the cone back
    projection at the 2048 class: per-band call and kernel-grid
    accounting, the workers against the combining step, so the remedy
    design rests on measured shares rather than on the recorded
    hypothesis.
+   **DONE (2026-08-17, evening; mg21 and mg21b, findings §1.21).**
+   The probe refuted the hypothesis and found the mechanism.  The
+   kernel itself is the only part that grows (24.3 s to 45.8 s from
+   three devices to four, with builders, copies, and the combining
+   step flat and small), and the cause is the compiler's
+   divisibility-by-16 specialization on the kernel's band argument:
+   672 at three devices is divisible, 504 at four is not, and a
+   one-device sweep measured the two rates at 2.44x apart with 496
+   and 512 fast on either side of 504.  The 1024-class two-device
+   anomaly (band 504) is the same effect.
 3. **The back-remedy design note.**  The forward remedy's pattern:
    the candidate structures (a cylinder-transfer counterpart for the
    back, a band-sized kernel grid, and sorted accumulation inside the
    kernel, with the mg20 counters as inputs), the 2048-class
    arithmetic, and the gates.  Desk work ending in a ruling request;
    no implementation.
+   **DONE (2026-08-17, evening).**  The note is
+   `torch_port/active/back_remedy_design.md`, reshaped by the probe's
+   answer: it proposes the band-argument padding (B2's increment) as
+   the remedy, declines the transfer counterpart on the measured
+   shares, closes the grid candidate as moot, and defers B3 behind a
+   counter run on the back kernel.  It ends in the ruling Greg needs
+   to make.
 4. **C2's measurement.**  Extend the floors refresh to multiaxis and
    translation and replace the carried row and the sentinel with
    measured thresholds.  This can share a cluster window with step 2.
+   **DONE (2026-08-17, evening; mg22, findings §1.22).**  The full
+   refresh ran on the merged tree and the paste landed: multiaxis
+   has measured rows (its two-device reading is not monotone, and
+   the floor sits conservatively at the 768-class with the anomaly
+   recorded), translation gained its own family with two sentinel
+   rows that stop a live mis-widening at production scale, the
+   parallel and cone floors did not move, and the re-recorded hashes
+   cleared the staleness note.  One new open question rides the
+   findings entry: the multiaxis 512-class two-device slowdown.
 5. **B2's padding increment**, small and reviewed, with the back
    kernel's width sensitivity measured alongside.
 6. **Riders as time allows**: the cross-framework re-anchor (C1,
@@ -177,6 +229,16 @@ is now the top speed target:**
 * Remains: design the back-projection counterpart of the cylinder
   transfer, or a kernel-level fix, as the kernel campaign's first
   item.  → multigpu_findings.md §1.20.
+* **Update (2026-08-17, evening).  Attributed and designed; the
+  ruling remains.**  The probe (findings §1.21) found the anomaly is
+  the compiler's divisibility specialization on the back kernel's
+  band argument, not the banded structure: bands of 504 and 252 run
+  2.44x slower per unit of work than divisible neighbors, and the
+  slow device counts are exactly the ones that produce those bands.
+  The design note (`torch_port/active/back_remedy_design.md`)
+  proposes padding the band argument to the next multiple of 16 and
+  projects back busy at the 2048 class falling from 228 s to near
+  100 s at four devices.  Remains: Greg's ruling on the note.
 
 **B2. OPEN, one small increment left: pad widths to multiples of 16.
 The kernel-width puzzle.**  A parallel projection-kernel launch
@@ -199,6 +261,17 @@ wastes half its cost.
   multiple of 16 at kernel entry, so arbitrary user shapes cannot pay
   the two-times penalty.  Whether the back kernel carries the same
   property is unmeasured.
+* **Update (2026-08-17, evening): the back kernel's sensitivity is
+  now measured, and it is the dominant effect at production scale.**
+  The cone back kernel's band argument carries the same divisibility
+  property at 2.44x (findings §1.21), and it is what made the cone
+  back projection anti-scale (B1).  The padding increment is
+  therefore no longer a small robustness item: it is the proposed
+  back remedy, written up in
+  `torch_port/active/back_remedy_design.md` and awaiting the ruling
+  there.  The parallel back reads much less sensitive (1.5x per unit
+  of work at the same cells) and the increment measures it rather
+  than assuming.
 * For B3: the counters show the atomic write path generating 192
   times the ideal L2 sector traffic at every width, which is what
   sorting would attack, but the fast widths carry it without penalty
@@ -258,6 +331,13 @@ never runs.  Greg ruled on 2026-08-17 to remove it.
 * Remains, for Greg: merge the branch, then run the floors re-bless
   (one command; the staleness note names the inputs).  A pre-existing
   device-policy test fragility is tracked as its own task chip.
+* Update (2026-08-17, evening): the merge landed as bfbd286 with the
+  defaults commit 6d90601 on top, but the re-bless did not run — the
+  staleness note trips on the merged tip with the five predicted
+  entries.  The C2 refresh job measures on the merged code and its
+  paste re-records the hashes, which clears the note; if that job
+  fails, the fallback is the bare --bless with the defaults-unchanged
+  defense recorded in banded_forward_removal.md increment 5.
 * Details: `torch_port/active/banded_forward_removal.md`, including
   the old-to-new name mapping.
 
@@ -270,7 +350,7 @@ change that made the column-gather forward projection the default.
 One run per geometry re-anchors them.
 *(open_items F1 and F2; active/execution_overview.md §5.2, §5.3.)*
 
-**C2. OPEN, a decision plus one measurement.  Translation and
+**C2. CLOSED 2026-08-17.  Translation and
 multi-axis have no device-count thresholds of their own.**  Both reuse parallel-beam's thresholds, the most
 permissive measured set.  This is also an input to the
 threshold-simplification decision (E3).
@@ -290,6 +370,16 @@ case:**
   Translation keeps the parallel floors, where the reuse is harmless.
 * Remains: measure the family's own thresholds, which replaces the
   carried two-device row and the sentinel.
+* **CLOSED (2026-08-17, evening; mg22, findings §1.22).**  Both
+  families are measured.  Multiaxis's carried row and sentinel are
+  replaced with measured rows; its two-device floor sits at the
+  768-class because the measurement was not monotone (a real,
+  unexplained 0.35x at the 512-class between wins on both sides,
+  recorded for follow-up).  Translation turned out NOT to be a
+  harmless reuse once measured against one device: splitting loses
+  at every probed size, so it now declares its own family with two
+  sentinel rows that hold it to one device.  The staleness note is
+  cleared by the same paste, and the suite is green (594 passed).
 
 **C3. The scan preprocessing pipeline's concurrency is unmeasured on
 GPUs.**  The multi-device path is correctness-gated only; whether it
