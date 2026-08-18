@@ -1764,6 +1764,73 @@ One closing observation that makes the picture cohere: **cone beam cannot use th
 
 All of this is recorded in findings §1.26 with the plain-language mechanism, and B7 holds the increment awaiting your go/no-go.
 
+### 1.27 The two view-loop spikes: the traffic moves, the atomic
+### path stays, and 1.17x is this variant family's ceiling (mg29,
+### mg30, 2026-08-18)
+
+Measured 2026-08-18 in two jobs on one H100 each: 15345411 (mg29,
+h002) and 15345519 (mg30, h001), each under two minutes, on the
+padded 64dedb8 tree.  The rows are
+`rows/mg29_pfwd_viewloop_h002_20260818_162605.jsonl` and
+`rows/mg30_pfwd_viewchunk_h001_20260818_163404.jsonl`; the run detail
+is in `mg29_pfwd_viewloop.md` beside the scripts.  This is B7's spike
+step, ruled by Greg the same day.  Both spikes were valid on their
+anchors: the shipped baseline reproduced mg20's 859 ms launch, and
+all sixteen swept configurations passed values against the shipped
+wrapper at the 6e-7 class, so every variant computes the projection.
+
+mg29 measured the remedy §1.26 pointed at, and it bought far less
+than the mechanism promised.  The whole-batch view loop collapsed the
+input re-read as designed, from 130x the values block to 12x, and the
+launch got only 1.10x faster on the production mixture.  The counters
+name the reason: the traffic moved instead of vanishing.  With every
+program walking all 128 views on its own schedule, the concurrently
+active output planes stopped fitting L2, and the atomic adds thrashed
+their planes to DRAM -- write traffic rose from the shipped 0.5 GB to
+262 GB per launch, nearly the read traffic saved.
+
+mg30 swept the middle the two ends bracket, a view CHUNK per program,
+and found the interior better but bounded.  The speedup rises
+monotonically with the chunk at both tiles and tops out at 1.17x on
+the mixture (1.19x at the full mask) at chunk 32 on the shipped 8x128
+tile.  The traffic account, full-mask launches:
+
+| design | DRAM read GB | DRAM write GB | launch ms |
+|---|---|---|---|
+| shipped, one view per program | 377 | 0.5 | 864 |
+| mg29, all 128 views per program | 38 | 262 | 757 |
+| mg30 winner, chunk 32 | 19 | 49 | 728 |
+
+One number is identical in all three rows and it is the finding: the
+atomic-path sector count, 5.597e10 per launch, 1.79 TB of 32-byte
+sectors through L2's atomic path in about three quarters of a second.
+Cutting the DRAM traffic 5.5x moved the launch only 1.19x, the
+memory-side throughput stayed near 60 percent of peak, and the stall
+reading ROSE to 50.7 warps per issue-active cycle.  These readings
+indicate the kernel's floor is the atomic path's own throughput, which
+no loop reordering touches, because every design issues the same
+taps x pixels x width x views atomic adds -- the volume is the
+algorithm's, not the schedule's.
+
+What the floor implies is a different increment, and its arithmetic
+is recorded here for the design note to start from.  The way past an
+atomic-volume floor is fewer atomics, not better-ordered traffic.
+Within one (pixels, columns) tile, neighboring pixels project to
+neighboring channels, so a P-pixel tile's taps land in a span of
+about P plus two channels.  Accumulating the tile's span in shared
+memory and issuing one atomic per (channel, column) of the span cuts
+the adds by about 3P over P plus 2: 2.4x at the shipped 8-pixel tile,
+rising toward 2.8x at 32.  That reduction matches the remaining gap
+to mbirjax's segmented forward, and it is the in-kernel form of the
+segmented accumulation whose torch-level form mg13 rejected.  It is a
+new kernel interior rather than a knob, so it needs a design note and
+a ruling before any code.
+
+Nothing ships from the spikes.  The view-chunk variant at 1.17x is
+values-safe and could take the library step through the composed
+re-gate; whether to ship it, fold its loop into a segmented design,
+or hold, is Greg's ruling on B7's next step.
+
 ## 3. The crossover ladder (mg4)
 
 This section locates where each device count starts paying, which is

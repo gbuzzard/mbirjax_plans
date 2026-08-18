@@ -43,16 +43,29 @@ beats one device (findings §1.23).
    occupancy (findings §1.24).  B3's disposition on those readings is
    a ruling request to Greg.  See
    [B3](#b-speed-investigations-at-current-sizes).
-2. **RUNNING 2026-08-18.  Re-measure the device-count thresholds, and
-   propose the coarser table.**  The refresh on the padded tree is
-   job 15342578 (mg26); the coarser-table proposal follows its rows.
-   See [E3](#e-decisions-waiting-on-a-person) and
-   `back_remedy_design.md` §7, increment 4.
+2. **DONE 2026-08-18, ruling pending.  Re-measure the device-count
+   thresholds, and land the coarsening proposal.**  mg26 ran on the
+   padded tree and its rows are pasted into
+   `mbirtorch/_widening_floors.py` (staged; the floors test passes).
+   Cone n=4's floor dropped to the 768-class, the rest reproduced,
+   and multiaxis n=2 gained a measured loss above its floor
+   (findings §1.25).  The coarsening proposal is complete with its
+   §2 rows filled: `torch_port/active/floors_coarsening_proposal.md`,
+   §5 is the ruling request.  See
+   [E3](#e-decisions-waiting-on-a-person).
 3. **DONE 2026-08-18.  Re-anchor the comparisons and the docs.**  mg27
    re-measured the full mbirtorch column (C1, closed), and the
    user-docs timing table carries the new numbers as a staged edit
    (F1).  See [C1](#c-measurement-and-calibration-gaps).
-4. **Riders as time allows.**  The ledger calibration pass (C5), the
+4. **DONE 2026-08-18.  The parallel forward counter variant (B7).**
+   mg28 ran at Greg's direction and the verdict is unambiguous: the
+   kernel is load-bound on the per-view reload of the values block,
+   the atomic write path is within 1.5x of coalesced, and §1.19's
+   "192x" was a pricing error now corrected (findings §1.26).  The
+   candidate remedy is the kernel docstring's own view-loop
+   respecialization; opening that increment is Greg's call.  See
+   [B7](#b-speed-investigations-at-current-sizes).
+5. **Riders as time allows.**  The ledger calibration pass (C5), the
    nightly's automatic-device row (C6), and B6's multiaxis probe,
    which Greg's priority ruling places behind the cone and parallel
    work.  See [C5](#c-measurement-and-calibration-gaps).
@@ -124,48 +137,66 @@ multigpu_findings.md §1.18.
 the survivor to cylinder transfer.**  →
 `torch_port/closed/banded_forward_removal.md`.
 
-**B6. OPEN, new 2026-08-18.  The multiaxis torch-body slowdowns do not
-have a mechanism.**  The mg22 floors refresh measured two readings no
-current mechanism explains.  Multiaxis at two devices wins at the
-384-class (1.25x), loses hard at the 512-class (0.35x; 11.4 s at one
-device against 32.6 s at two, repeats tight, values agreeing), and wins
-again at the 768-class (1.46x); and four devices lose 0.23x at the
-768-class against two.  The readings do not sort by band divisibility,
-and multiaxis runs compiled torch bodies, so this is not the cone back
-kernel's specialization effect.  The floor rows fence the harm
-meanwhile: the family holds to two devices, with the two-device floor
-set conservatively at the 768-class.  The natural first probe is an
-mg21-style decomposition of the 512-class two-device composed call.
-Translation's uniform losses at every count may share the mechanism and
-would ride the same attribution.
-*(multigpu_findings.md §1.22; the floor rows' notes in
+**B6. OPEN, grown 2026-08-18.  The multiaxis torch-body slowdowns do
+not have a mechanism, and the two-device win is a window.**  The mg22
+floors refresh measured two readings no current mechanism explains.
+Multiaxis at two devices wins at the 384-class (1.25x), loses hard at
+the 512-class (0.35x; 11.4 s at one device against 32.6 s at two,
+repeats tight, values agreeing), and wins again at the 768-class
+(1.46x); and four devices lose 0.23x at the 768-class against two.
+mg26 added a third reading on the padded tree: two devices LOSE again
+at the 1024-class (0.80x), above the 768-class win, so the admission
+region is a window in problem size and the floor structure cannot
+express it (findings §1.25).  The pasted floor still admits two
+devices from the 768-class, into that measured 20 percent slowdown at
+the 1024-class; the coarsening proposal recommends holding the family
+to one device until this item finds the mechanism.  The readings do
+not sort by band divisibility, and multiaxis runs compiled torch
+bodies, so this is not the cone back kernel's specialization effect.
+The natural first probe is an mg21-style decomposition of the
+512-class two-device composed call, now with the 1024-class loss as a
+second cell to discriminate against.  Translation's uniform losses at
+every count may share the mechanism and would ride the same
+attribution.
+*(multigpu_findings.md §1.22, §1.25; the floor rows' notes in
 mbirtorch/_widening_floors.py.)*
 
-**B7. OPEN, new 2026-08-18, unscheduled.  The parallel forward kernel
-against mbirjax's.**  vcd parallel trails mbirjax at every count
-(mg27: 1.55x at one device, 1.66x at two, 1.35x at four) while cone
-matches or beats it, and the records localize the gap to one object.
-The parallel forward's device span is 28.9 s of the 40 s one-device
-wall (findings §1.5, the corrected reading), so torch's forward alone
-exceeds mbirjax's whole 25.8 s reconstruction.  The design difference
-on exactly that kernel is recorded: mbirjax's forward moved to sorted,
-segmented accumulation in its July kernel campaign
-(projector_kernels/gpu_headroom_findings.md; the forward gained
-1.4 to 2x, greg_notes item 6), while the torch kernel scatters with
-float atomic adds.  mg20 measured that atomic path at 192x the ideal
-L2 sectors and explicitly left open whether it sets the kernel's
-absolute rate (§1.19: the cross-width design could not see a
-uniform limiter).  The torch-level sorted form is rejected (loses
-3.5x to the kernel, §1.14); the in-Triton segmented form was never
-built.  The deciding instrument is cheap: mg25's counter harness
-pointed at the parallel forward at width 1008, one variant, reading
-SM against memory throughput and the atomic-pipe pressure.  Cone's
-parity is not a different write design -- both forwards scatter
-atomically -- but mbirjax's cone being comparatively expensive.
-Unscheduled at Greg's direction; performance items rest until
-refactoring reopens them.
-*(mg27 rows; findings §1.5, §1.9, §1.14, §1.19;
-projector_kernels/gpu_headroom_findings.md; greg_notes.md item 6.)*
+**B7. OPEN, measured 2026-08-18; the increment is Greg's call.  The
+parallel forward kernel against mbirjax's.**  vcd parallel trails
+mbirjax at every count (mg27: 1.55x at one device) while cone matches
+or beats it, and the gap is one object: the parallel forward's device
+span is 28.9 s of the 40 s one-device wall (findings §1.5), so
+torch's forward alone exceeds mbirjax's whole 25.8 s reconstruction.
+The counter run Greg ordered (mg28, findings §1.26) named the
+mechanism.  The kernel is LOAD-BOUND on the per-view reload of the
+values block: memory throughput 52 percent of peak against SM's 16,
+38 warps stalled on memory per issue-active cycle, and DRAM
+re-fetching the 3.1 GB values block 130 times per 128-view launch.
+The atomic write path is NOT the problem: it measures 1.50x from
+coalesced, and §1.19's "192x" characterization was a pricing error,
+corrected in §1.26.  mbirjax's segmented-accumulation design
+difference is therefore not where the torch-side gap lives.  The
+candidate remedy is the one the kernel's own docstring reserved for
+exactly this measurement: move the view axis from the launch grid
+into an in-program loop, so each values tile is read once instead of
+once per view.  Greg ruled 2026-08-18: proceed, and the spike step ran twice the
+same evening (mg29 and mg30, findings §1.27).  The spikes settled
+the loop-structure family: reordering which loop owns the view moves
+the DRAM traffic but not the floor, because all three designs issue
+the same atomic-add volume -- 1.79 TB of atomic sectors per launch
+through L2, which the counters now name as the kernel's binding
+resource.  The best interior point, a 32-view chunk per program,
+reads 1.17x on the production mixture, values-safe.  The way past
+the floor is fewer atomics: in-tile accumulation in shared memory,
+one add per (channel, column) of a tile's span, an arithmetic
+2.4x to 2.8x reduction that matches the remaining gap to mbirjax's
+segmented forward.  That is a new kernel interior and needs a design
+note.  The item now waits on Greg's next-step ruling: ship the
+1.17x chunk variant through the composed re-gate, commission the
+segmented design note, both, or hold.
+*(mg27 through mg30 rows; findings §1.5, §1.19 corrected, §1.26,
+§1.27; projector_kernels/gpu_headroom_findings.md; greg_notes.md
+item 6.)*
 
 ## C. Measurement and calibration gaps
 

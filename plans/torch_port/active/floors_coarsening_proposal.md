@@ -1,7 +1,9 @@
 # Proposal: coarser device-count thresholds, and a family-scoped refresh
 
-**Status: DRAFT, awaiting Greg's ruling (§5).**  Opened 2026-08-18.
-Nothing here is implemented.
+**Status: COMPLETE, awaiting Greg's ruling (§5).**  Opened 2026-08-18;
+§2's rows filled the same day from mg26's verdicts.  The fine-grained
+refresh itself is pasted and staged in `mbirtorch/_widening_floors.py`
+(the floors test passes on it); nothing from §2 or §3 is implemented.
 
 **What this note is.**  E3 is ruled: the device-count thresholds (the
 widening speed floors in `mbirtorch/_widening_floors.py`) should become
@@ -68,7 +70,42 @@ Three rules produce the coarser table from a refresh's verdicts:
    768-class floor fences the unexplained 512-class anomaly, findings
    §1.22, and no shared row may absorb that).
 
-**The proposed rows (from mg26): TO BE FILLED when the run lands.**
+**The proposed rows, from mg26's verdicts (job 15342578, the padded
+64dedb8 tree; findings §1.25).**  Applying the three rules to the
+measured crossovers:
+
+| family | count | proposed floor | measured basis | rule applied |
+|---|---|---|---|---|
+| parallel and cone, shared | 2 | 88,080,384 (the 512-class) | parallel wins 1.20x, cone 1.34x, both at or above 1.15x | rules 1 and 2 |
+| parallel and cone, shared | 4 | 1,023,934,464 (the 1024-class) | at the 768-class parallel wins 1.055x and cone 1.145x, both under 1.15x, so both round up; at the 1024-class they win 1.54x and 1.60x | rules 1 and 2 |
+| multiaxis | 2 | SENTINEL (recommended; see below) | wins only in a window: 0.35x at the 512-class, 1.46x at the 768-class, 0.80x at the 1024-class | rule 3, extended |
+| multiaxis | 4 | sentinel | loses at every probe | rule 3 |
+| translation | 2 and 4 | sentinels | lose at every probe | rule 3 |
+| denoiser | 2 and 4 | sentinels | lose at every probe | rule 3 |
+
+Two judgment calls inside that table are named for the ruling rather
+than buried.  First, cone n=4 misses the 1.15x margin by 0.005 (it
+wins 1.145x at the 768-class), so the rule rounds it up to the
+1024-class beside parallel; a 1.10x threshold would instead admit
+cone at the 768-class and either split the families or carry an
+asymmetric shared row.  The strict rule is recommended, because a
+margin chosen after seeing the numbers is not a rule.  Second, the
+multiaxis n=2 row: mg26 measured a LOSS above the current floor
+(0.80x at the 1024-class over the 1.46x win at the 768-class), so
+the two-device win is a window a floor cannot express.  The
+recommended row is a sentinel until B6 finds the mechanism, which is
+the same principle the family's own 2026-08-17 note applied below
+the floor -- no admission that also admits a measured loss.  The
+cost is real and named: the sentinel gives up a measured 1.46x win
+at the 768-class.  Keeping the 768-class floor with a warning note
+is the alternative.
+
+Against the pasted fine table, the coarse table changes two
+admissions: four devices wait one class longer for cone and
+parallel (giving up measured wins of 1.145x and 1.055x at the
+768-class), and multiaxis two-device widening stops (giving up the
+768-class window win, avoiding the 1024-class regression).  The
+distinct measured threshold values drop from four to two.
 
 What the notes carry under the coarse table: the class, the bracket
 readings the floor was read from, the margin rule applied, and one
@@ -122,11 +159,15 @@ Five design points, decided here so the increment is mechanical:
 
 **The payoff.**  Under this mode, the padding refresh would have been
 `--families cone,parallel`: about a third of the full plan's arms,
-estimated at 3 to 5 GPU-hours against the full run's 12.  The two
-follow-ups already in view are scoped the same way: a kernel change
-from the B3 ruling touches cone and parallel only, and a B6 multiaxis
-remedy touches multiaxis only.  The mode also shrinks what the E2
-automation would submit on a nightly staleness hit.
+estimated at 3 to 5 GPU-hours against the full run's 12.  mg26
+evidenced the premise from the tool itself: after the run, `--bless`
+named the cost inputs that moved since mg22 as `triton_cone.py` and
+`triton_parallel.py` alone, exactly the two-family scope.  The
+follow-ups in view are scoped the same way: a B7 forward-kernel
+change touches parallel (and cone, sharing `triton_cone.py`'s
+helpers), and a B6 multiaxis remedy touches multiaxis only.  The
+mode also shrinks what the E2 automation would submit on a nightly
+staleness hit.
 
 **Three gaps in today's hash set, found while designing the
 partition.**  These are observations for the ruling, not decisions:
