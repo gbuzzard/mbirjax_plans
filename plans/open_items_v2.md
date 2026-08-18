@@ -1,6 +1,6 @@
 # Open items — v2
 
-**Compiled 2026-08-16, statuses updated 2026-08-17** from three
+**Compiled 2026-08-16, statuses updated 2026-08-18** from three
 sources: `plans/open_items.md` (the
 2026-08-11 compilation), `plans/current_plans.md`, and
 `plans/torch_port/active/greg_notes.md`.  Every item was cross-checked
@@ -113,6 +113,14 @@ work at one place, the cone back projection.
    findings entry: the multiaxis 512-class two-device slowdown.
 5. **B2's padding increment**, small and reviewed, with the back
    kernel's width sensitivity measured alongside.
+   **RULED AND IN IMPLEMENTATION (2026-08-18).**  The sensitivity
+   was measured first (step 2 found it to be B1's whole mechanism),
+   Greg approved the design note's recommendation, and the padding
+   increment is being implemented: the cone back and parallel kernel
+   wrappers pad their width-class arguments to the next multiple of
+   16, the ledger charges follow through a shared helper, and the
+   confirmation runs re-measure the 2048-class cone arms and the
+   1024-class two-device back against the note's projections.
 6. **Riders as time allows**: the cross-framework re-anchor (C1,
    now also stale for the batch default), the user-docs timing table
    (F1), and the ledger calibration pass (C5).
@@ -212,7 +220,7 @@ item stays behind the kernel campaign.
 
 ## B. Speed investigations at current sizes
 
-**B1. OPEN, the kernel campaign's first item.  The cone back
+**B1. RULED 2026-08-18, remedy in implementation.  The cone back
 projection takes longer on two devices than on one.**  Its GPU time reads 30.3 s at two devices, and splitting only
 pays at three or more.  Nobody owns finding out why, and no landed
 change addresses it.
@@ -239,6 +247,11 @@ is now the top speed target:**
   proposes padding the band argument to the next multiple of 16 and
   projects back busy at the 2048 class falling from 228 s to near
   100 s at four devices.  Remains: Greg's ruling on the note.
+* **RULED (Greg, 2026-08-18): the padding increment is approved and
+  in implementation.**  This item closes when the confirmation runs
+  read against the note's projections: the 2048-class cone composed
+  arms at three and four devices, and the 1024-class two-device
+  back.
 
 **B2. OPEN, one small increment left: pad widths to multiples of 16.
 The kernel-width puzzle.**  A parallel projection-kernel launch
@@ -272,6 +285,13 @@ wastes half its cost.
   there.  The parallel back reads much less sensitive (1.5x per unit
   of work at the same cells) and the increment measures it rather
   than assuming.
+* **RULED (Greg, 2026-08-18): in implementation with B1's remedy.**
+  The scope is cone and parallel, both directions -- the geometries
+  with hand-written kernels.  Translation and multiaxis have no
+  kernel to pad; their measured slowdowns do not sort by band
+  divisibility and their floor rows hold them to safe counts (the
+  note's scope paragraph records this).  B2 closes with B1's
+  confirmation runs.
 * For B3: the counters show the atomic write path generating 192
   times the ideal L2 sector traffic at every width, which is what
   sorting would attack, but the fast widths carry it without penalty
@@ -280,8 +300,8 @@ wastes half its cost.
   which dominates a four-device cone wall (B1's update).
 *(multigpu_findings.md §1.9, §1.19, and §1.20.)*
 
-**B3. OPEN, now pointed at the cone back kernel.  In-kernel sorted or
-segmented accumulation.**  Sorting each
+**B3. OPEN, deferred behind a counter run on the back kernel.
+In-kernel sorted or segmented accumulation.**  Sorting each
 call's detector writes so the scattered additions become ordered,
 collision-free segments.  The cheap per-call form was re-tested on
 2026-08-11 and stands rejected: it wins over the plain torch scatter
@@ -290,6 +310,14 @@ in eager mode but loses to the production Triton kernel by about
 belongs to a kernel campaign and is coupled to B2's answer.
 *(open_items E4; greg_notes.md item 6 and the addendum;
 current_plans.md item 13; multigpu_findings.md §1.14.)*
+**Update (2026-08-18, from the back-remedy ruling):** the cone back
+kernel has no atomics -- it gathers and stores once per output
+element -- so the mg20 counters, which measured the forward's atomic
+write path, do not describe it.  Once the padding lands, the back
+kernel runs at the divisible rate and what remains is single-call
+efficiency.  The named precondition for this item is a counter run
+on the back kernel itself, after the padding's confirmation runs
+(back_remedy_design.md §6).
 
 **B4. CLOSED 2026-08-17.  Time translation and multi-axis on the
 newer forward path.**
@@ -318,7 +346,7 @@ review:**
   the banded forward path's removal is B5.  →
   multigpu_findings.md §1.18.
 
-**B5. OPEN, implementation done, merge left.  Remove the banded
+**B5. CLOSED 2026-08-17.  Remove the banded
 forward path, and rename the survivor to cylinder transfer.**  With the gather the measured
 winner on all four geometries, the banded multi-device forward is
 unused code behind a switch that CI must keep green and production
@@ -338,8 +366,29 @@ never runs.  Greg ruled on 2026-08-17 to remove it.
   paste re-records the hashes, which clears the note; if that job
   fails, the fallback is the bare --bless with the defaults-unchanged
   defense recorded in banded_forward_removal.md increment 5.
+* **This closes the item: the merge landed, the mg22 paste cleared
+  the staleness note the same evening, and the plan file has moved
+  to `torch_port/closed/banded_forward_removal.md`.**
 * Details: `torch_port/active/banded_forward_removal.md`, including
   the old-to-new name mapping.
+
+**B6. OPEN, new 2026-08-18.  The multiaxis torch-body slowdowns do
+not have a mechanism.**  The mg22 floors refresh measured two
+readings no current mechanism explains: multiaxis at two devices
+wins at the 384-class (1.25x), loses hard at the 512-class (0.35x;
+11.4 s at one device against 32.6 s at two, repeats tight, values
+agreeing), and wins again at the 768-class (1.46x); and four
+devices lose 0.23x at the 768-class against two.  The readings do
+not sort by band divisibility, and multiaxis runs compiled torch
+bodies, so this is not the cone back kernel's specialization
+effect.  The floor rows fence the harm meanwhile (the family holds
+to two devices, with the two-device floor set conservatively at the
+768-class).  The natural first probe is an mg21-style decomposition
+of the 512-class two-device composed call.  Translation's uniform
+losses at every count may share the mechanism and would ride the
+same attribution.
+*(multigpu_findings.md §1.22; the floor rows' notes in
+mbirtorch/_widening_floors.py.)*
 
 ## C. Measurement and calibration gaps
 
