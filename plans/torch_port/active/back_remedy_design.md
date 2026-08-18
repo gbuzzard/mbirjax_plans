@@ -153,6 +153,21 @@ float.  The mg21b addendum measured it directly: at a fixed band of
 one another.  The start does not matter, and the band argument alone
 governs.
 
+**What this remedy does and does not cover.**  The pad applies where
+a hand-written kernel takes a width-class launch argument, which is
+cone and parallel, in both directions.  Translation and multiaxis
+run compiled torch bodies with no such kernel, so the pad has no
+site there, and their shared fan helper is plain torch code as
+well.  Their measured multi-device slowdowns are a different
+problem: the mg22 readings do not sort by band divisibility (at two
+devices multiaxis wins on a divisible band, loses on a
+non-divisible one, and wins again on a non-divisible one), and
+their floor rows hold them to safe counts meanwhile -- multiaxis to
+two devices, translation to one.  The unexplained part is recorded
+as the multiaxis anomaly (findings §1.22).  If those geometries
+gain hand-written kernels later, the padding rule rides in through
+the same wrapper pattern.
+
 ## 3. The 2048-class arithmetic
 
 The projected effect follows from the two measured rates.  At four
@@ -259,10 +274,11 @@ after the padding's confirmation runs.
    projections are the acceptance evidence.
 4. **The floors consequence.**  The pad changes projection cost, so
    the staleness machinery will name it and the floors will owe a
-   re-measure.  The mg22 refresh now running stays valid for the
-   unpadded tree it measures.  The rows the padding will move are
-   the cone and multiaxis rows at non-divisible bands.  A second
-   refresh after the padding is committed re-anchors those rows.
+   re-measure.  The mg22 refresh's rows stay valid for the
+   unpadded tree they measure.  The rows the padding will move are
+   the cone rows at non-divisible bands; multiaxis has no kernel and
+   its rows do not move (the scope paragraph in §2).  A second
+   refresh after the padding is committed re-anchors the cone rows.
    This is what the staleness rule is for.
 
 ## 8. The decision
