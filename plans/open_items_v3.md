@@ -187,16 +187,37 @@ the same atomic-add volume -- 1.79 TB of atomic sectors per launch
 through L2, which the counters now name as the kernel's binding
 resource.  The best interior point, a 32-view chunk per program,
 reads 1.17x on the production mixture, values-safe.  The way past
-the floor is fewer atomics: in-tile accumulation in shared memory,
-one add per (channel, column) of a tile's span, an arithmetic
-2.4x to 2.8x reduction that matches the remaining gap to mbirjax's
-segmented forward.  That is a new kernel interior and needs a design
-note.  The item now waits on Greg's next-step ruling: ship the
-1.17x chunk variant through the composed re-gate, commission the
-segmented design note, both, or hold.
-*(mg27 through mg30 rows; findings §1.5, §1.19 corrected, §1.26,
-§1.27; projector_kernels/gpu_headroom_findings.md; greg_notes.md
-item 6.)*
+the floor is fewer atomics: in-tile accumulation, one add per
+(channel, column) of a tile's span, an arithmetic 2.4x to 2.8x
+reduction that matches the remaining gap to mbirjax's segmented
+forward.  The design note is drafted at Greg's direction
+(`torch_port/active/pfwd_segmented_design.md`), with the cone
+forward's counter reading taken the same evening (mg31, findings
+§1.28: mixed profile, same shared scatter, smaller projected payoff
+-- cone rides the spike opportunistically).  Two spikes ran the same
+evening.  mg32 (findings §1.29): the contraction wins 1.68x at the
+full mask, subset calls lose for lack of channel locality, and the
+TF32 twin answers the precision question (1.84x at 1e-3-class
+values).  mg33, at Greg's channel-sorting question (findings
+§1.30): sorting per view makes the contraction win EVERYWHERE --
+3.97x at the full mask, 2.8x to 3.9x at the subsets, the atomic
+volume down 31.6x, values at 3e-6, sort costs in the milliseconds
+and amortizable.  The combined selection reads 3.45x on the
+production mixture, which by §1.5's shares puts the one-device
+1024-class wall near 20 s against mbirjax's 25.8.  Greg gave the
+library-step go the same evening, and the step is staged and half
+gated: the sorted route landed in triton_parallel.py as the
+wrapper's default (MBIRTORCH_SORTED_FORWARD=0 restores the per-tap
+kernel), the CPU suite reads 584 passed with four new sorted-route
+gates, and mg34 passed the composed gate's first half whole -- the
+full GPU suite, then 1.43x to 1.89x at the 1024 class and 1.03x to
+1.41x at the 512 class with every value gate inside 1e-3 (findings
+§1.31).  Parallel now matches or beats the recorded mbirjax column
+at every measured count.  The 2048-class confirmation is running as
+mg35 (job 15347106); the staged change is committed only after it.
+*(mg27 through mg31 rows; findings §1.5, §1.19 corrected, §1.26
+through §1.28; pfwd_segmented_design.md;
+projector_kernels/gpu_headroom_findings.md; greg_notes.md item 6.)*
 
 ## C. Measurement and calibration gaps
 

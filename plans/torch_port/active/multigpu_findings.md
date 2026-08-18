@@ -1831,6 +1831,189 @@ values-safe and could take the library step through the composed
 re-gate; whether to ship it, fold its loop into a segmented design,
 or hold, is Greg's ruling on B7's next step.
 
+### 1.28 The cone forward counters: a mixed profile, and the shared
+### scatter's 1.50x constant confirmed a third time (mg31, 2026-08-18)
+
+Measured 2026-08-18, job 15345826 on h007, one H100, 81 seconds, on
+the padded 64dedb8 tree.  The rows are
+`rows/mg31_pfwd_counters_h007_20260818_165713.jsonl`; the run detail
+is in `mg31_cfwd_counters.md` beside the script.  Greg ordered the
+run as the segmented design note's cone input, so the note commits
+to cone on a measurement rather than an analogy.
+
+The cone forward reads mixed, between its two siblings.  SM
+throughput is 50.4 percent of peak against memory's 63.6, with the
+stall at 9.0 warps per issue-active cycle -- against the parallel
+forward's 15.6 over 52.3 with stall 38, and the cone back's 71.6
+over 63.6 with stall 0.5.  The vertical tap loop gives this kernel
+real arithmetic beside its memory traffic, and neither side is
+cleanly binding.
+
+Two components split the memory side.  The scatter is the shared
+horizontal-fan block, and it reads exactly 1.50x the coalesced ideal
+at the same per-view atomic volume as parallel's -- the third kernel
+to measure that constant.  The gather is the larger stream: the
+vertical fan re-reads the values block 60x per 52-view launch from
+DRAM (175 GB), with the L1 load hit at 42 percent.  Segmented
+accumulation therefore applies to cone unchanged, but it relieves
+the smaller of the two streams; the design note bounds the cone
+payoff near 1.3x and recommends cone ride the spike
+opportunistically while parallel remains the primary target
+(`pfwd_segmented_design.md` §4).  The gather-side re-read is
+recorded as an observation for a possible later increment, outside
+that note's scope.
+
+### 1.29 The segmented spike: the contraction wins 1.68x at the full
+### mask, and the subset calls belong to a tap path (mg32, 2026-08-18)
+
+Measured 2026-08-18 in two submissions of one spike on h002 (jobs
+15346037 and 15346085, 74 and 106 seconds), on the padded 64dedb8
+tree.  The rows are
+`rows/mg32_pfwd_segmented_h002_20260818_172015.jsonl`; the run detail
+including the first submission's compiler lesson is in
+`mg32_pfwd_segmented.md` beside the script.  This is the segmented
+design note's increment 1, approved the same evening.
+
+The mechanism worked exactly as designed, where its assumption
+holds.  At the full pixel mask, the winning gated configuration (a
+16-pixel tile with a 32-channel window, 128 columns, 32-view chunks)
+reads 1.68x over the shipped kernel at 3.7e-6 values, and the
+counters close the account: the atomic-path sectors fell 2.64x
+(against the predicted 2.4x to 2.8x), the memory-wait stall fell
+from 38.2 to 3.4 warps per issue-active cycle, and SM throughput
+rose from 15.6 to 38.7 percent of peak.  The TF32 twin of the same
+shape, run ungated to answer Greg's precision question, reads 1.84x
+at 6.69e-4 worst values -- the tensor-core default buys about ten
+percent more speed at three decades of accuracy, so the
+full-precision mode is the right default and TF32 remains a
+contract question, not a knob.
+
+The other half of the verdict is the subset calls, and it reshapes
+the library step.  Every subset ladder point read 0.87x to 0.88x,
+so the plain production mixture breaks even (0.99x).  The mechanism
+is channel locality: a subset call's pixels are spread across the
+mask (the harness strides them, production draws them randomly), so
+a 16-pixel tile spans far more channels than any window and every
+subset tile takes the fallback.  The contraction's domain is
+full-mask and locality-preserving calls; subset calls belong to a
+tap path.  These results indicate the library form is a per-call
+selection: the segmented kernel where the call's pixels are
+channel-local, the existing kernels elsewhere -- the same
+per-kernel selection discipline the library already applies by
+platform.  A size-gated selection measured from this run's points
+reads 1.11x on the mixture; pairing the segmented full-mask path
+with mg30's chunk path on subsets projects higher and is the
+library step's A/B to measure, not to assume.
+
+Two items ride the record.  The 32-pixel tile is disqualified
+(0.49x to 0.65x: the 64-channel window outgrows the win).  And the
+fallback-rate counter under-counts by about the column-tile factor
+(a uniform 12.5 percent reading at points whose spans guarantee
+near-total fallback); the subset values passing at 3.7e-6 proves
+the routing is sound, and the counter accounting is to be fixed
+before the library step leans on rates.
+
+### 1.30 The sorted contraction wins everywhere: 3.97x at the full
+### mask, 2.8x to 3.9x at the subsets, and the atomic volume falls
+### 31.6x (mg33, 2026-08-18)
+
+Measured 2026-08-18, job 15346414 on h002, one H100, 74 seconds, on
+the padded 64dedb8 tree.  The rows are
+`rows/mg33_pfwd_sorted_h002_20260818_175404.jsonl`; the run detail is
+in `mg33_pfwd_sorted.md` beside the script.  This is the design
+note's increment 1b, the answer to Greg's channel-sorting question,
+approved and run the same evening.
+
+The sorted contraction removed the segmented kernel's one measured
+weakness and then improved on its strength.  Per view, the call's
+pixels are sorted by channel center outside the kernel, and the
+values tile is gathered through the per-view permutation inside it.
+Every configuration won at every ladder point at 3.3e-6 worst
+values: the winner (a 32-pixel tile with a 16-channel window) reads
+3.97x at the full mask and 2.77x to 3.85x across the subsets, with
+the fallback rate at zero everywhere -- sorted tiles fit even the
+16-channel window.  The combined selection across paths reads 3.45x
+on the production call mixture, and the sorted path is the selected
+path at every point.
+
+The counters explain the size of the win.  Sorted 32-pixel tiles
+collapse into a 2-to-3-channel span, so the contraction performs a
+deep segmented reduction: the atomic-path sectors fell from the
+shipped kernel's 5.597e10 to 1.773e9, which is 31.6x, an order
+beyond the unsorted window's 2.64x.  The memory-wait stall fell
+from 38.2 to 2.6 warps per issue-active cycle, and the memory
+throughput at 81.5 percent of peak is now spent on useful traffic.
+
+One pre-registered expectation was wrong, and the correction carries
+the design insight.  The full-mask point was expected to lose,
+because the per-view values gather looked like mg29's reload; it won
+3.97x instead.  The sorted order at each view walks the dense mask
+in stripes, so consecutive sorted pixels are geometric neighbors,
+the row gather stays coherent, and DRAM read held at 11.2x the
+values block -- the chunk path's class -- while the atomic collapse
+dominated.  The locality partition the note drew between a sorted
+subset path and an unsorted full-mask path may therefore be
+unnecessary: one always-sorted kernel is the simpler candidate, and
+the composed A/B decides between them.
+
+The sort's own cost is small even before amortization: 14.6 ms at
+the full mask against a 648 ms saving, under 4 ms at every subset.
+Production pays it once per (pixel set, view batch) per
+reconstruction, since the mask and VCD's subsets are fixed across
+iterations; the cached orderings take a ledger charge.
+
+The arithmetic this leaves for the library step, stated as
+arithmetic: the parallel forward was 28.9 s of the 40 s one-device
+1024-class wall, and 3.45x on the forward puts the wall near 20 s
+against mbirjax's 25.8.  The composed re-gate turns that into a
+measurement or refutes it; the 2048-class gather behavior and the
+multi-device paths are its open cells.
+
+### 1.31 The sorted forward passes its composed gate: the suite
+### whole, and 1.43x to 1.89x at the 1024 class (mg34, 2026-08-18)
+
+Measured 2026-08-18, job 15346797 on h006, 22 minutes on four H100s,
+on the staged tree: 64dedb8 plus the sorted-contraction forward
+change (triton_parallel.py and two test files, synced per file by
+md5).  The rows are
+`rows/mg34_sorted_ab_h006_20260818_183711.jsonl`; the harness is
+mg27's protocol with the route switch as the A/B axis, reusing
+mg27's staged sinograms.  This is the segmented design note's
+increment 2, first half.
+
+The gate passed whole.  The full GPU suite ran first and read rc 0,
+with the sorted route's own value gates in it: the two kernels
+against each other, the sparse-set fallback, and the view-chunk
+tail.  All twelve composed arms then ran, every arm realized its
+pinned count, and both value gates held at every (cell, count): each
+arm against its own route's one-device arm, and the two routes
+against each other, all inside 1e-3.
+
+The composed A/B, warm medians, busiest-device peaks:
+
+| cell | devices | per-tap s | sorted s | speedup | peak moved |
+|---|---|---|---|---|---|
+| 1024-class | 1 | 39.96 | 21.19 | 1.89x | none |
+| 1024-class | 2 | 23.73 | 14.25 | 1.66x | none |
+| 1024-class | 4 | 15.42 | 10.75 | 1.43x | +0.07 GB |
+| 512-class | 1 | 1.84 | 1.31 | 1.41x | +0.17 GB |
+| 512-class | 2 | 1.48 | 1.26 | 1.17x | +0.08 GB |
+| 512-class | 4 | 2.12 | 2.05 | 1.03x | +0.08 GB |
+
+Against the mbirjax column these numbers close the parallel gap B7
+opened.  At the 1024 class the sorted route reads 21.19, 14.25, and
+10.75 s against mbirjax's 25.80, 14.33, and 11.52: faster at one
+device by 1.22x, at parity at two, faster at four.  Parallel now
+matches or beats mbirjax at every measured count, as cone has since
+the padding landed.  The composed one-device gain (1.89x) sits
+where the spike arithmetic put it: 3.45x on a forward that is
+seventy percent of the wall.
+
+What remains of the gate is the 2048-class confirmation (mg35,
+submitted as job 15347106): the same A/B at three and four devices,
+where the 24 GB values block is the sorted gather's unmeasured
+territory.  The staged change ships only after it.
+
 ## 3. The crossover ladder (mg4)
 
 This section locates where each device count starts paying, which is
