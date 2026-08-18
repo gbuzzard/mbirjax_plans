@@ -37,21 +37,21 @@ confirmed everywhere it was read, and B1 and B2 are closed: the
 padded-tip nightly's 1024-class two-device back fell 2.44x and now
 beats one device (findings §1.23).
 
-1. **The counter run on the cone back kernel.**  Every band now runs
-   at the divisible rate, so the next cone speed question is whether
-   the kernel's gathers leave single-call headroom; this is B3's named
-   precondition, in mg20's counter-harness pattern.  See
+1. **DONE 2026-08-18.  The counter run on the cone back kernel.**
+   mg25 ran and the counters answered B3's precondition: the gathers
+   are cache-absorbed, not transaction-bound, and registers cap
+   occupancy (findings §1.24).  B3's disposition on those readings is
+   a ruling request to Greg.  See
    [B3](#b-speed-investigations-at-current-sizes).
-2. **Re-measure the device-count thresholds, and propose the coarser
-   table.**  The padding moves the cone crossovers at non-divisible
-   bands (mg22's rows describe the unpadded tree), and E3 is ruled:
-   coarsen.  One refresh run feeds both.  See
-   [E3](#e-decisions-waiting-on-a-person) and
+2. **RUNNING 2026-08-18.  Re-measure the device-count thresholds, and
+   propose the coarser table.**  The refresh on the padded tree is
+   job 15342578 (mg26); the coarser-table proposal follows its rows.
+   See [E3](#e-decisions-waiting-on-a-person) and
    `back_remedy_design.md` §7, increment 4.
-3. **Re-anchor the comparisons and the docs.**  C1's single-device
-   baselines, stale for the batch default and the padding, one run per
-   geometry; then F1's user-docs timing table with the new numbers.
-   See [C1](#c-measurement-and-calibration-gaps).
+3. **DONE 2026-08-18.  Re-anchor the comparisons and the docs.**  mg27
+   re-measured the full mbirtorch column (C1, closed), and the
+   user-docs timing table carries the new numbers as a staged edit
+   (F1).  See [C1](#c-measurement-and-calibration-gaps).
 4. **Riders as time allows.**  The ledger calibration pass (C5), the
    nightly's automatic-device row (C6), and B6's multiaxis probe,
    which Greg's priority ruling places behind the cone and parallel
@@ -101,29 +101,19 @@ remedy landing), with the design in
 multiple of 16.**  Landed and confirmed with B1's remedy; arbitrary
 user shapes no longer pay the two-times penalty.  → findings §1.23.
 
-**B3. OPEN; the next step is the counter run on the back kernel.
-In-kernel sorted or segmented accumulation.**  Sorting each call's
-detector writes so the scattered additions become ordered,
-collision-free segments.  The cheap per-call form was re-tested on
-2026-08-11 and stands rejected: it wins over the plain torch scatter in
-eager mode but loses to the production Triton kernel by about 3.5x.
-What remains is the deeper form inside the kernel itself, which belongs
-to the kernel campaign.  The cone back kernel has no atomics, since it
-gathers and stores once per output element, so the mg20 counters, which
-measured the forward's atomic write path, do not describe it.  Once the
-padding lands, the back kernel runs at the divisible rate and what
-remains is single-call efficiency.  The named precondition for this
-item is a counter run on the back kernel itself, after the padding's
-confirmation runs (back_remedy_design.md §6).  mg20's counter leg is
-the instrument pattern: Nsight Compute over one warm launch per
-configuration, with the sbatch's PATH fallback to the cuda module's
-own bin directory (`mg20_width_mechanism.py` and its sbatch).  What
-it should read for this kernel: whether the gathers are
-transaction-bound at the divisible rate, their L2 sector efficiency,
-and the occupancy limiter -- the numbers that say whether sorting or
-reordering has headroom worth a kernel-campaign increment.
+**B3. CLOSED 2026-08-18, by ruling.  In-kernel sorted or segmented
+accumulation.**  The counter run (mg25, findings §1.24) found nothing
+for sorting to fix in the cone back kernel: no atomics (measured
+zero), one write per output element, gather waste absorbed by the
+caches with DRAM nearly idle, and the kernel mildly compute-side.
+Greg closed the item on those readings.  Two notes ride the closure.
+The only measured headroom is a register-pressure retune bounded near
+1.4x on a kernel that is about a tenth of the four-device 2048-class
+wall; it is recorded, not scheduled.  And Greg's closing note applies
+to this whole family of items: a performance investigation closed
+here can rise again after further refactoring.
 *(open_items E4; greg_notes.md item 6 and the addendum;
-current_plans.md item 13; multigpu_findings.md §1.14.)*
+current_plans.md item 13; multigpu_findings.md §1.14, §1.24.)*
 
 **B4. CLOSED 2026-08-17, by ruling.  Time translation and multi-axis on
 the newer forward path.**  The column gather won everywhere measured
@@ -151,17 +141,42 @@ would ride the same attribution.
 *(multigpu_findings.md §1.22; the floor rows' notes in
 mbirtorch/_widening_floors.py.)*
 
+**B7. OPEN, new 2026-08-18, unscheduled.  The parallel forward kernel
+against mbirjax's.**  vcd parallel trails mbirjax at every count
+(mg27: 1.55x at one device, 1.66x at two, 1.35x at four) while cone
+matches or beats it, and the records localize the gap to one object.
+The parallel forward's device span is 28.9 s of the 40 s one-device
+wall (findings §1.5, the corrected reading), so torch's forward alone
+exceeds mbirjax's whole 25.8 s reconstruction.  The design difference
+on exactly that kernel is recorded: mbirjax's forward moved to sorted,
+segmented accumulation in its July kernel campaign
+(projector_kernels/gpu_headroom_findings.md; the forward gained
+1.4 to 2x, greg_notes item 6), while the torch kernel scatters with
+float atomic adds.  mg20 measured that atomic path at 192x the ideal
+L2 sectors and explicitly left open whether it sets the kernel's
+absolute rate (§1.19: the cross-width design could not see a
+uniform limiter).  The torch-level sorted form is rejected (loses
+3.5x to the kernel, §1.14); the in-Triton segmented form was never
+built.  The deciding instrument is cheap: mg25's counter harness
+pointed at the parallel forward at width 1008, one variant, reading
+SM against memory throughput and the atomic-pipe pressure.  Cone's
+parity is not a different write design -- both forwards scatter
+atomically -- but mbirjax's cone being comparatively expensive.
+Unscheduled at Greg's direction; performance items rest until
+refactoring reopens them.
+*(mg27 rows; findings §1.5, §1.9, §1.14, §1.19;
+projector_kernels/gpu_headroom_findings.md; greg_notes.md item 6.)*
+
 ## C. Measurement and calibration gaps
 
-**C1. Re-anchor the cross-framework comparison.**  The single-device
-reference timings that every speedup ratio divides by, and the whole
-512-class column of the comparison table, predate the 2026-08-11 change
-that made the column-gather forward projection the default.  They are
-also stale for the 2026-08-17 batch default, which moved the forward
-times the references carry.  The band padding left the standard-cell
-single-device numbers alone (their bands are divisible), but it moved
-the multi-device numerators the ratios compare against.  One run per
-geometry re-anchors them.
+**C1. CLOSED 2026-08-18.  Re-anchor the cross-framework comparison.**
+mg27 re-measured the full mbirtorch column on the padded tip: both
+geometries, both standard cells, all three counts, under mg1's
+protocol.  Every one-device time reproduced its recorded value, and
+the cone multi-device rows took the padding's gain, so cone is now
+faster than the recorded mbirjax column at two and four devices.  The
+record is execution_overview.md §5.1 to §5.3, with the run detail in
+`experiments/torch_port/mg27_reference_timings.md`.
 *(open_items F1 and F2; active/execution_overview.md §5.2, §5.3.)*
 
 **C2. CLOSED 2026-08-17.  Translation and multi-axis have no
@@ -276,13 +291,15 @@ multigpu_plan.md §0a item 8.)*
 device-count thresholds.**  The thresholds are measured at specific
 shapes, one GPU model, and one run configuration, and that precision
 is fragile.  Greg ruled for fewer, coarser thresholds that survive
-shape and hardware variation.  Remains: propose the coarser table --
-which sizes and counts survive, what the notes carry -- and land it
-with a refresh.  Sequencing note: the padding remedy moves the cone
-crossovers anyway, so the coarsening proposal should follow that
-re-measure rather than precede it.  A coarser table also drifts less
-and needs the E2 automation less.
-*(open_items G3; multigpu_plan.md item 9 and §0a.)*
+shape and hardware variation.  The proposal is drafted:
+`torch_port/active/floors_coarsening_proposal.md` carries the
+coarsening rules, and, at Greg's 2026-08-18 direction, a
+family-scoped mode for the refresh tool so future refreshes measure
+only the families whose cost inputs moved.  The proposal's rows fill
+from the mg26 padded-tree refresh, and its §5 is the ruling request.
+A coarser table also drifts less and needs the E2 automation less.
+*(open_items G3; multigpu_plan.md item 9 and §0a;
+active/floors_coarsening_proposal.md.)*
 
 **E4. The nightly cadence for multi-GPU rows, and campaign close-out.**
 The cost in question is GPU-hours on the ai partition against the
@@ -318,11 +335,12 @@ handling is E5's cadence question, which is Charlie's.
 
 ## F. Documentation and demos
 
-**F1. The multi-GPU page's timing table is stale.**  The table in
-`usr_multi_gpu.rst` still shows 94 s for the 1024-class single-device
-reconstruction, which predates the kernel-era path (the same
-reconstruction now runs near 40 s).  It is the only place a user sees
-these numbers, and refreshing it is part of campaign close-out (E4).
+**F1. CLOSED 2026-08-18, as a staged edit.  The multi-GPU page's
+timing table is stale.**  The table now carries mg27's parallel-beam
+numbers (40.0, 23.8, 15.5 s at the 1024 class), names the geometry,
+and the surrounding ratios are recomputed; the old 94 s row is gone.
+The edit is staged in mbirtorch (`docs/source/usr_multi_gpu.rst`) for
+Greg's commit.
 *(open_items H2; multigpu_plan.md item 7; closed/docs.md:12.)*
 
 **F2. Two demo-side documentation pieces.**  An FAQ paragraph for the
