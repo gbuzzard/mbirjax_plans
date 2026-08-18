@@ -121,6 +121,9 @@ they raise even though their own work fits.  Proposal: decide whether these
 helpers should check against their own, smaller allocations, as the direct
 reconstructions now do.
 
+**Issue 7: API name change - `recon_split_sino` and `recon_direct`.**
+These two name changes are proposed for consistency with `recon`.  
+
 # DETAILED DESCRIPTIONS
 
 The sections below follow the taxonomy above.  Each table lists every public
