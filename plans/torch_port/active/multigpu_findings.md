@@ -1548,6 +1548,81 @@ ledger; production cells take no copy.  Two warn-level forward time
 rows at the 512 cell sit in the node-noise class the 2026-08-17
 forced repeat established.
 
+### 1.24 The counter run on the cone back kernel: the gathers are
+### cache-absorbed, and registers cap occupancy (mg25, 2026-08-18)
+
+Measured 2026-08-18, job 15342576 on h000, one H100, under three
+minutes of wall, on the padded 64dedb8 tree.  The rows are
+`plans/experiments/torch_port/rows/mg25_back_counters_h000_20260818_121603.jsonl`;
+the run detail is in `mg25_back_counters.md` beside the script.
+
+This is B3's named precondition (back_remedy_design.md §6): a Nsight
+Compute counter run on the cone back kernel itself, at the divisible
+rate the padding now guarantees, asking whether the kernel's gathers
+leave single-call headroom worth a kernel-campaign increment.  mg20's
+counters measured the parallel forward's atomic write path, and this
+kernel has no atomics, so this run is the back kernel's own reading.
+
+The reading is valid on its anchors.  Five bands were timed through
+the production route on one device, the production bands 1008, 672,
+512, 336, and 256, and every rate sat in the divisible class
+(18,390 to 21,517 ns per view-slice against mg23's 20,400 anchor).
+Every cross-band witness read exactly zero, and all six profiled
+variants collected the full 21-metric set on the first attempt.
+
+**The counters, one warm production-shaped launch per band.**  The
+readings are nearly constant across the bands; the table shows the
+band-672 variant beside its full-pixel-mask control:
+
+| counter | 672, quarter mask | 672, full mask |
+|---|---|---|
+| achieved occupancy | 24.9 percent | 24.9 percent |
+| occupancy limiter | registers, 4 blocks per SM | same |
+| registers per thread | 121 | 121 |
+| SM throughput, percent of peak | 71.6 | 71.6 |
+| memory throughput, percent of peak | 63.6 | 62.5 |
+| L2 hit rate | 81.2 percent | 91.6 percent |
+| L1 load hit rate | 90.8 percent | 96.3 percent |
+| L1 load sectors over the coalesced ideal | 4.16 | 4.09 |
+| long-scoreboard stall per issue-active cycle | 0.48 | 0.44 |
+| DRAM write over the output partial | 1.00 | 1.00 |
+| atomic plus reduction sectors | 0 | 0 |
+
+Three answers follow, one per question the run was chartered to ask.
+First, the gathers are NOT transaction-bound at the divisible rate.
+SM throughput sits above memory throughput at every variant, the
+long-scoreboard stall is about half a cycle per issue-active cycle,
+and the DRAM rate during the profiled launch is a few percent of the
+device's bandwidth (54.4 GB over a 211.6 ms launch at the largest
+band).  The gather's sector amplification is real, about 4x the
+coalesced ideal, and the caches absorb it: nine of ten load sectors
+hit in L1.  Second, the sector efficiency is therefore a cache story
+rather than a bandwidth story.  The kernel re-reads its sinogram
+batch tens of times from DRAM across a launch (20x to 91x by the
+counter), and that traffic still costs almost nothing against the
+device's bandwidth.  Third, the occupancy limiter is registers: 121
+registers per thread cap residency at 4 blocks per multiprocessor,
+which is the 24.9 percent achieved occupancy, and the kernel keeps
+SM throughput at 71.6 percent anyway through per-thread parallelism.
+The store path is already minimal, one write per output element
+(DRAM write exactly 1.00x the partial), and the zero-witness measured
+the no-atomics claim rather than assuming it.
+
+**What this says for B3.**  Sorted or segmented accumulation attacks
+scattered writes and wasted read sectors.  This kernel has neither:
+its writes are one store per output element, and its read waste is
+absorbed by the caches while DRAM sits nearly idle.  The counters
+therefore show little for a sorting or reordering increment to win.
+What headroom remains is bounded and lives elsewhere: SM throughput
+at 71.6 percent of peak bounds any scheduling or occupancy remedy at
+about 1.4x, and the named limiter is register pressure at the
+current tile, which is a tile-and-warp retuning question rather than
+a memory-ordering one.  The disposition of B3 on these readings was
+Greg's ruling, and he ruled the same day: B3 is closed, with the
+register-pressure retune recorded as the only measured headroom and
+not scheduled, and with the standing note that a performance item
+closed this way can rise again after further refactoring.
+
 ## 3. The crossover ladder (mg4)
 
 This section locates where each device count starts paying, which is
