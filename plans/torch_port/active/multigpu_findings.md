@@ -1480,6 +1480,74 @@ one repeat of the two-device arms is the cheapest way to shrink the
 
 ---
 
+### 1.23 The band padding lands: the cliff closes and 2048-class back
+### scaling turns monotone (mg23, mg24, 2026-08-18)
+
+Measured 2026-08-18 in two jobs: 15336959 (mg23, the gate run, two
+H100s on h004, 11 minutes) and 15337015 (mg24, the composed
+confirmation, four H100s on h017, 36 minutes), on the merged tree
+plus the padding implementation Greg committed the same morning as
+mbirtorch 64dedb8.  The rows are
+`rows/mg21b_band_gpu_h004_20260818_064628.jsonl`,
+`rows/mg23_pband_gpu_h004_20260818_064809.jsonl`, and
+`rows/mg24_padding_h017_20260818_065201.jsonl`; the run detail is in
+`mg24_padding_confirm.md` beside the scripts.
+
+This is §1.21's remedy, implemented and confirmed.  The kernel
+wrappers round their width-class arguments up to the next multiple of
+16 before the launch, allocate the output at the padded width, and
+return the real-width slice; the memory ledger charges the padded
+band through the same helper.  Cone and parallel take the pad in both
+directions; translation and multiaxis have no hand-written kernel and
+are unchanged.
+
+**The gate run passed whole.**  The suite read 674 passed on GPUs,
+including new value tests at 1e-5 against the torch bodies and
+windowed references.  The cone band sweep that measured the 2.44x
+divisibility cliff on the unpadded tree read 1.06x on the padded one:
+bands 504, 344, and 252 fell from about 47,000 to about 20,400 ns per
+view-slice.  The parallel back sweep read 1.07x, flat across the
+boundary.  The residual over the divisible rate is the discarded
+padded lanes, 1.6 to 3 percent by arithmetic.
+
+**The 2048-class composed confirmation hit the projections.**  On
+mg19's staged cell, three-iteration cone reconstructions read, on the
+busiest device:
+
+| arm | band | back busy s | mg19's reading | the §3 projection |
+|---|---|---|---|---|
+| n=3 | 672, no pad | 137.1 | 136.8 | unchanged |
+| n=4 | 504 padded to 512 | 106.4 | 227.8 | near 100 |
+| n=4 repeat | 504 padded to 512 | 104.2 | 228.2 | near 100 |
+
+Back busy time is monotone in the device count again, and 104 over
+137 is 0.76 against the ideal work ratio of 0.75.  The forward at
+n=4 reproduced mg19's batch-32768 arm at 127.9 s, and every
+calibration ratio sat inside the (1.00, 1.30) band with the padded
+ledger charges, which validates the design note's ledger rule at
+scale.
+
+**The nightly on the padded tip closed B1 the same morning** (job
+15338176, tip 64dedb8, suite 651 passed, results file
+`regression_gpu-torch_20260818T120327Z_64dedb87.yaml`).  The per-call
+back rows moved by the mechanism ratio everywhere a band was
+non-divisible: the cone 1024-class two-device back fell from 5.78 s
+to 2.37 s per call, which is 2.44x -- the measured cliff exactly --
+and its speedup against one device went from 0.78x to 1.92x, so the
+two-device anomaly that opened B1 is gone.  Cone at four devices
+fell 2.33x (speedup 1.52x to 3.55x).  The parallel back moved the
+same way: its 1024-class two-device call went from break-even
+(0.997x) to 1.88x, which retroactively measures the parallel
+sensitivity the design note could only bound.  The odd 513x449x385
+single-device rows fell 2.4x, which is the robustness case measured.
+The gate tripped on one hard row that is the padding's priced cost
+appearing where designed: the parallel forward at the odd cell now
+makes a zero-padded input copy (+182 MB, +21 percent at one device),
+which exists only at non-divisible shapes and is charged by the
+ledger; production cells take no copy.  Two warn-level forward time
+rows at the 512 cell sit in the node-noise class the 2026-08-17
+forced repeat established.
+
 ## 3. The crossover ladder (mg4)
 
 This section locates where each device count starts paying, which is
