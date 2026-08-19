@@ -2164,6 +2164,66 @@ Cone n=2 keeps its 512-class floor and parallel n=2 now sits at the
 measured floors agree, which today is the n=4 pair.  Both rows' notes
 name the split.
 
+### 1.35 The ledger probe: the three-device over-read attributed,
+### the lead-device transient refuted, and one under-read found
+### (mg42a, 2026-08-19)
+
+Measured 2026-08-19, jobs 15376256 and 15377054 on h004, four H100s,
+about ten minutes of measurement across the two.  This is the
+calibration design's probe (ledger_calibration_design.md §2), run
+before any term changes.  Ten arms ran with the calibration mode on
+and seven library seams wrapped by a reset-free watermark sampler, so
+every arm carries modeled-versus-measured per device plus a per-region
+attribution of where the peak rose.  The run detail, including the
+probe's own one-device defect and its re-run, is in
+mg42a_ledger_probe.md; the rows are the two mg42a jsonl files.
+
+The three-device over-read reproduced and split by geometry.  Cone
+reads 1.427 at three devices, and its dominant modeled phase is the
+direct-recon back workers, where the back batch charge alone is
+0.74 GB of a 1.33 GB phase.  That is the same charge the
+back-attribution arms measured, so the first two calibration inputs
+are one defect: the batch charge counts a live set the launch instant
+does not hold.  Parallel reads 1.436 at three devices with a different
+mechanism: its dominant phase is the initial forward projection, whose
+top terms are the deliberate covers -- the doubled forward output, the
+forward batch, and three resident cylinder batches -- which loom large
+when shards are small.
+
+The lead-device transient does not exist in a single reconstruction.
+In a fresh process the four-device 1024-class arms peak device 0 at
+6.84 GiB, against the nightly's 26.6 GiB reading, and the placement
+trail shows shard-sized steps only.  So no ledger term is owed: the
+ledger prices one reconstruction, and one reconstruction never holds
+what the nightly read.  What produced the 26.6 remains UNEXPLAINED,
+and the two easy mechanisms are now refuted.  A reference cycle
+holding each call's end-state until garbage collection was the first
+candidate; mg42b checked it locally on two virtual CPU devices with
+automatic gc disabled, and across three back-to-back reconstructions
+garbage collection freed zero tensor bytes -- the end-state frees at
+refcount, so no library cycle fix is owed.  Trial-to-trial
+accumulation in the nightly's own loop was the second candidate; its
+time_op was read and is disciplined (the previous result is dropped
+and gc runs before each timed call).  The accuracy remedy for the
+nightly does not need the mechanism: reset the peak counters before
+EACH trial and report the warm trial's peak, recording the per-trial
+peaks so the column diagnoses itself -- if every trial reads high the
+cost is real and visible, and if only the warmup does, it was setup.
+Until that lands, the nightly's multi-device memory columns are read
+as unreliable; its timings and value gates are unaffected.
+
+One reading is new, and it leads the next increment: parallel at ONE
+device reads 0.935, UNDER the band, reproduced in both runs (modeled
+1.96 GB, measured 2.10 at the 512-class).  The model's peak phase is
+the initial dot products; the measured watermark accumulates inside
+the back worker region.  Cone at one device is in band at 1.104.  An
+under-read is the direction the ledger exists to prevent, so the
+term-change increment starts here, and its first discriminating step
+is the same arm on the per-tap forward route, which says whether the
+sorted kernel brought the gap or the model always had it.
+
+## 3. The crossover ladder (mg4)
+
 This section locates where each device count starts paying, which is
 decision 1's data.  The ladder sweeps six parallel-family sizes below
 the gate cells, spot-checks cone, and re-measures the 1024 anchor to

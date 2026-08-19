@@ -7,7 +7,23 @@ accumulated since the last pass, so that pass has them in one place.
 Three are measured charges: the conservative back-projection charge
 that opened the item, and two over-readings found later.  Two are
 policy gaps, where no ledger term prices the cost at all.  Open item
-C5 in `plans/open_items_v3.md` is the entry these inputs belong to.
+C5 in `plans/open_items_v4.md` is the entry these inputs belong to.
+
+**Probe verdicts and the ruling, 2026-08-19 (mg42a; findings §1.35;
+the design and the ruling are `ledger_calibration_design.md`).**
+Inputs 1 and 2 measured as one defect on the cone side (the back batch
+charge) plus the forward side's deliberate covers on the parallel
+side; Greg TABLED the term changes as not urgent, since the preflight
+margin absorbs input 6's under-read and the over-reads cost only
+headroom.  Input 3 confirmed as the anchor.  Input 4 is CLOSED WITHOUT
+ACTION by ruling: no additional workloads join the ledger, and an
+explicit device list remains the way to run a bare projection at a
+scale one device cannot hold.  Input 5: the transient does not exist
+in a single reconstruction, so no ledger term is owed; the cycle and
+trial-accumulation mechanisms behind the nightly's reading were both
+refuted (mg42b locally; the harness loop read directly), so the
+reading is unexplained and the accuracy remedy moved to the nightly
+itself as open item G4.  Input 6 below was found by the probe.
 
 Each input below keeps the citations it came with.
 
@@ -57,3 +73,18 @@ that cost.
 *(regression rows 20260818T231349Z_c761b244 (2 GPUs, interactive)
 against 20260819T020141Z_950beaaf and 20260818T120327Z_64dedb87
 (4 GPUs, batch).)*
+
+## 6. Parallel at one device reads UNDER the band
+
+Found 2026-08-19, by the calibration probe itself.  The weighted
+512-class parallel reconstruction at one device models 1.96 GB against
+a measured 2.10, a ratio of 0.935 against the band floor of 1.00,
+reproduced in both probe runs.  The model's peak phase is the initial
+dot products; the measured watermark accumulates inside the back
+worker region.  Cone at one device reads 1.104, in band.  An
+under-read lets a doomed run start, so this input leads the term
+increment; its first discriminating step is the same arm on the
+per-tap forward route, which says whether the channel-sorted kernel
+brought the gap or the model always had it.
+
+*(mg42a jobs 15376256 and 15377054; multigpu_findings.md §1.35.)*

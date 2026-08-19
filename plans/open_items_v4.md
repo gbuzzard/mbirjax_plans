@@ -33,21 +33,18 @@ speed floors).
 
 ## Start here: the next session
 
-Ordered 2026-08-19, after Greg's E-section rulings and the close of
-the cone forward rework line (multigpu_findings.md §1.32, §1.33).
+Reordered 2026-08-19, later the same day.  Three items closed today:
+B7 (the chained mg40 and mg27 re-run submission, findings §1.34), D3
+(by verification), and the production comparison (mg41; the table is
+execution_overview.md §5.4 -- mbirtorch faster in both geometries at
+0.47x the memory).  The list advances.
 
-1. **Finish B7, one chained submission.**  The family-scoped
-   threshold refresh on the committed sorted forward, implementing
-   E3's ruled coarse table in the same pass
-   (`floors_coarsening_proposal.md` §5), chained with a re-run of
-   mg27 to re-anchor the comparison tables; then paste the rows,
-   refresh the user-docs timing table, and close B7.
-2. **D3, the forward driver's leftover-memory fix.**  The last
-   code-level item on the parallel and cone drivers.
-3. **MBIRJAX/MBIRTorch comparison.** Time and peak memory for a 15 iteration vcd recon with nontrivial weights at 1024**3 on 1 GPU, each of parallel and cone, each of MBIRJAX and MBIRTorch.  
-3. **C5, the ledger calibration pass.**  One pass answering the five
-   collected inputs (`torch_port/active/ledger_calibration_inputs.md`).
-4. **Riders as time allows.**  C6's automatic-device nightly row, and
+1. **G4, the nightly's memory column.**  Per-trial peak resets and
+   per-trial readings in the metrics repo's torch writer, so the
+   column means one warm reconstruction's peak; the 26.6 GiB reading's
+   mechanism stays open and the new per-trial numbers will localize
+   it.
+2. **Riders as time allows.**  C6's automatic-device nightly row, and
    B6's multiaxis probe: break the 512-class two-device loss into its
    component calls, with the 1024-class loss as the second case.
 
@@ -117,38 +114,34 @@ explains it.**  Two threshold refreshes measured the same shape: two
 devices win at the 384-class, lose badly at the 512-class, win at the
 768-class, and lose again at the 1024-class.  The sizes where two
 devices help are therefore a window, not a threshold, which the
-device-count thresholds cannot express.  The current threshold admits
-two devices from the 768-class up, and therefore into the 1024-class
-slowdown.  E3's ruling holds this geometry to
-one device (a sentinel, not a threshold) until the mechanism is
-known.  The proposed
+device-count thresholds cannot express.  E3's ruling holds this
+geometry to one device until the mechanism is known, and that hold
+landed 2026-08-19 as a sentinel row in the shipped table (with the
+coarse-table implementation, findings §1.34).  The proposed
 first step is to break the slow 512-class two-device run into its
 component calls, with the 1024-class loss as a second case.
 Translation loses at every device count and may share the mechanism.
 *(multigpu_findings.md §1.22, §1.25; the floor rows' notes in
 mbirtorch/_widening_floors.py.)*
 
-**B7. MOSTLY COMPLETE; two re-measures finish it, an early task for
-the next session.  The parallel-beam forward projection was much
-slower than mbirjax's, and a faster kernel now ships (c761b24).**  At the 1024 class the
-forward took 28.9 s of a 40 s one-device reconstruction, more than
-mbirjax spends on a whole reconstruction.  Profile runs put the cost
-in the kernel's memory traffic.  The design that measured best sorts
-each view's pixels by detector channel, accumulates a tile, and adds
-once per channel.  That form reads 3.45x on the production mixture of
-calls.  It is committed as the default route in `triton_parallel.py`,
-and it passed the test suites and composed reconstructions at the
-1024 and 2048 classes.  Parallel now matches or beats mbirjax at
-every measured device count.  What remains is a threshold refresh
-and a re-anchor of the comparison tables, which measured the old
-kernel.  A cone extension of the same idea was tried and lost
-(multigpu_findings.md §1.32), as did the sorted-order rework that followed it
-(multigpu_findings.md §1.33); Greg closed that line 2026-08-19, and Section 9 of
-`plans/torch_port/active/pfwd_segmented_design.md` carries the
-measured verdicts.
-*(mg27 through mg31 rows; multigpu_findings.md §1.5, §1.19 corrected, §1.26
-through §1.31; pfwd_segmented_design.md;
-projector_kernels/gpu_headroom_findings.md; greg_notes.md item 6.)*
+**B7. CLOSED 2026-08-19.  The parallel-beam forward projection was
+much slower than mbirjax's, and a faster kernel now ships
+(c761b24).**  The kernel sorts each view's pixels by detector
+channel and read 3.45x on the production mixture of calls.  It
+shipped as the default route.  The kernel owed two re-measures, and
+both ran as one chained submission.  The first family-scoped
+threshold refresh (mg40) re-measured the parallel thresholds on the
+new kernel in 7.5 minutes, against about 3 hours for a full refresh.
+The two-device threshold moved up one class, and E3's coarse table
+landed in the same pass.  The mg27 re-run then re-anchored the
+comparison tables and the user-docs timing table.  mbirtorch now
+matches or beats mbirjax at every measured cell of both geometries.
+The cone extensions of the sorted idea lost, and that line is closed
+(multigpu_findings.md §1.32, §1.33; pfwd_segmented_design.md §9).
+→ multigpu_findings.md §1.26 through §1.31 (the mechanism and the
+kernel), §1.34 (the scoped refresh); execution_overview.md §5;
+mg40_floors_scoped.md and mg27_reference_timings.md (the run
+records).
 
 ## C. Measurement and calibration gaps
 
@@ -174,19 +167,23 @@ reasoned default, not a measured one.**  The constant moved to 256 MiB;
 the sweep is in multigpu_findings.md §1.20 and in the constant's
 comment.
 
-**C5. OPEN, inputs accumulating for the next calibration pass.  The
-memory ledger's back-projection charge is conservative, and four
-further inputs are waiting for the same pass.**  The charge counts
-four memory blocks where only three are live at once, about 0.8 GB
-high at parallel 1024 on two devices.  Two later runs measured
-further over-charges.  Two other runs found costs the ledger does not
-price at all: one projection ran out of memory instead of widening or
-being refused, and a multi-device run briefly peaks on its lead
-device above what any ledger term names.  The five inputs are
-collected, with their citations, in
-`torch_port/active/ledger_calibration_inputs.md`.  The proposed next
-step is one calibration pass that answers all five.
-*(open_items F7; active/ledger_calibration_inputs.md.)*
+**C5. CLOSED 2026-08-19: the probe ran and the remainder is ruled.
+The memory ledger's charges were owed a calibration pass.**  The
+probe (mg42a, findings §1.35) attributed the over-reads (cone's back
+batch charge; parallel's deliberate forward covers at small shards),
+refuted the lead-device transient in a single reconstruction, and
+found one under-read (parallel at one device, 0.935).  Greg ruled the
+same day: the term changes are TABLED as not urgent, because the
+preflight's 15 percent margin absorbs the under-read and the
+over-reads cost only headroom; and the projection-entry preflight is
+CLOSED WITHOUT ACTION, since no additional workloads join the ledger
+-- an explicit device list remains the way to run a bare projection
+at a scale one device cannot hold.  The revisit triggers: an
+under-read past the margin, or a widening decision measured wrong.
+→ ledger_calibration_design.md (the design and the ruling);
+ledger_calibration_inputs.md (the six inputs and their verdicts);
+multigpu_findings.md §1.35.  The one live residue is the nightly's
+memory column, which is G4.
 
 **C6. No nightly row exercises the automatic device choice.**  Every
 nightly row pins its device count, which bypasses the automatic path
@@ -214,10 +211,16 @@ other; one of the two should be amended.
 *(open_items K3; array_forms_rule.md;
 closed/entry_point_survey.md rows E6, D8.)*
 
-**D3. A leftover-memory pattern in the forward driver.**  The forward
-projection's two-fan branch keeps a large temporary alive across a
-rebind, the same pattern that was fixed in the back-projection loop; it
-was out of that fix's scope.
+**D3. CLOSED 2026-08-19, by verification -- the defect no longer
+exists.  A leftover-memory pattern in the forward driver.**  The
+record described a pre-fix snapshot: the same commit that fixed the
+back loop (mbirtorch a880d9c, 2026-08-10) added the release to the
+banded forward too, and the banded forward was later removed whole
+(bfbd286).  The current forward driver, the cylinder transfer,
+releases each cylinder batch after its projection is issued
+(``full_cyl = None`` in ``_sparse_forward_project_cylinders``), and
+its only multi-batch residency is the deliberate transfer-ahead
+overlap, which the memory ledger charges.  No code change was needed.
 *(open_items K1; closed/backloop_attribution.md §5 item 3.)*
 
 **D4. Re-sweep for missed multi-GPU support.**  The original survey
@@ -269,11 +272,12 @@ family-scoped refresh measures drift in the coarse table.
 *(open_items G2 and I3; active/floors_refresh_automation.md §7;
 multigpu_plan.md §0a item 8.)*
 
-**E3. CLOSED 2026-08-19, fully ruled.  Whether and when to simplify
-the device-count thresholds.**  Coarser table; family-scoped
+**E3. CLOSED 2026-08-19, ruled and implemented.  Whether and when to
+simplify the device-count thresholds.**  Coarser table; family-scoped
 refreshes; cone n=4 joins the shared row; multiaxis n=2 is a
-sentinel until B6's mechanism is known.  Implementation rides B7's
-owed refresh.  → floors_coarsening_proposal.md §5 (the ruling).
+sentinel until B6's mechanism is known.  The implementation rode
+B7's refresh and landed the same day (mg40, findings §1.34).
+→ floors_coarsening_proposal.md §5 (the ruling and the landing).
 
 **E4. CLOSED 2026-08-19, confirmed.  The nightly cadence for
 multi-GPU rows.**  Fire-on-change at the measured price: about 1.6
@@ -298,11 +302,11 @@ handling is E5's cadence question, which is Charlie's.
 ## F. Documentation and demos
 
 **F1. CLOSED 2026-08-18, as a staged edit.  The multi-GPU page's
-timing table is stale.**  The table now carries mg27's parallel-beam
-numbers (40.0, 23.8, 15.5 s at the 1024 class), names the geometry,
-and the surrounding ratios are recomputed; the old 94 s row is gone.
-The edit is staged in mbirtorch (`docs/source/usr_multi_gpu.rst`) for
-Greg's commit.
+timing table is stale.**  The table took mg27's numbers and lost the
+old 94 s row; B7's close refreshed it again on 2026-08-19 with the
+sorted-kernel re-anchor (21.3, 14.2, 10.8 s at the 1024 class), and
+the page's floors paragraph now describes the coarse table.  Both
+edits are committed (mbirtorch 88abb4c).
 *(open_items H2; multigpu_plan.md item 7; closed/docs.md:12.)*
 
 **F2. CLOSED 2026-08-19.  Two demo-side documentation pieces.**
@@ -325,6 +329,20 @@ to be read once, by Greg.
 A new mbirtorch_metrics repo and dashboard should become independent and record mbirtorch only, 
 in a format similar to the mbirjax dashboard prior to the addition of mbirtorch. 
 The mbirjax nightly runs will eventually be retired.  
+
+**G4. The nightly's multi-device memory columns are unreliable, for a
+reason not yet explained.**  A four-device 1024-class arm recorded a
+26.6 GiB lead-device watermark where a fresh single reconstruction
+peaks at 6.84 GiB.  The two easy mechanisms are refuted: reconstruction
+end-states free at refcount (mg42b, run locally), and the harness's
+trial loop already drops results and collects before each timed call.
+The accuracy remedy needs no mechanism: reset the peak counters before
+each trial and report the warm trial's peak, recording per-trial peaks
+so the column diagnoses itself.  Until that lands in
+`mbirjax_metrics/tooling/scaling_tests/torch_backend_writer.py`, read
+the multi-device memory columns as unreliable; timings and value gates
+are unaffected.
+*(multigpu_findings.md §1.35; mg42b_cycle_check.py.)*
 
 ## H. Scheduled and back-burner work
 

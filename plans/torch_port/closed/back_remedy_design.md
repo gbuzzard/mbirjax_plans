@@ -1,7 +1,6 @@
 # Design note: the cone back-projection remedy
 
-**Status: DRAFT, awaiting Greg's ruling (§8).**  Opened 2026-08-17,
-evening.  Nothing here is implemented.
+**Status: IMPLEMENTED 2026-08-18.**
 
 **What this note is.**  The open item B1 asked why the cone back
 projection costs more on more devices.  Three related items appear
