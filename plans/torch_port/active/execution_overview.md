@@ -603,6 +603,30 @@ digit.  For reference, the mbirjax nightly of 2026-08-08 on the
 prerelease branch reads parallel 1024 at 22.45, 10.44 and 8.32 s and
 cone 1024 at 61.75, 43.90 and 27.22 s, under the other ruler.
 
+### 5.4 A production-shaped reading: 15 iterations, one GPU
+
+The tables above compare device counts at 3 iterations.  This table
+answers the plain user question instead: what one real reconstruction
+costs in each library, at the 1024-class cell on one H100, over 15
+VCD iterations with transmission-shaped weights.  Both libraries
+reconstructed the same staged sinograms as §5.1.
+
+| geometry | library | warm median | peak |
+|---|---|---|---|
+| parallel | mbirtorch | 117.09 s | 22.87 GB |
+| parallel | mbirjax | 139.75 s | 48.66 GB |
+| cone | mbirtorch | 253.89 s | 22.95 GB |
+| cone | mbirjax | 271.52 s | 48.66 GB |
+
+mbirtorch is faster in both geometries, 1.19x on parallel and 1.07x
+on cone, and holds 0.47x of mbirjax's device memory.  The two
+libraries' reconstructions agree at the 1e-7 class.  The peak columns
+carry the same instrument difference as §5.1 (the jax peak includes
+compile-time allocations).  Measured 2026-08-19 by mg41 (job
+15371081); the run record is
+`plans/experiments/torch_port/mg41_production_compare.md`, and the
+mbirjax side ran the cluster checkout at e99bc76, jax 0.10.1.
+
 ## 6. The tile policy
 
 mbirjax has a tile policy and mbirtorch does not.  This section states what
