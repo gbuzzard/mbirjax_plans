@@ -4,17 +4,12 @@ both and contains plans related to both.  `mbirjax_metrics` is the nightly
 regression engine and dashboard and is also parallel to both.
 
 This session's task: the opening list in
-`mbirjax_plans/plans/open_items_v3.md`, following that file's
-"Start here" note (ordered 2026-08-18: parallel and cone performance
-first).  The item entries in v3 carry the detail; work from them, not
+`mbirjax_plans/plans/open_items_v4.md`, following that file's
+"Start here" note.  The item entries in v4 carry the detail; work from them, not
 from this file.
 
-Do not start the B3 remedy; the counter run is this session's item, and
-acting on what it finds requires Greg's approval.  The coarser-table
-proposal (item 2) likewise ends in a ruling request, not an
-implementation.  The band-padding remedy is closed (B1, B2; findings
-§1.23) — do not reopen it.  Update
-`mbirjax_plans/plans/open_items_v3.md` as you complete items.
+Update
+`mbirjax_plans/plans/open_items_v4.md` as you complete items.
 
 **IMPORTANT — workflow protocol:** stage only (`git add` by explicit file
 name), never `git commit` unless Greg directs it (he commits from
