@@ -122,7 +122,13 @@ Five design points, decided here so the spike is mechanical:
   granularity; the shipped form recomputes them per call at the
   measured few-millisecond class, and the plan-slot memoization is
   the recorded follow-up, at about 6 MB per subset per view batch
-  under a ledger charge.
+  under a ledger charge.  (Sizing caution, 2026-08-18: the default
+  granularity list carries four independent 128-subset partitions
+  and the default sequence cycles all four, so the cache keys on
+  the partition entry and the fine level costs four times any
+  one-partition estimate.  Greg's proposed lever: one shared
+  128-partition per granularity -- free as an opt-in, an algorithm
+  change owing convergence and parity evidence as a default.)
   The full mask keeps the unsorted chunk path: raster order is
   already channel-local, and a per-view gather of a 3.1 GB block
   would resurrect the reload mg29 measured.

@@ -147,16 +147,24 @@ per-tap kernel had 38 (mg33's counter reading).  The sort itself
 costs 14.6 ms at the full mask and under 4 ms at subsets, against
 savings tens to hundreds of milliseconds per call, and the shipped
 code simply pays it per call.  The orderings are REUSABLE but not yet
-reused: a reconstruction draws its partitions once at setup (one
-partition per granularity level; only the subset visit order
-reshuffles per pass), so each subset's per-view orderings are fixed
-for the whole run.  A memoization through the ``plan`` slot would
-therefore compute each ordering once and reuse it once per pass at
-that granularity -- about eight reuses in a 3-iteration run, more in
-longer ones -- at a cache cost of one (views x pixels) integer array
-per subset, a few hundred megabytes for a default schedule, which is
-why it is a recorded follow-up with a ledger charge rather than a
-free win.
+reused: a reconstruction draws its partitions once at setup and
+their memberships never change afterward -- only the subset visit
+order reshuffles per pass.  One caution for any future cache: the
+default granularity list carries four INDEPENDENT 128-subset
+partitions, not one, and the default sequence cycles through all
+four for the tail of a long run, so a cache must key on the
+partition entry, and holding the fine level whole costs four times
+any one-partition estimate.  The reuse is also back-loaded: a pass
+visits each entry once, and a 3-iteration run's sequence entries
+are all distinct, so nothing repeats until runs get long -- a
+default-length run visits each 128-entry twenty-five times, and a
+positivity-constrained update projects its subset twice back to
+back.  Restricting the schedule to a single 128-partition would cut
+the cache four-fold, free as an opt-in; as a default change it is
+an algorithm decision owing convergence and parity evidence, since
+the four-way cycling is inherited mbirjax behavior.  All of which
+is why the memoization stays a recorded follow-up with a ledger
+charge rather than a free win.
 
 ### 3.2 The parallel back: gather and store once
 

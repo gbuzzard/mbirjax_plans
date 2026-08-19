@@ -1961,10 +1961,20 @@ mask against a 648 ms saving, under 4 ms at every subset, and the
 shipped route pays it per call.  Amortization is available but not
 taken: a reconstruction draws its partitions once at setup and only
 reshuffles the subset visit order per pass, so each subset's
-orderings are fixed for the run and a plan-slot memoization would
-reuse each one once per pass at its granularity, at a cache cost of
-a few hundred megabytes for a default schedule (the recorded
-follow-up, with its ledger charge).
+orderings are fixed for the run.  A plan-slot memoization must key
+on the partition ENTRY, though, not the granularity: the default
+granularity list carries four independent 128-subset partitions and
+the default sequence cycles all four, so holding the fine level
+costs four times any one-partition estimate (the earlier
+few-hundred-megabyte figure rested on one partition per level and
+is withdrawn), and a 3-iteration run repeats nothing at all -- its
+sequence entries are distinct.  The reuse that pays is the long
+tail: twenty-five visits per 128-entry at default length, doubled
+per visit when positivity re-projects the clipped update.  A single
+shared 128-partition per granularity (Greg's proposed restriction,
+2026-08-18) would cut the cache four-fold -- free as an opt-in,
+owing convergence and parity evidence as a default.  The
+memoization stays the recorded follow-up, with its ledger charge.
 
 The arithmetic this leaves for the library step, stated as
 arithmetic: the parallel forward was 28.9 s of the 40 s one-device
