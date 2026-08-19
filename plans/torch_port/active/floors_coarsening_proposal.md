@@ -1,9 +1,18 @@
 # Proposal: coarser device-count thresholds, and a family-scoped refresh
 
-**Status: COMPLETE, awaiting Greg's ruling (§5).**  Opened 2026-08-18;
-§2's rows filled the same day from mg26's verdicts.  The fine-grained
-refresh itself is pasted and staged in `mbirtorch/_widening_floors.py`
-(the floors test passes on it); nothing from §2 or §3 is implemented.
+**Status: RULED AND IMPLEMENTED.**  Opened 2026-08-18; §2's rows
+filled the same day from mg26's verdicts; Greg ruled (a) and (b)
+approved whole on 2026-08-19 (§5).  The implementation landed the
+same day and rode the first scoped refresh (mg40, job 15369689): the
+coarse table, the 1.15x margin (`ADMISSION_MARGIN`), the multiaxis
+n=2 sentinel, the per-family cost inputs with all three gap closures,
+and the `--families` mode with the carry refusal are in
+`mbirtorch/_widening_floors.py` and
+`dev_scripts/refresh_widening_floors.py` (staged).  mg40 measured the
+parallel family in 7.5 minutes against mg26's 2 hours 57, and moved
+the parallel n=2 floor up a class on the sorted forward kernel --
+multigpu_findings.md §1.34 is the record.  One §2 row is superseded:
+the shared n=2 row split when parallel's floor moved above cone's.
 
 **What this note is.**  E3 is ruled: the device-count thresholds (the
 widening speed floors in `mbirtorch/_widening_floors.py`) should become

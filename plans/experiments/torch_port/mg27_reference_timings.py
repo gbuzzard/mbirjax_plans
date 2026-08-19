@@ -225,12 +225,15 @@ CROSS_COUNT_REL_GATE = 1e-3
 BASE_COUNT = 1
 
 # ── recorded context, not gates ───────────────────────────────────────────────
-#: The three changes these references postdate, printed with the plan so the
-#: log opens with the reason the run exists.
+#: The changes these references postdate, printed with the plan so the
+#: log opens with the reason the run exists.  The first three drove the
+#: 2026-08-18 run (job 15342577); the fourth drives the 2026-08-19 re-run,
+#: which re-anchors the tables on the channel-sorted parallel forward.
 CHANGES_SINCE_REFERENCES = (
     "column-gather forward default, 2026-08-11",
     "forward pixel batch default 32768, 2026-08-17",
     "kernel width padding, mbirtorch 64dedb8, 2026-08-18",
+    "channel-sorted parallel forward kernel, mbirtorch c761b24, 2026-08-18",
 )
 #: The padding witness.  504 is a four-device slice band at the 2048 cell and
 #: 512 is what the rounding must turn it into; an unpadded tree either has no

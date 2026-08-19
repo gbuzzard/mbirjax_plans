@@ -2114,7 +2114,55 @@ chunked arms' printout, and an ncu launch-skip that profiled the
 availability self-check's tiny launch instead of the full-mask
 call); neither gated anything.
 
-## 3. The crossover ladder (mg4)
+### 1.34 The first scoped floors refresh: the coarse table lands,
+### and the parallel n=2 floor rises a class on the sorted kernel
+### (mg40, 2026-08-19)
+
+Measured 2026-08-19, job 15369689 on h018, four H100s, 7.5 minutes
+of measurement, exit 0.  The run detail is in `mg40_floors_scoped.md`
+beside the sbatch; the refreshed parallel rows are pasted into
+`mbirtorch/_widening_floors.py` with current hashes and checksum, and
+the floors and device-policy tests pass on the pasted table (staged).
+
+The run also carried E3's implementation, which rode this refresh as
+ruled.  The coarse admission rule is now code: a floor needs a 1.15x
+win (`ADMISSION_MARGIN`), a thinner win rounds up one class, and the
+multiaxis n=2 row is a sentinel that holds the family to one device
+until B6's mechanism is known.  The cost inputs became per-family
+(`FAMILY_COST_INPUTS`), with the three gaps from the proposal closed:
+`_utils.py` joined the shared set, each geometry's body file joined
+its family, and the denoiser gained its own set.  The refresh tool
+gained the `--families` mode with the carry-refusal rule.
+
+The scope came from the hashes rather than from a person.  The
+channel-sorted forward kernel (c761b24) changed `triton_parallel.py`
+alone, that file prices only the parallel family, and the bare
+`--families` flag resolved to exactly that family: 10 timed arms and
+4 generators against mg26's 66 and 17.  mg26 ran 2 hours 57 minutes;
+this run's measurement took 7.5 minutes, and the carried families'
+rows passed through verbatim.
+
+The parallel n=2 floor moved up one class, from the 512-class to the
+768-class.  Against one device, two devices read 0.62x at the
+384-class, 0.97x at the 512-class, and 1.38x at the 768-class.  The
+512-class win was 1.20x on the per-tap kernel (mg26), so the sorted
+kernel did not merely thin that win below the margin -- it removed
+it.  The direction is the expected one: splitting's overheads did
+not change, and the work they amortize shrank.
+
+The parallel n=4 floor held at the 1024-class, now by measurement
+rather than by rounding.  Against two devices, four read 0.80x at
+the 768-class and 1.32x at the 1024-class.  mg26 read a thin 1.06x
+win at the 768-class and the margin rule rounded the floor up; the
+sorted kernel turned that same cell into an outright loss, so the
+rounding anticipated exactly this kernel change one day before it
+was measured.
+
+One consequence for the table's shape: the n=2 rows no longer share.
+Cone n=2 keeps its 512-class floor and parallel n=2 now sits at the
+768-class, so the shared-row convention applies only where the
+measured floors agree, which today is the n=4 pair.  Both rows' notes
+name the split.
 
 This section locates where each device count starts paying, which is
 decision 1's data.  The ladder sweeps six parallel-family sizes below

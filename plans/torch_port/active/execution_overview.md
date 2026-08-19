@@ -523,27 +523,32 @@ peak.  The mbirtorch column is the current tip and comes from three jobs, so
 
 | geometry | devices | mbirtorch time | mbirtorch peak | mbirjax time | mbirjax peak |
 |---|---|---|---|---|---|
-| parallel | 1 | 39.98 s | 22.87 GB | 25.80 s | 49.81 GB |
-| parallel | 2 | 23.84 s | 11.77 GB | 14.33 s | 19.71 GB |
-| parallel | 4 | 15.50 s | 6.23 GB | 11.52 s | 14.73 GB |
-| cone | 1 | 61.56 s | 22.95 GB | 62.75 s | 48.45 GB |
-| cone | 2 | 35.13 s | 12.47 GB | 43.37 s | 21.52 GB |
-| cone | 4 | 22.34 s | 6.84 GB | 25.78 s | 12.23 GB |
+| parallel | 1 | 21.26 s | 22.87 GB | 25.80 s | 49.81 GB |
+| parallel | 2 | 14.24 s | 11.77 GB | 14.33 s | 19.71 GB |
+| parallel | 4 | 10.84 s | 6.30 GB | 11.52 s | 14.73 GB |
+| cone | 1 | 61.65 s | 22.95 GB | 62.75 s | 48.45 GB |
+| cone | 2 | 35.06 s | 12.47 GB | 43.37 s | 21.52 GB |
+| cone | 4 | 22.33 s | 6.84 GB | 25.78 s | 12.23 GB |
 
-Three readings carry the table.  Cone mbirtorch is now FASTER than mbirjax
-at every multi-device cell, 0.81x at two devices and 0.87x at four, with
-parity at one (0.98x); parallel remains slower, at 1.55x, 1.66x and 1.35x
-across the three counts.  mbirtorch holds less memory at every cell, at
-0.46x to 0.47x of mbirjax's peak at one device and 0.42x to 0.60x at the
-multi-device cells.  Within mbirtorch the scaling is monotone in both
-geometries: parallel gains 1.68x at two devices and 2.58x at four, cone
-1.75x and 2.76x, and the four-device peak is 0.27x to 0.30x of the
-one-device peak.
+Three readings carry the table.  mbirtorch now matches or beats mbirjax
+at EVERY cell of both geometries: parallel reads 0.82x at one device,
+0.99x at two, and 0.94x at four, and cone reads 0.98x, 0.81x, and 0.87x.
+mbirtorch holds less memory at every cell, at 0.43x to 0.60x of mbirjax's
+peak.  Within mbirtorch the scaling is monotone in both geometries:
+parallel gains 1.49x at two devices and 1.96x at four, cone 1.76x and
+2.76x, and the four-device peak is 0.28x to 0.30x of the one-device peak.
 
-The cone column is where the band padding landed.  Cone at two devices was
-a REGRESSION against one device on 2026-08-09 (67.23 s against 61.57 s),
-reached 1.12x with the copy streams on 2026-08-11 (54.86 s), and reads
-1.75x now (35.13 s) with the padding.  The mbirjax column did not move.
+The parallel column is where the channel-sorted forward kernel landed
+(mbirtorch c761b24): parallel at one device read 94.0 s before the
+hand-written kernels, 39.98 s on the per-tap kernel, and 21.26 s now.
+The gain shrinks as devices are added (1.88x, 1.67x, 1.43x against the
+2026-08-18 column), so parallel's device-count crossovers moved up, and
+the widening floors were re-measured to match (multigpu_findings.md
+§1.34).  The cone column reproduced within run noise, which is what the
+kernel change predicts: the sorted kernel is parallel-only.  The mbirjax
+column did not move.  Cone's own history: two devices were a REGRESSION
+on 2026-08-09 (67.23 s against 61.57 s) and read 1.76x now, with the
+band padding the largest step.
 
 ### 5.2 The 512-class cell
 
@@ -551,37 +556,45 @@ The cell is sinogram (512, 448, 384).
 
 | geometry | devices | mbirtorch time | mbirtorch peak | mbirjax time | mbirjax peak |
 |---|---|---|---|---|---|
-| parallel | 1 | 1.85 s | 1.93 GB | 1.66 s | 3.89 GB |
-| parallel | 2 | 1.49 s | 1.06 GB | 1.98 s | 2.14 GB |
-| parallel | 4 | 2.15 s | 0.62 GB | 3.12 s | 1.66 GB |
-| cone | 1 | 2.74 s | 2.15 GB | 3.07 s | 3.96 GB |
-| cone | 2 | 2.13 s | 1.33 GB | 2.93 s | 2.15 GB |
+| parallel | 1 | 1.31 s | 2.10 GB | 1.66 s | 3.89 GB |
+| parallel | 2 | 1.29 s | 1.14 GB | 1.98 s | 2.14 GB |
+| parallel | 4 | 2.10 s | 0.70 GB | 3.12 s | 1.66 GB |
+| cone | 1 | 2.75 s | 2.15 GB | 3.07 s | 3.96 GB |
+| cone | 2 | 2.14 s | 1.33 GB | 2.93 s | 2.15 GB |
 | cone | 4 | 2.80 s | 0.87 GB | 3.76 s | 1.33 GB |
 
-Two readings carry this table.  Two devices now pay for themselves in both
-geometries at this size, 1.24x on parallel and 1.29x on cone, which is the
-crossover the widening floors place exactly here.  Neither library gains
-from four devices at this size, and mbirjax loses more than mbirtorch
-does.
+Two readings carry this table.  Two devices still pay for themselves on
+cone at this size (1.29x), which is where cone's widening floor sits.  On
+parallel the two-device win is gone (1.02x, inside run noise): the sorted
+forward made one device fast enough that this size no longer covers the
+cost of splitting, and the parallel floor moved up to the 768-class to
+match (multigpu_findings.md §1.34).  Neither library gains from four
+devices at this size, and mbirjax loses more than mbirtorch does.
 
 ### 5.3 Provenance
 
-Every mbirtorch number in §5.1 and §5.2 comes from one job: mg27, job
-15342577, 2026-08-18, on four H100s (node h012), on the padded 64dedb8
-tip with the column-gather forward, the 32768 pixel batch, and the
-padded kernels.  Each row is the warm median of three seeded
-3-iteration reconstructions after a discarded cold pass, in a fresh
-process per device count, all counts of one cell reconstructing the
-same staged sinogram.  The cross-count value fingerprints agreed with
-the one-device row at 4.0e-8 relative or better on every cell.  The
-rows are `plans/experiments/torch_port/rows/mg27_reference_h012_20260818_121856.jsonl`.
+Every mbirtorch number in §5.1 and §5.2 comes from one job: the mg27
+re-run, job 15369703, 2026-08-19, on four H100s (node h018), on the
+channel-sorted forward kernel (mbirtorch c761b24) with the cylinder
+transfer, the 32768 pixel batch, and the padded kernels; the job
+asserted the padding and sorted-forward witnesses before any variant
+ran.  Each row is the warm median of three seeded 3-iteration
+reconstructions after a discarded cold pass, in a fresh process per
+device count.  The staged sinograms were reused from the 2026-08-18
+run by md5, so every run of this harness reconstructs identical
+arrays and the columns compare across runs.  The cross-count value
+fingerprints agreed with the one-device row at 4.1e-8 relative or
+better on every cell.  The rows are
+`plans/experiments/torch_port/rows/mg27_reference_h018_20260819_130958.jsonl`.
 
-The re-measure settled the one-device caveat the previous provenance
-carried.  The old one-device rows predated the column-gather default,
-with a code argument that a trivial placement never enters the gather;
-the new rows measure it: 39.98 s against the old 39.90 on parallel and
-61.56 against 61.66 on cone, so the one-device path did not move
-through the flip, the batch default, or the padding.
+The re-run separates the sorted kernel's effect from everything else.
+Parallel took the whole gain: 21.26 s against the 2026-08-18 run's
+39.98 at one device, 14.24 against 23.84, and 10.84 against 15.50.
+Cone reproduced within run noise (61.65 against 61.56, 35.06 against
+35.13, 22.33 against 22.34), which is what a parallel-only kernel
+change predicts.  The 2026-08-18 column (job 15342577, rows
+`mg27_reference_h012_20260818_121856.jsonl`) remains the padded
+per-tap reference.
 
 The mbirjax rows are mg1, job 15011662, 2026-08-09.  They come from a
 jax version and branch that has not moved during the campaign, and
