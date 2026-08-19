@@ -206,3 +206,14 @@ run.
 * **(c) Or direct otherwise** -- the current fine-grained table and
   whole-table refresh keep working as they are; nothing here is
   urgent except the GPU-hours the next refresh costs.
+
+**RULED 2026-08-19 (Greg): (a) and (b) approved whole.**  The two
+judgment calls resolve as the proposal recommended: cone at four
+devices joins the shared coarse row despite its 1.145 reading
+against the 1.15 margin (the margin exists for robustness, and a
+cone-only row would re-create the fragility the coarsening
+removes), and multiaxis at two devices becomes a sentinel rather
+than a threshold until B6's mechanism is known.  The first
+family-scoped refresh is B7's owed threshold re-measure (the
+sorted parallel forward moved triton_parallel.py's cost inputs);
+it implements the coarse table in the same pass.
