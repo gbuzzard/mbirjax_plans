@@ -1,7 +1,9 @@
 # Design note: segmented accumulation for the forward kernels
 
-**Status: SPIKES COMPLETE, 2026-08-18 (mg32 and mg33, findings
-§1.29 and §1.30); the library step (§6.2) awaits Greg's go.**  Opened 2026-08-18,
+**Status: the parallel library step SHIPPED as mbirtorch c761b24
+(2026-08-18; composed gate, findings §1.31), and the cone rework
+line (§9) CLOSED by Greg's ruling 2026-08-19 (findings §1.32,
+§1.33).**  Opened 2026-08-18,
 evening; the cone counter reading (mg31) landed the same evening and
 §4 carries it.  Greg approved the spike the same evening and asked
 for the plain-language explanation now following §2; the spike is
@@ -219,8 +221,9 @@ not measurements; the spike turns them into numbers.
   bounded near 1.3x if the atomic share vanished entirely.  The
   recommendation: cone rides the spike (the kernel change is shared
   and one sweep column is nearly free), and its library adoption
-  gates on its own composed numbers.  The gather-side re-read is
-  recorded as a separate observation, not this note's scope.
+  gates on its own composed numbers.  The gather-side re-read was
+  recorded here as out of scope; §9 (added 2026-08-19) now carries
+  the design that attacks it.
 * **The back kernels: out of scope.**  They gather and store once per
   output element, with zero atomic sectors measured (§1.24).
 
@@ -314,3 +317,195 @@ ceiling if this design is declined.
 * **(c) Decline, and take the recorded alternative:** ship mg30's
   view-chunk variant at 1.17x through the composed re-gate, or hold
   the forward as it is.
+## 9. The cone pixel-batched form: two-axis grouping (2026-08-19)
+
+Added after the sorted parallel forward shipped, from Greg's proposal
+in discussion; this section carries the design that §4 previously
+declared out of scope.
+
+**What it attacks.**  mg31's gather reading: 175.4 GB of DRAM read
+per full-mask 52-view launch, 60.6x the flat recon.  Divided by the
+views that is 1.17x per view -- each view reads the volume
+essentially once, nearly perfectly -- so nothing inside a view is
+worth reordering.  The whole prize is CROSS-VIEW amortization: hold
+a piece of the flat recon and serve several views from it.
+
+**The inverted decomposition.**  A work unit holds a (pixel tile x
+slice tile) block of the flat recon in registers and serves a chunk
+of 8 to 16 consecutive views; reads fall by roughly the chunk
+length.  The hazard is the traffic-conservation lesson (mg29):
+anchor the loop on the input and the OUTPUT becomes the moving
+target.
+
+**The two-axis grouping (the proposal).**  Ungrouped, a tile's
+slices scatter over hundreds of detector rows, because magnification
+varies across the mask and row = m0 + W_p_r x slice (cone_beam.py's
+sanctioned affine bridge).  Group pixels so each tile is compact in
+BOTH detector axes -- channel center for the horizontal, W_p_r for
+the vertical -- and the tile's footprint collapses to a (channel
+window x row window) patch: accumulate it in registers, flush it
+once per view.  The per-view flush decouples the two concerns: chunk
+drift moves the window's POSITION between views (recomputed, free),
+while the window's SIZE is set by the within-view spread of the
+group plus a pad for membership going stale across the chunk's
+angles.  The ordering is ONE compound sort per chunk, not two full
+sorts: coarse W_p_r buckets as the primary key, channel center as
+the secondary; consecutive tiles inherit bucket-width compactness in
+magnification and sort-order compactness in channel.  Against the
+parallel route's per-view sorts this is a factor-of-chunk fewer
+sorts, each slightly heavier for its fused key.  If the paper check
+finds lexicographic tiles too loose in magnification at viable
+bucket widths, the fallback organization is true two-axis bucketing
+-- still one pass, different constants.
+
+**Required fallbacks (Greg's rider, 2026-08-19).**  Three inputs
+must disengage the route rather than degrade it.  Sparse pixel
+SUBSETS thin the groups; the per-tile per-tap fallback carries over
+from the parallel design unchanged.  SMALL reconstructions fall
+below the tile and window minimums; the whole call takes the per-tap
+route behind a switch, the pattern the parallel forward ships.
+Sparse-VIEW problems break the chunk's premise of nearby angles, so
+the availability rule must key on ANGULAR SPACING, not view count:
+the chunk shrinks as spacing grows and the route disengages when a
+chunk of one is all that remains.
+
+**Helical scope (Greg's note, 2026-08-19).**  Nonzero helical
+z-shifts fit this design rather than fighting it.  The shift enters
+the affine as a per-view term (the z_offset of
+`_cone_vertical_affine`), so within one view it moves every pixel's
+rows together -- common-mode, which the per-view flush absorbs as
+window position rather than size -- and consecutive views of a
+chunk carry similar shifts because the helix is continuous in
+angle, so the membership staleness padding stays small.  The
+spike's kernel therefore keeps the shipped z-offset arithmetic even
+though its test cell is non-helical, and a helical arm of the mg37
+check (one extra cell construction; the harness already reads the z
+column of the view parameters) is the cheap confirmation when this
+scope is exercised.
+
+**Ceiling and ladder.**  The kernel runs at 50.4 percent arithmetic
+(mg31), so a perfect memory fix bounds near 2x on the kernel --
+about 16 s of the 59 s cone 1024 wall.  The ladder: mg37, the paper
+check, on the real builders on CPU (bucket count against the row
+window budget against tile fill; chunk staleness padding; the
+accumulator's register bill); a spike in mg33's template only if
+mg37 closes; the composed gate only on a spike win.
+
+**The paper check closed (mg37, run 2026-08-19, same day).**
+Computed from the shipped builders on CPU at the 1024-class cone
+cell, four reference angles, the compound sort exactly as above.
+With 32 W_p_r buckets, an 8- or 16-view chunk, and slice tiles of 4
+or 8, at least 99.8 percent of tiles fit a 16-row x 8-channel
+window (per-view flush sizing: row p99 15.7, channel p99 7.3), and
+every swept combination fits 32 x 16 at 99.7 percent or better; the
+leftovers are the per-tile fallback's job, and bucket-boundary
+tiles number at most 31 of 24,101.  The accumulator patch at
+16 x 8 is 512 bytes, far under mg32's 6 KB precedent.  The check
+also measured WHY the flush must be per view: the union footprint
+across a chunk runs 27 channels wide at 8 views and 54 at 16 (the
+common-mode rotation drift), so a per-chunk flush is infeasible
+while the per-view window stays single-digit channels.  Chunk 16
+prices nearly the same windows as chunk 8, so the read amortization
+can take the longer chunk essentially free.  Rows:
+`rows/mg37_cone_window_Gregs-MacBook-Pro-2_20260819_075351.jsonl`.
+The spike is worth building; it awaits Greg's go.
+
+**The spike ran and lost (mg38, 2026-08-19; findings §1.32).**
+0.24x at the best arm on the full mask, every values gate held.
+The grouping and the window mechanics validated exactly as the
+paper check predicted (99.8 percent of tiles on the window path,
+atomics down 5x), but the read amortization -- this design's one
+prize -- never materialized: the counter read DRAM at the shipped
+kernel's once-per-view signature (73.7x the recon block per
+launch), so the values tile did not stay resident across the view
+chunk, and the window path's arithmetic tax was paid on top.  The
+compile introspection could not read registers or spills (None
+throughout), so spill-versus-rematerialization is undistinguished.
+Status: a measured negative.  The one bounded follow-up left open
+is the spill diagnostic; reopening on it is Greg's call, with the
+honest arithmetic that even amortized reads faced a thin margin
+under the 2x ceiling and the tax.
+
+**mg38 follow-up:**
+
+**What mg38 actually isolated.** The loss decomposes into two 
+independent problems, and the promising parts survive both: 
+(1) the *residency failure* — the values tile never stayed 
+in registers across the view chunk, so reads stayed at 
+once-per-view; and (2) the *arithmetic tax* — the window 
+path evaluates all 16 window rows per (pixel, slice) where 
+only 2–3 carry weight, because Triton can't scatter into a 
+register tile by computed index, so it must evaluate 
+densely. Fixing only the residency leaves the tax: my 
+arithmetic says reads dropping to the predicted 8x would 
+take 1968 ms to roughly 1200 — still 0.4x. Any winning 
+rework must beat *both*, or sidestep the register-residency 
+idea entirely. Three candidates, ranked:
+
+**A. The sorted order fed to the *unchanged* shipped 
+kernel — my top pick.** Everything mg38 built for grouping 
+runs *outside* the kernel: the compound sort, the gathered 
+contract, the permuted values. Feed exactly that sorted 
+order to the shipped per-tap kernel — no new kernel, zero 
+arithmetic tax, values identical to within summation order. 
+The shipped kernel's measured pathology at mg31 wasn't DRAM 
+bandwidth, it was *locality*: L1 hit 41.7%, nine warps 
+parked. Sorted tiles make the 32 pixels of each program 
+gather overlapping slice ranges and adjacent channels, 
+which is precisely what raises L1/L2 hits. If locality 
+alone recovers 1.2–1.5x, it ships through a composed gate 
+as a wrapper-level data-order change — the same shape of 
+change as the parallel sort, minus the new kernel risk. 
+Cost: one harness arm reusing mg38's machinery, 
+~30 GPU-minutes.
+
+**B. Cache-blocking by slice band through the existing 
+kernel.** The wrapper already accepts `slice_start` with 
+banded values. Loop (slice band × view chunk): a ~16-slice 
+band of the flat recon is ~49 MB — it *fits in L2* — so 
+serving a whole view chunk from one band gets the cross-view 
+amortization mg38 wanted, but through the cache instead of 
+through registers, with the shipped kernel's arithmetic 
+untouched. Two mechanical needs: narrow the launched 
+row-tile range per band (the mg37 affine machinery computes 
+each band's row span directly — typically a few dozen rows, 
+so the grid shrinks instead of wasting work), and accumulate 
+across bands (either a no-zero variant of the output or 
+summing band outputs). This is the design that actually 
+attacks the 60x with the hardware doing what it's good at.
+
+**C. Repair mg38's kernel itself** — fix the compile 
+introspection to read spills, split fitting/non-fitting 
+tiles into two launches so the divergent branch leaves 
+the view loop, shrink the live set (accumulate the 8×16 
+patch instead of the 32×16 pixel block), and cut the tax 
+with slice tiles of 1–2 and 8-row windows (tax falls to 
+~2.7x). Most effort, and the ceiling math is thinnest — 
+it needs *everything* to land to reach maybe 1.3–1.6x.
+
+A and B compose: sorted order helps B's within-band 
+locality too. My recommendation is a single mg39 that 
+runs A as the headline arm and B as the second arm 
+(both reuse mg38's harness bones), with C held unless 
+the other two disappoint. Rough cost: a half-day of 
+authoring plus under an hour of GPU. Greg's decision:
+start with A, then evaluate whether to proceed with B; 
+C is not considered a good candidate.
+
+**A ran and lost (mg39, 2026-08-19; findings §1.33).**  Every arm
+below the raster baseline, 0.87x at best (the whole-batch compound
+sort, its sort cost only 3.3 ms), all values gates inside 1e-5.
+The raster order is already spatially local for the shipped
+kernel's output-anchored grid; sorting bought nothing the caches
+were not delivering.  **The evaluation of B, from mg31's own
+counters rather than a run:** B exists to cut DRAM re-reads, and
+DRAM is measured at about 13 percent of bandwidth with L2 already
+absorbing 87 percent -- the hardware is already doing what B would
+arrange.  Recommendation: decline B and close this rework line on
+the three measured verdicts (mg38, mg39, B's arithmetic).  The
+cone forward's cost is the vertical gather's sector and latency
+machinery at the algorithm's own tap count -- a floor of the same
+kind the parallel atomic volume was, without a sorting-shaped
+exit -- and cone already matches or beats mbirjax at every
+measured cell.  Greg so ruled 2026-08-19: A and B are closed, and
+the §9 rework line with them.

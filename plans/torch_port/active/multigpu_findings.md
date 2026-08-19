@@ -2037,6 +2037,83 @@ floors staleness note on triton_parallel.py and a re-anchor of the
 comparison tables, whose mbirtorch columns measured the per-tap
 route.  The run detail for both halves is in mg34_sorted_ab.md.
 
+### 1.32 The cone grouped-forward spike loses: the windows fit, the
+### reads never amortize (mg38, 2026-08-19)
+
+Measured 2026-08-19, job 15361079 on h003, one H100, about 50
+minutes, exit 0 with every instrument healthy.  The spike implements
+design note §9 -- the pixel-batched cone forward with two-axis
+grouping -- authored by an Opus agent from the section and the mg33
+template, reviewed and submitted after an independent smoke.  Rows:
+`rows/mg38_cone_grouped_h003_20260819_085812.jsonl`.
+
+Every configuration loses at every ladder point.  The best arm (16x8
+window, 8-view chunk, 8-slice tile) reads 1968.37 ms against the
+shipped wrapper's 477.13 ms at the full-mask 64-view launch --
+0.24x -- with the wide-window arms at 0.07x to 0.13x.  Subset
+points fall back entirely and read 0.03x, which is §9's
+disengagement rider measured rather than a defect.
+
+The instructive part is what validated and what did not.  The
+geometry all validated: the two-axis grouping put 99.8 percent of
+full-mask tiles on the window path (mg37's prediction, realized),
+the flush cut atomic sectors about 5x, the sort and gather cost
+single-digit milliseconds, values held at 1e-5 everywhere through
+the inverted arithmetic (after the author's one real catch: the
+trapezoid must be inverted AT THE ROW, as the shipped kernel does,
+or float32 cancellation costs 5e-5 and fails the gate with no bug
+behind it), and the helical z-offset term rode intact.  What failed
+is the single prize the design exists for: the counter pass on the
+winner read DRAM at 73.7x the recon block per launch -- the shipped
+kernel's once-per-view signature, not the once-per-chunk the design
+predicted -- so the values tile never stayed resident across the
+view chunk, and the window path's arithmetic tax (about 5x
+per-voxel operations) was paid on top of unamortized reads.  The
+compile-record introspection returned None for registers and
+spills, so whether the tile spilled to local memory or was
+rematerialized per view is undistinguished; that diagnostic is the
+one bounded follow-up left open.  Disposition: recorded as a
+measured negative (the run record is mg38_cone_grouped.md); §9
+carries the status, and reopening is Greg's call.
+
+### 1.33 The sorted order into the unchanged cone kernel also
+### loses, and the rework line's arithmetic closes (mg39, 2026-08-19)
+
+Measured 2026-08-19, job 15362636 on h003, one H100, exit 0, every
+values gate inside 1e-5 (worst 3.1e-6).  Rework candidate A from §9
+-- Greg's pick after the mg38 loss -- fed the two-axis sorted pixel
+order to the UNCHANGED shipped cone forward: no new kernel, the
+compound sort and permutes outside.  Rows:
+`rows/mg39_cone_sorted_h003_20260819_094504.jsonl`.
+
+Every arm loses at every ladder point.  The whole-batch compound
+sort is the best of them at 0.87x on the full mask (546.96 ms
+against 474.50, the sort itself 3.3 ms); per-chunk sorts read 0.83x
+to 0.85x, the channel-only ablation 0.61x, and the subsets 0.29x to
+0.90x.  The locality hypothesis is refuted at the timing level: the
+kernel's raster order is already spatially local for its
+output-anchored (pixel tile, row tile, view) grid, and mg31's own
+counters said as much in advance -- L2 hit 87.2 percent and DRAM
+read at about 452 GB/s, roughly 13 percent of an H100's bandwidth.
+That last figure also evaluates candidate B without running it:
+cache-blocking by slice band exists to cut DRAM re-reads, and DRAM
+is measured at 13 percent utilization with the caches already
+absorbing 87 percent of L2 traffic -- the hardware is already doing
+what B would arrange.  The cone forward's cost is the vertical
+gather's sector and latency machinery at the algorithm's own tap
+count: the same kind of floor the parallel forward's atomic volume
+was, but without a sorting-shaped exit, because the expensive
+operation here is a read that must happen, not an add that can be
+merged.  The recommendation recorded for Greg: decline B, close the
+§9 rework line on three measured verdicts (mg38, mg39, and B's
+arithmetic), and note that the cone forward already matches or
+beats mbirjax at every measured cell, so nothing is owed
+competitively.  Run detail: mg39_cone_sorted_order.md, including
+two harness defects (a contaminated sort/kernel split in the
+chunked arms' printout, and an ncu launch-skip that profiled the
+availability self-check's tiny launch instead of the full-mask
+call); neither gated anything.
+
 ## 3. The crossover ladder (mg4)
 
 This section locates where each device count starts paying, which is

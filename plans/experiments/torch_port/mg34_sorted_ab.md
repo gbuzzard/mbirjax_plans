@@ -11,7 +11,9 @@ jobs is 64dedb8 plus the staged sorted-forward change
 * Node h006, four H100s, 22 minutes.  Exit 0.
 * The full GPU suite ran first and read rc 0, with the sorted route's
   own gates in it (the kernel pair, the sparse-set fallback, the
-  view-chunk tail, the switch contract).
+  view-chunk tail, the switch contract).  The CPU suite on the same
+  staged tree read 584 passed, including the four new sorted-route
+  gates.
 * Twelve composed arms at mg27's protocol, reusing mg27's staged
   sinograms by md5: parallel, the 512- and 1024-class cells, one,
   two, and four devices, sorted against per-tap.  Every arm realized

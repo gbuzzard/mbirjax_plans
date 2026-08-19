@@ -1,0 +1,14 @@
+{"kind": "header", "plan": {"whole_call": ["parallel fwd sorted", "parallel fwd per-tap", "parallel back", "cone fwd", "cone back"], "launch_128": ["1/128 subset, sorted and per-tap, 128 views"], "cell": [1024, 1008, 992], "repeats": 3}, "node": "h001", "smoke": false, "device": "NVIDIA H100 80GB HBM3", "torch": "2.13.0+cu130"}
+{"kind": "mask", "geometry": "parallel", "num_pixels": 771240, "values_ok": true}
+{"kind": "whole_call", "geometry": "parallel", "direction": "forward", "route": "sorted", "median_ms": 2526.8569469917566, "all_ms": [2516.0197299846914, 2526.8569469917566, 2527.4291370005812], "repeats": 3}
+{"kind": "whole_call", "geometry": "parallel", "direction": "forward", "route": "per_tap", "median_ms": 7187.099129019771, "all_ms": [7187.066804995993, 7187.138416978996, 7187.099129019771], "repeats": 3}
+{"kind": "gate", "geometry": "parallel", "direction": "forward", "rel_diff": 5.0759423007486785e-06, "values_ok": true}
+{"kind": "whole_call", "geometry": "parallel", "direction": "back", "route": "only", "median_ms": 791.7298499960452, "all_ms": [805.7881520071533, 791.7298499960452, 790.2771670196671], "repeats": 3}
+{"kind": "mask", "geometry": "parallel", "num_pixels": 6025, "values_ok": true}
+{"kind": "launch_128", "divisor": 128, "route": "sorted", "median_ms": 3.239726007450372, "all_ms": [3.41198401292786, 3.239726007450372, 3.2188559998758137], "repeats": 3}
+{"kind": "launch_128", "divisor": 128, "route": "per_tap", "median_ms": 6.645795016083866, "all_ms": [6.6677340073511004, 6.645795016083866, 6.633309996686876], "repeats": 3}
+{"kind": "gate", "geometry": "parallel", "direction": "launch_128", "rel_diff": 2.945888809636297e-07, "values_ok": true}
+{"kind": "mask", "geometry": "cone", "num_pixels": 771240, "values_ok": true}
+{"kind": "whole_call", "geometry": "cone", "direction": "forward", "route": "only", "median_ms": 7991.991699993378, "all_ms": [7991.991699993378, 7991.800574993249, 7996.993591019418], "repeats": 3}
+{"kind": "whole_call", "geometry": "cone", "direction": "back", "route": "only", "median_ms": 4544.510273000924, "all_ms": [4544.661422987701, 4544.466271996498, 4544.510273000924], "repeats": 3}
+{"kind": "done", "rc": 0}
