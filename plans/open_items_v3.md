@@ -213,8 +213,14 @@ gates, and mg34 passed the composed gate's first half whole -- the
 full GPU suite, then 1.43x to 1.89x at the 1024 class and 1.03x to
 1.41x at the 512 class with every value gate inside 1e-3 (findings
 §1.31).  Parallel now matches or beats the recorded mbirjax column
-at every measured count.  The 2048-class confirmation is running as
-mg35 (job 15347106); the staged change is committed only after it.
+at every measured count.  The 2048-class confirmation then passed as well
+(mg35, job 15347172: 1.77x at three devices and 1.67x at four, value
+gates holding), so BOTH halves of the composed gate are green and
+the staged change meets its shipping condition.  What remains is
+Greg's commit, and the two follow-ups it triggers: the floors
+staleness note on triton_parallel.py (the family-scoped refresh
+mode's case), and a re-anchor of the comparison tables, whose
+mbirtorch columns measured the per-tap route.
 *(mg27 through mg31 rows; findings §1.5, §1.19 corrected, §1.26
 through §1.28; pfwd_segmented_design.md;
 projector_kernels/gpu_headroom_findings.md; greg_notes.md item 6.)*
@@ -255,9 +261,17 @@ at parallel 1024 on two devices.  The 2026-08-16 gate run added related
 readings: cone and parallel at three devices over-read the declared
 band's top (up to 1.417 against 1.30).  The 2048-class runs added a
 third input: every ratio there sits between 1.10 and 1.19
-(multigpu_findings.md §1.20).
+(multigpu_findings.md §1.20).  A fourth input landed 2026-08-18, and it
+is a policy gap rather than a charge: mg35's first staging job ran a
+2048-class direct forward projection under a four-device pin on the
+automatic branch, and the settle chose ONE device and ran out of
+memory assembling the 30.5 GiB sinogram beside the 29.6 GiB phantom
+-- it neither widened nor was refused.  The direct-entry preflight
+under-prices that call at this scale, and the automatic settle
+honored the wrong arithmetic; the explicit device list was the
+workaround (the fix note in mg35_sorted_2k.py's staging).
 *(open_items F7; closed/backloop_attribution.md §5;
-multigpu_findings.md §1.16.)*
+multigpu_findings.md §1.16; mg35 job 15347106.)*
 
 **C6. No nightly row exercises the automatic device choice.**  Every
 nightly row pins its device count, which bypasses the automatic path

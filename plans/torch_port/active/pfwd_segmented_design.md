@@ -116,10 +116,13 @@ Five design points, decided here so the spike is mechanical:
   exactly the scale that needs the sort.  A subset's values block is
   L2-resident (about 48 MB), so per-view gathered rows are on-chip
   reads and losing the chunk's hoist there costs little.  And VCD's
-  subsets are fixed per reconstruction, so the per-(subset, view)
-  orderings compute once and are reused every iteration; the cached
-  permutations are about 6 MB per subset per view batch and take a
-  ledger charge, or recompute per call at the few-millisecond class.
+  subset membership is fixed per reconstruction (the partitions draw
+  once at setup; only the visit order reshuffles per pass), so the
+  per-(subset, view) orderings are reusable once per pass at their
+  granularity; the shipped form recomputes them per call at the
+  measured few-millisecond class, and the plan-slot memoization is
+  the recorded follow-up, at about 6 MB per subset per view batch
+  under a ledger charge.
   The full mask keeps the unsorted chunk path: raster order is
   already channel-local, and a per-view gather of a 3.1 GB block
   would resurrect the reload mg29 measured.

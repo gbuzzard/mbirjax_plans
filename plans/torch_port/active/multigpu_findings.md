@@ -1956,11 +1956,15 @@ subset path and an unsorted full-mask path may therefore be
 unnecessary: one always-sorted kernel is the simpler candidate, and
 the composed A/B decides between them.
 
-The sort's own cost is small even before amortization: 14.6 ms at
-the full mask against a 648 ms saving, under 4 ms at every subset.
-Production pays it once per (pixel set, view batch) per
-reconstruction, since the mask and VCD's subsets are fixed across
-iterations; the cached orderings take a ledger charge.
+The sort's own cost is small even unamortized: 14.6 ms at the full
+mask against a 648 ms saving, under 4 ms at every subset, and the
+shipped route pays it per call.  Amortization is available but not
+taken: a reconstruction draws its partitions once at setup and only
+reshuffles the subset visit order per pass, so each subset's
+orderings are fixed for the run and a plan-slot memoization would
+reuse each one once per pass at its granularity, at a cache cost of
+a few hundred megabytes for a default schedule (the recorded
+follow-up, with its ledger charge).
 
 The arithmetic this leaves for the library step, stated as
 arithmetic: the parallel forward was 28.9 s of the 40 s one-device
@@ -2009,10 +2013,19 @@ the padding landed.  The composed one-device gain (1.89x) sits
 where the spike arithmetic put it: 3.45x on a forward that is
 seventy percent of the wall.
 
-What remains of the gate is the 2048-class confirmation (mg35,
-submitted as job 15347106): the same A/B at three and four devices,
-where the 24 GB values block is the sorted gather's unmeasured
-territory.  The staged change ships only after it.
+The 2048-class confirmation completed the gate the same evening
+(mg35, job 15347172, after a first submission whose staging failure
+is C5's fourth input): three devices read 239.10 s per-tap against
+134.84 sorted (1.77x), four devices 188.98 against 113.25 (1.67x),
+with the mode-pair value gate holding at both counts and the
+busiest-device peaks identical between routes.  The 24 GB values
+block was the sorted gather's one unmeasured territory, and it
+carries the same win class as the standard cells.  Both halves of
+the composed gate have now passed whole, so the staged change meets
+the design note's shipping condition; what follows the commit is the
+floors staleness note on triton_parallel.py and a re-anchor of the
+comparison tables, whose mbirtorch columns measured the per-tap
+route.  The run detail for both halves is in mg34_sorted_ab.md.
 
 ## 3. The crossover ladder (mg4)
 
