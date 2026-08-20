@@ -16,7 +16,7 @@ name), never `git commit` unless Greg directs it (he commits from
 PyCharm).  Shared checkouts — never `git add -A`; verify staged-file
 lists at report time.  No plan notation in
 code or tests.  Cluster jobs are pre-authorized during the agreed
-investigation.  Durable records in Alley style — reread
+investigation.  Durable records and summary status reports in Alley style — reread
 `.claude/writing_style.md` before drafting; plan entries and chat
 summaries stay short and plain, with run detail in script comments or a
 companion `.md` beside the script.  Have opus carry out well-defined
@@ -25,19 +25,9 @@ plans, then review.
 Read for orientation (code and measured results over recollection or .md files):
 1. `.claude/claude_prompt.md`, `.claude/lessons.md` (§2, §5, §6),
    `.claude/cluster_use.md`.
-2. `plans/open_items_v3.md` — the task source, with the Start-here
+2. `plans/open_items_v4.md` — the task source, with the Start-here
    order this session follows and per-item status labels.
-3. `plans/torch_port/active/multigpu_findings.md` §1.19, §1.21, and
-   §1.23 — the width mechanism, its measurement on the back kernel,
-   and the padding remedy's landing; §1.22 for the floors state and
-   the multiaxis anomaly.
-4. `plans/torch_port/active/back_remedy_design.md` — the landed
-   padding design; its §6 names the counter-run precondition item 1
-   tests.
-5. For item 2: `mbirtorch/_widening_floors.py` (the table and its
-   notes) and `dev_scripts/refresh_widening_floors.py` (the tool;
-   mg22 was the last full run).
-6. `plans/API_specification.md` for reference.
+3. `plans/API_specification.md` for reference.
 
 The nightly dashboard is live and seeding history — its rows are regression
 protection for this campaign's tuning, not its instrument; campaign

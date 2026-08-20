@@ -33,20 +33,32 @@ speed floors).
 
 ## Start here: the next session
 
-Reordered 2026-08-19, later the same day.  Three items closed today:
-B7 (the chained mg40 and mg27 re-run submission, findings §1.34), D3
-(by verification), and the production comparison (mg41; the table is
+Reordered 2026-08-19, through the day.  Closed or landed today: B7
+(the chained mg40 and mg27 re-run, findings §1.34), D3 (by
+verification), the production comparison (mg41; the table is
 execution_overview.md §5.4 -- mbirtorch faster in both geometries at
-0.47x the memory).  The list advances.
+0.47x the memory), C5 (probe run and remainder ruled, findings
+§1.35), G4's nightly memory fix (pushed), and C6's automatic-choice
+check (verified on four GPUs, staged for the push).  What remains is
+below, in order.
 
-1. **G4, the nightly's memory column.**  Per-trial peak resets and
-   per-trial readings in the metrics repo's torch writer, so the
-   column means one warm reconstruction's peak; the 26.6 GiB reading's
-   mechanism stays open and the new per-trial numbers will localize
-   it.
-2. **Riders as time allows.**  C6's automatic-device nightly row, and
-   B6's multiaxis probe: break the 512-class two-device loss into its
-   component calls, with the 1024-class loss as the second case.
+1. **B6's first probe, the component split.**  The multiaxis
+   two-device anomaly: 0.35x at the 512-class, a 1.46x win at the
+   768-class, 0.80x at the 1024-class, mechanism unknown.  The probe
+   times each component call of the reconstruction -- forward
+   projection, back projection, the prior, the per-iteration
+   statistics -- at one and two devices, in fresh processes, at the
+   512-class first (the deepest loss) and the 1024-class second.
+   mg42a's seam-wrapping instrument does this with perf_counter
+   samples in place of memory counters, so the harness is mostly
+   built.  The deliverable is which call carries the loss and how it
+   moves with size; translation loses at every count and may share
+   the mechanism, so its 2-device production cell rides along as one
+   extra arm.
+2. **Read the first fixed night's memory rows (G4's follow-up).**
+   The per-trial peaks land with the next nightly; one read says
+   whether the old 26.6 GiB inflation was warmup-only or recurs in
+   warm trials, which localizes the open mechanism.
 
 ## A. Large-scale reconstruction (2048-class and larger)
 
@@ -185,11 +197,22 @@ ledger_calibration_inputs.md (the six inputs and their verdicts);
 multigpu_findings.md §1.35.  The one live residue is the nightly's
 memory column, which is G4.
 
-**C6. No nightly row exercises the automatic device choice.**  Every
-nightly row pins its device count, which bypasses the automatic path
-entirely; one unpinned row asserting the automatic choice is proposed
-and unanswered.
-*(open_items F6; multigpu_plan.md §0a item 8.)*
+**C6. CLOSED 2026-08-19.  No nightly row exercised the automatic device
+choice.**  Every measured row pins its device count, and a pin
+bypasses the automatic path, so the choice a multi-GPU user gets by
+default never ran on a schedule.  The torch writer now runs one
+UNPINNED check per multi-GPU night: it settles a 512-class cone model
+and asserts the realized count equals the widest count the shipped
+floors admit, computed at run time from the table so a floors refresh
+moves the expectation with it.  The check records its verdict, the
+per-count reasons, any leaked pin, and the floors staleness note
+under its own key in the run file (no collision with the pinned
+rows), and a mismatch gates HARD, cold start included, because the
+expectation needs no prior run.  Verified on four H100s (mg43, job
+15388660): the settle chose two devices of four visible, as the
+floors say.  Single-device and cpu nights record a skip.
+*(open_items F6; multigpu_plan.md §0a item 8;
+mg43_autochoice_gautschi.sbatch.)*
 
 ## D. Correctness and API-contract gaps
 
@@ -330,18 +353,25 @@ A new mbirtorch_metrics repo and dashboard should become independent and record 
 in a format similar to the mbirjax dashboard prior to the addition of mbirtorch. 
 The mbirjax nightly runs will eventually be retired.  
 
-**G4. The nightly's multi-device memory columns are unreliable, for a
-reason not yet explained.**  A four-device 1024-class arm recorded a
-26.6 GiB lead-device watermark where a fresh single reconstruction
-peaks at 6.84 GiB.  The two easy mechanisms are refuted: reconstruction
+**G4. FIX LANDED 2026-08-19 (pushed); the mechanism behind the old
+readings stays open.  The nightly's multi-device memory columns were
+unreliable.**  A four-device 1024-class arm recorded a 26.6 GiB
+lead-device watermark where a fresh single reconstruction peaks at
+6.84 GiB.  The two easy mechanisms are refuted: reconstruction
 end-states free at refcount (mg42b, run locally), and the harness's
 trial loop already drops results and collects before each timed call.
-The accuracy remedy needs no mechanism: reset the peak counters before
-each trial and report the warm trial's peak, recording per-trial peaks
-so the column diagnoses itself.  Until that lands in
-`mbirjax_metrics/tooling/scaling_tests/torch_backend_writer.py`, read
-the multi-device memory columns as unreliable; timings and value gates
-are unaffected.
+The fix is in
+`mbirjax_metrics/tooling/scaling_tests/torch_backend_writer.py`,
+pushed 2026-08-19, so the next nightly run carries it: the peak
+counters reset before every iteration, the row's `mem_mb` is the
+largest single-call peak among the warm trials, and the warmup and
+per-trial peaks are recorded beside it, so an inflated call is visible
+by itself.  Three consequences to expect: multi-device memory series
+may step down (an improvement, not a regression; the record book
+keeps the min, so baselines ratchet down); a recurrence of the old
+inflation then trips the HARD memory gate instead of hiding; and the
+per-trial lists localize the open mechanism on the next night it
+appears.  Reading the first fixed night's rows is the follow-up.
 *(multigpu_findings.md §1.35; mg42b_cycle_check.py.)*
 
 ## H. Scheduled and back-burner work
