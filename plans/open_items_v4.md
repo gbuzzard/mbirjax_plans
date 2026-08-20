@@ -38,23 +38,20 @@ Reordered 2026-08-19, through the day.  Closed or landed today: B7
 verification), the production comparison (mg41; the table is
 execution_overview.md §5.4 -- mbirtorch faster in both geometries at
 0.47x the memory), C5 (probe run and remainder ruled, findings
-§1.35), G4's nightly memory fix (pushed), and C6's automatic-choice
-check (verified on four GPUs, staged for the push).  What remains is
-below, in order.
+§1.35), G4's nightly memory fix (pushed), C6's automatic-choice
+check (verified on four GPUs, staged for the push), and B6's first
+probe (mg44, findings §1.36: the mechanism is found).  What remains
+is below, in order.
 
-1. **B6's first probe, the component split.**  The multiaxis
-   two-device anomaly: 0.35x at the 512-class, a 1.46x win at the
-   768-class, 0.80x at the 1024-class, mechanism unknown.  The probe
-   times each component call of the reconstruction -- forward
-   projection, back projection, the prior, the per-iteration
-   statistics -- at one and two devices, in fresh processes, at the
-   512-class first (the deepest loss) and the 1024-class second.
-   mg42a's seam-wrapping instrument does this with perf_counter
-   samples in place of memory counters, so the harness is mostly
-   built.  The deliverable is which call carries the loss and how it
-   moves with size; translation loses at every count and may share
-   the mechanism, so its 2-device production cell rides along as one
-   extra arm.
+1. **B6's floors refresh and the sentinel rulings.**  The remedy's
+   confirmations are all in: every cell of the old two-device window
+   now wins (1.53x / 1.45x / 1.52x across the multiaxis ladder,
+   translation 1.25x at production; findings §1.37).  The remedy
+   changed a shared floors cost input, so the FULL refresh is
+   running (mg48, job 15399595) rather than the family-scoped one.
+   Its verdicts land in the job log; nothing is pasted by the job.
+   The rulings on the multiaxis, translation, and n=4 sentinel rows
+   follow the verdicts and are Greg's.
 2. **Read the first fixed night's memory rows (G4's follow-up).**
    The per-trial peaks land with the next nightly; one read says
    whether the old 26.6 GiB inflation was warmup-only or recurs in
@@ -120,20 +117,29 @@ multigpu_findings.md §1.18.
 the survivor to cylinder transfer.**  →
 `torch_port/closed/banded_forward_removal.md`.
 
-**B6. OPEN, grown 2026-08-18.  The multi-axis geometry runs slower on
-two GPUs at some problem sizes and faster at others, and no mechanism
-explains it.**  Two threshold refreshes measured the same shape: two
-devices win at the 384-class, lose badly at the 512-class, win at the
-768-class, and lose again at the 1024-class.  The sizes where two
-devices help are therefore a window, not a threshold, which the
-device-count thresholds cannot express.  E3's ruling holds this
-geometry to one device until the mechanism is known, and that hold
-landed 2026-08-19 as a sentinel row in the shipped table (with the
-coarse-table implementation, findings §1.34).  The proposed
-first step is to break the slow 512-class two-device run into its
-component calls, with the 1024-class loss as a second case.
-Translation loses at every device count and may share the mechanism.
-*(multigpu_findings.md §1.22, §1.25; the floor rows' notes in
+**B6. OPEN; the mechanism was found and remedied 2026-08-19, and the
+re-measures and sentinel rulings remain.  The multi-axis geometry ran
+slower on two GPUs at some problem sizes and faster at others.**  The
+component split (mg44) attributed every losing cell to the back
+projection running uncompiled: torch caps one function's compiled
+variants at 8, the per-device compiled instances share that cap, and
+the variants guard on the device index, so two devices filled it and
+the remaining calls ran eagerly.  Translation shared the mechanism.
+The remedy raises the cap to 64 in projectors.py, and it took two
+forms because dynamo consults a per-thread view of the setting: a
+raise made where the wrapper is created never reached the per-device
+pool threads, so the shipped form raises it on the compiling thread
+inside maybe_compile.  The gate and the large-cell confirmation flipped every losing cell
+to a two-device WIN: multiaxis 512 from 0.35x to 1.53x, multiaxis
+1024 from 0.80x to 1.52x, translation production from 0.89x to
+1.25x, with the 768-class win reproduced at 1.45x.  The remedy
+changed a shared floors cost input, so the FULL floors refresh runs
+(mg48) rather than a family-scoped one; the sentinel rulings follow
+its verdicts and are Greg's.  The paths beyond this remedy,
+including the multiaxis and translation kernel question, are H8's
+document.
+*(multigpu_findings.md §1.36, §1.37; mg44_component_split.md;
+multigpu_plan_part_2.md; the floor rows' notes in
 mbirtorch/_widening_floors.py.)*
 
 **B7. CLOSED 2026-08-19.  The parallel-beam forward projection was
@@ -421,6 +427,18 @@ PyTorch front end, so the wrapper is thinner on mbirtorch than it
 would have been on jax.  When picked up: run their examples, scope a
 translation, then design and validate the interfaces.
 *(current_plans.md item 10; port_plan.md §1.)*
+
+**H8. Multi-device speed, part 2: the torch-body geometries.**  The
+recompile-budget remedy's two structural alternatives (a budget per
+device instance, and pre-marked dynamic dimensions), and the
+hand-written-kernel path for multiaxis and translation with its two
+entry gates: a counter run on the compiled bodies, and a
+cross-framework anchor against mbirjax.  The kernel path's strongest
+case is capacity rather than speed: the torch bodies' transients keep
+sharding from shrinking per-device peaks, and multiaxis 1024 models
+at 68 GB on one device.
+*(torch_port/active/multigpu_plan_part_2.md; multigpu_findings.md
+§1.36.)*
 
 ## I. Accepted gaps and monitor-only notes
 

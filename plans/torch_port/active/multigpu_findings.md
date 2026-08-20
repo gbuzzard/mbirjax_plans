@@ -2222,6 +2222,206 @@ term-change increment starts here, and its first discriminating step
 is the same arm on the per-tap forward route, which says whether the
 sorted kernel brought the gap or the model always had it.
 
+### 1.36 The component split: the multiaxis and translation
+### two-device losses are the back projection running uncompiled
+### (mg44, 2026-08-19)
+
+Measured 2026-08-19, job 15391547 on h004, two H100s, 66 minutes,
+exit 0.  This is B6's first probe.  Ten arms ran in fresh processes:
+multiaxis at the 512-, 768-, and 1024-class cells and translation at
+the production cell, each at one and two devices, plus two unwrapped
+control arms at the 512-class.  The protocol is the floors refresh's,
+copied exactly.  The rows are
+`rows/mg44_component_h004_20260819_210951.jsonl`; the run detail is
+in `mg44_component_split.md` beside the script.
+
+**The instrument read cleanly, and the anomaly reproduced exactly.**
+Every arm's warm wall matched its recorded mg26 wall at 1.00x (worst
+0.99x), so the run measured the recorded anomaly rather than an
+approximation of it.  The wrapped and control arms agree within 0.4
+percent, so the wrappers cost nothing visible.  Each region was timed
+on two clocks: the host clock around the call, and CUDA event pairs
+on each device's default stream, resolved only after each
+reconstruction returned.  The two clocks separate enqueue cost from
+device time, which is what names the mechanism below.
+
+**The back projection carries the loss at every losing cell.**  The
+table gives per-warm-reconstruction device milliseconds on the
+busiest device, one device against two:
+
+| cell | back n1 | back n2 | forward n1 | forward n2 | warm wall n1 -> n2 |
+|---|---|---|---|---|---|
+| multiaxis 512 | 3,014 | 16,523 | 4,084 | 2,051 | 11.4 -> 32.6 s |
+| multiaxis 768 | 15,456 | 13,403 | 21,032 | 10,555 | 56.3 -> 38.5 s |
+| multiaxis 1024 | 92,146 | 250,053 | 126,160 | 63,315 | 309.9 -> 388.3 s |
+| translation prod | 879 | 4,908 | 2,545 | 1,346 | 12.5 -> 14.2 s |
+
+The forward projection HALVES at two devices at every cell, which is
+the scaling the split is supposed to buy.  The prior, the line-search
+reductions, the update apply, the halo exchange, and the band reduce
+all sit at or under a third of a second per reconstruction at every
+cell.  At the losing cells the back projection alone explains the
+wall gap.  At the 512-class it adds 13.5 s inside the iterations and
+another 10.3 s in the setup phases; the Hessian diagonal and the
+direct-recon initializer also back-project, so both setup phases pay
+the same path.  The whole warm gap there is 21.2 s once the
+forward's 2.0 s gain is netted out.
+
+**The mechanism is torch.compile's per-frame recompile budget,
+which the per-device compiled instances share.**  `maybe_compile`
+binds one `torch.compile` wrapper per device (`instance_key=i`), a
+split introduced to isolate triton launcher state.  Dynamo's variant
+cache and its recompile limit (`config.recompile_limit`, default 8)
+attach to the function's CODE OBJECT, and both wrappers share it.
+The compiled variants guard on the input tensors' device index, so a
+two-device run must hold separate variants for each device, and the
+shape specializations multiply them.  When a frame's budget fills,
+dynamo stops compiling that frame, and calls that match no existing
+variant run eagerly from then on.  The job log carries torch's own
+warning (`torch._dynamo hit config.recompile_limit (8)`, last reason
+a device-index guard) for `_multiaxis_back_view_batch` at exactly the
+three losing multiaxis arms and for `_translation_back_view_batch` at
+the translation two-device arm.  No warning fires at any one-device
+arm, and none fires at the 768-class, the one two-device cell that
+wins.  The unwrapped control arm carries the same warning, so the
+mechanism is the library's, not the instrument's.
+
+**The warm loss is the eager end-state, not compile time.**  The
+dynamo counters read zero compiles on every warm call of every arm;
+all compile activity is in the discarded cold pass.  The host clock
+confirms what eager execution looks like.  At the 512-class
+two-device arm the back body's host time is 34.5 s per warm
+reconstruction against 16.5 s of device time; the one-device
+compiled back body spends 1.2 s of host time on the same work.
+Host time above device time is the op-by-op dispatch signature, so
+these readings say the two-device back runs uncompiled.  At the
+1024-class the eager back's host and device times are both about
+250 s, so the device work dominates there.  This size dependence is
+why the loss is 0.80x at the 1024-class against 0.35x at the
+512-class: eager kernels on large tensors do real work, and the
+dispatch overhead amortizes.
+
+**Which callers go eager depends on when the budget fills.**  The
+budget is consumed in call order, so the trip point in one cell's
+chronology decides which later callers run eager.  At the 512-class
+the Hessian's back projection is also eager (1.4 s to 12.1 s); at the
+1024-class the same phase improves (31.4 s to 26.4 s) because its
+variants compiled before the budget filled.  Both two-device arms at
+the 512- and 768-class hold about 36 unique graphs, so the aggregate
+graph count does not separate the winning cell from the losing one;
+the per-frame chronology does.  Enumerating the variants that fill
+the budget takes one cheap run with `TORCH_LOGS=recompiles` at the
+512- and 768-class two-device cells, recorded here as the
+discriminator if a remedy needs it.
+
+**Translation shares the mechanism, which closes B6's rider.**  Its
+two-device back projection reads 4.9 s against 0.9 s at one device
+while its forward halves, and its back body's frame carries the same
+recompile-limit warning.
+
+**The mg26 refresh's own log corroborates, unread until now.**  That
+log holds 33 recompile-limit warnings.  They name the multiaxis and
+translation back and forward bodies, the qGGMRF prior body, and the
+update-apply body, and they cluster in that run's multiaxis and
+translation arm blocks.  The deepest recorded loss (multiaxis n=4 at
+the 768-class, 0.23x) sits in a block where four frames tripped.
+These warnings were present at the original anomaly measurements, so
+the mechanism is not new to today's tree.
+
+Three consequences are recorded, none scheduled.  First, remedy
+candidates: raise the per-frame recompile limit for the compiled
+bodies, give each device instance a frame of its own, or pre-mark the
+varying dimensions dynamic; any of them gates cheaply at the
+512-class two-device cell, whose warm loss predicts about a 3x
+recovery.  Second, the multiaxis floors sentinel's stated condition
+("until B6's mechanism is known") is now met; the row should stay a
+sentinel until a remedy lands and a family-scoped refresh re-measures
+the window.  Third, the n=4 readings (0.23x to 0.87x) were measured
+under the same mechanism with four device indices competing for the
+same budgets, so they are due a re-measure after any remedy, not a
+separate investigation.
+
+### 1.37 The recompile-budget remedy lands in two forms, and both
+### losing gate cells flip to wins (mg45, mg46, 2026-08-19)
+
+Measured 2026-08-19 in three short jobs on two H100s: the first gate
+(15394465, seven minutes), the assignment tracer (mg46, 15394591, 53
+seconds), and the passing gate (15394667, six minutes).  The remedy
+raises torch's per-function recompile budget from 8 to 64 in
+`mbirtorch/projectors.py` (`_RECOMPILE_LIMIT_FLOOR`, with the
+arithmetic in its comment; `MBIRTORCH_RECOMPILE_LIMIT` overrides the
+floor verbatim).  Each gate re-ran the component split's cheap arms
+on its tree: multiaxis at the 512-class and translation at the
+production cell, one and two devices each, the floors protocol.  The
+local suite passes on the change (599 passed).
+
+**The first form failed its gate, and the failure measured a torch
+behavior worth recording on its own.**  The first form raised the
+budget once, where the compiled wrapper is created, on the creating
+thread.  Its gate read every wall unchanged, and torch's warning
+still printed the default limit.  The reason is that dynamo consults
+a PER-THREAD view of this config: an assignment made on one thread
+does not reach another.  This was measured three ways.  Locally, a
+limit assigned on the main thread capped nothing when the compiled
+function was called from a worker thread, and the same assignment
+made on the worker thread capped it.  On the cluster, a tracer on the
+config module's setter (mg46) showed the library's raises firing with
+no assignment ever writing the default back, while the conversion
+warning still read the default: the converting pool thread never saw
+the main thread's writes.  The same behavior explains why one device
+never tripped the budget: at one device the per-device fan-out
+short-circuits onto the main thread, where the raise was visible.
+
+**The second form raises the budget on the compiling thread, and the
+gate passes.**  `maybe_compile`'s wrapper now calls the raise on each
+first sight of an input shape, on the calling thread, under the
+compile lock, before any call that can compile.  The passing gate's
+log carries no recompile-limit warning, and both cells flip:
+
+| cell | n1 warm | n2 warm before | n2 warm after | two-device ratio |
+|---|---|---|---|---|
+| multiaxis 512 | 11.40 s | 32.6 s | 7.47 s | 0.35x to 1.53x |
+| translation prod | 12.57 s | 14.2 s | 10.04 s | 0.89x to 1.25x |
+
+The component split says the mechanism is gone rather than thinner.
+The 512-class back projection reads 2.34 s at two devices against
+3.01 s at one, where the eager form read 16.5 s.  The Hessian phase
+reads 1.14 s against its eager 12.1 s.  The one-device walls are
+unchanged, which is the mechanism's own prediction.  The gate rows
+are `rows/mg44_component_h012_20260819_230041.jsonl` (the failed
+first form) and `rows/mg44_component_h007_20260819_232038.jsonl`
+(the passing second form).
+
+**What this opens, pending re-measures.**  Both cells that held
+their families to one device now win at two, so the shipped sentinel
+rows are stale in the conservative direction: automatic multiaxis and
+translation reconstructions stay on one device and forgo measured
+wins.  Three re-measures come before any floors change: the
+1024-class pair (about 50 minutes on two GPUs), a 768-class check
+that the raised budget cost that winning cell nothing, and the
+family-scoped floors refresh for multiaxis and translation, which
+also re-measures the n=4 sentinels (four pool threads paid the same
+per-thread mechanism).  The follow-on paths beyond this remedy are
+in `multigpu_plan_part_2.md`.
+
+**The large-cell confirmation ran the same night, and the whole
+window is now wins (mg47, job 15398646, 2026-08-20).**  The
+1024-class two-device warm wall reads 203.6 s against the recorded
+388.8, with one device unchanged at 308.6 s, so the recorded 0.80x
+loss is a 1.52x win.  Its back projection reads 65.7 s at two
+devices against 91.6 s at one, where the eager form read 250 s.  The
+768-class reproduces at 1.45x against the recorded 1.46x, so the
+raised budget cost the winning cell nothing.  With the gate cells,
+the multiaxis two-device column across the measured ladder is now
+1.53x, 1.45x, 1.52x, and translation reads 1.25x at production.  No
+recompile-limit warning appears in the run's log.  The rows are
+`rows/mg44_component_h001_20260820_072619.jsonl`.  One scope note:
+the remedy changed a shared floors cost input, so the refresh that
+follows is the FULL refresh rather than the family-scoped one the
+previous entry anticipated -- the tool itself refuses to carry any
+family whose cost inputs moved, and the cone and parallel closures
+are compiled bodies the remedy also touches.
+
 ## 3. The crossover ladder (mg4)
 
 This section locates where each device count starts paying, which is
