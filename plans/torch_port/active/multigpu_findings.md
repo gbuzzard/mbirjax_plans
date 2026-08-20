@@ -2422,6 +2422,67 @@ previous entry anticipated -- the tool itself refuses to carry any
 family whose cost inputs moved, and the cone and parallel closures
 are compiled bodies the remedy also touches.
 
+### 1.38 The full floors refresh on the remedied tree: all four
+### torch-body sentinels clear, and the kernel families reproduce
+### (mg48, 2026-08-20)
+
+Measured 2026-08-20, job 15399595 on h007, four H100s, 1 hour 34
+minutes, exit 0 -- against 2 hours 57 minutes for the same full plan
+before the remedy.  The run detail and the verbatim paste block are
+in `mg48_floors.md` beside the sbatch; the arm records are under
+`results/mg48_floors/` on scratch.  Nothing is pasted into the
+library by this run; the rulings are Greg's.
+
+**The remedy holds everywhere.**  The log carries ZERO
+recompile-limit warnings across every family, cell, and device
+count, where the pre-remedy refresh's log carried 33.
+
+**All four torch-body sentinels clear.**  Multiaxis n=2 wins at
+every probed cell (1.525x, 1.461x, 1.515x), so its proposed floor is
+the 512-class.  Multiaxis n=4, measured against one device, wins
+everywhere by more than two (2.027x, 2.185x, 2.167x); its proposed
+floor is also the 512-class, and the family is monotone in device
+count at every measured size (the 1024-class walls read 308 s, 204 s,
+142 s across one, two, and four devices).  Translation n=2 clears at
+its middle production-anchored cell (1.192x, and 1.264x at
+production); translation n=4 clears at the production cell (1.433x).
+The old n=4 readings for these families, 0.23x to 0.87x, were the
+per-thread recompile mechanism at four pool threads; with the remedy
+they are the table's largest wins.
+
+**The kernel families and the denoiser reproduce.**  Cone n=2 reads
+0.872x, 1.305x, 1.606x (floor unchanged at the 512-class); cone n=4
+reads 1.121x at the 768-class, still under the 1.15x margin, so that
+floor stays at the 1024-class.  Parallel n=2 and n=4 reproduce their
+floors at the 768- and 1024-class.  The denoiser stays a sentinel at
+both counts.  These reproductions say the remedy moved nothing it
+was not supposed to move.
+
+**Two independent harnesses agree.**  The refresh's ratios match the
+component harness's readings within noise: 1.525 against 1.53 at the
+multiaxis 512-class n=2, 1.515 against 1.52 at the 1024-class, 1.264
+against 1.25 at translation's production cell.
+
+One coverage note rides the proposed multiaxis floors: the sentinel
+probes are the ladder's top three cells, so the 384-class was not
+probed, and the pre-anomaly record (mg22) read a 1.25x two-device
+win there.  The proposed 512-class floor forgoes that win, bounded
+by the cell's 3.9 s one-device wall; a ladder extension can revisit.
+
+**The ruling and the landing (2026-08-20).**  Greg accepted the full
+proposed table the same day.  The paste is in
+mbirtorch/_widening_floors.py with hand-written notes, the blessed
+hashes and checksum from the tool, and the module docstring's
+sentinel narrative updated.  Two behavior tests pinned the old
+sentinel rulings and were re-pinned to the new floors: the multiaxis
+admission test now asserts admission at the 512-class and refusal
+below it at every count, and the translation direct-recon test now
+expects the finite-floor refusal wording for its small sinogram.
+The floors, device-policy, and full suites pass (599).  This closes
+the item the component split opened; what the remedy did not change
+-- the kernel families' floors and the denoiser sentinels -- is the
+table's own evidence that the change was scoped as intended.
+
 ## 3. The crossover ladder (mg4)
 
 This section locates where each device count starts paying, which is

@@ -79,15 +79,17 @@ at the 512-, 768-, and 1024-class, and translation 1.25x at
 production.  The full-refresh verdicts and the sentinel rulings are
 what remain.
 
-Three follow-ups remain after the gate, in order.  The 1024-class
-two-device confirmation costs about 50 minutes on two GPUs.  A
-family-scoped floors refresh (multiaxis and translation together) then
-re-measures the thresholds on the remedied tree.  The sentinel decision
-is Greg's: the multiaxis n=2 row was held to one device until the
-mechanism was known, the mechanism is now known and remedied, and the
-refresh says what the rows should become.  The n=4 readings (0.23x to
-0.87x) were measured under the same mechanism and belong to that
-refresh, not to a separate investigation.
+The follow-ups all completed on 2026-08-20.  The 1024-class pair
+flipped (0.80x to 1.52x) and the 768-class reproduced (mg47).  The
+floors refresh ran as the FULL refresh -- the remedy changed a shared
+cost input, so the tool refused any narrower scope -- and cleared all
+four torch-body sentinels while the kernel families and the denoiser
+reproduced (mg48, findings §1.38).  Greg accepted the refreshed table
+the same day; the paste, the blessed constants, and the re-pinned
+behavior tests are in the library.  Multiaxis widens from the
+512-class and translation from its measured cells; the old n=4
+readings (0.23x to 0.87x) are now the table's largest wins (above
+2x).
 
 ## Approach 2, kept in reserve: a budget per device instance
 

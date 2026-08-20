@@ -43,19 +43,12 @@ check (verified on four GPUs, staged for the push), and B6's first
 probe (mg44, findings §1.36: the mechanism is found).  What remains
 is below, in order.
 
-1. **B6's floors refresh and the sentinel rulings.**  The remedy's
-   confirmations are all in: every cell of the old two-device window
-   now wins (1.53x / 1.45x / 1.52x across the multiaxis ladder,
-   translation 1.25x at production; findings §1.37).  The remedy
-   changed a shared floors cost input, so the FULL refresh is
-   running (mg48, job 15399595) rather than the family-scoped one.
-   Its verdicts land in the job log; nothing is pasted by the job.
-   The rulings on the multiaxis, translation, and n=4 sentinel rows
-   follow the verdicts and are Greg's.
-2. **Read the first fixed night's memory rows (G4's follow-up).**
-   The per-trial peaks land with the next nightly; one read says
-   whether the old 26.6 GiB inflation was warmup-only or recurs in
-   warm trials, which localizes the open mechanism.
+1. **Read the first fixed night's memory rows (G4's follow-up).**
+   The per-trial peaks land with the next nightly that measures a
+   moved branch; one read says whether the old 26.6 GiB inflation
+   was warmup-only or recurs in warm trials.  (B6 closed 2026-08-20
+   with Greg's ruling on the refreshed floors; its entry below has
+   the record.)
 
 ## A. Large-scale reconstruction (2048-class and larger)
 
@@ -117,9 +110,19 @@ multigpu_findings.md §1.18.
 the survivor to cylinder transfer.**  →
 `torch_port/closed/banded_forward_removal.md`.
 
-**B6. OPEN; the mechanism was found and remedied 2026-08-19, and the
-re-measures and sentinel rulings remain.  The multi-axis geometry ran
-slower on two GPUs at some problem sizes and faster at others.**  The
+**B6. CLOSED 2026-08-20, ruled and shipped.  The multi-axis geometry
+ran slower on two GPUs at some problem sizes and faster at others.**
+The full arc took two days: the component split found the mechanism,
+the remedy landed in two forms, the confirmations flipped every
+losing cell to a win, the full floors refresh cleared all four
+torch-body sentinels, and Greg accepted the refreshed table the same
+day.  The paste is in mbirtorch/_widening_floors.py with hand-written
+notes, blessed hashes, and the two behavior tests re-pinned (staged);
+automatic multiaxis reconstructions widen from the 512-class (1.5x at
+two devices, above 2x at four) and translation from its measured
+cells.  One recorded caveat: the 384-class was never probed for
+admission, so a ladder extension could lower the multiaxis floors.
+The detail below is the pre-closure record.  The
 component split (mg44) attributed every losing cell to the back
 projection running uncompiled: torch caps one function's compiled
 variants at 8, the per-device compiled instances share that cap, and
