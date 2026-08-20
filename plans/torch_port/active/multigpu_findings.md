@@ -2483,6 +2483,98 @@ the item the component split opened; what the remedy did not change
 -- the kernel families' floors and the denoiser sentinels -- is the
 table's own evidence that the change was scoped as intended.
 
+### 1.39 The denoiser: no admission size exists, and the multi-device
+### cost is the output gather rather than the computation
+### (mg49, mg50, 2026-08-20)
+
+Measured 2026-08-20 in two jobs on four H100s: mg49 (job 15402884 on
+h005, 24 minutes) and mg50 (job 15403256, 7 minutes).  Both ran the
+floors protocol exactly, so their walls compare with the recorded
+denoiser rows.  The run detail is in `mg49_denoiser_split.md` and
+`mg50_denoiser_gather.md`; the rows are the two jsonl files under
+`rows/`.
+
+**No admission size exists, and the sentinel rows are correct across
+their whole domain.**  The denoiser ladder ran at four cells, each at
+one, two and four devices.  Against one device, two devices read
+0.640x, 0.654x, 0.643x and 0.657x at the 1024-, 1280-, 1536- and
+1664-class; four devices read 0.594x to 0.620x.  The ratio is FLAT
+across a 4.4 times range in volume.  The earlier rise across the
+512-, 768- and 1024-class cells was a small-size effect that
+plateaus, not a trend approaching admission.  The denoiser's own
+memory ledger, read from the tree under test, prices one device at
+13.7 GB at the 1024-class rising to 59.5 GB at the 1664-class, and
+at the 1792-class the demand with the preflight's margin is 85.6 GB
+against a 79 GB device.  Capacity therefore takes the widening
+decision at the 1792-class, so the ladder covers every size at which
+the speed sentinel has any effect.  The question is closed rather
+than moved upward.
+
+**The sharded sweep is a twentieth of the call.**  The component
+split wrapped the denoise call, its setup phases, the sharded sweep
+and the components inside that sweep.  At the 1024-class on two
+devices the sweep reads 175 ms of a 3,401 ms call, and at four
+devices 190 ms.  Setup reads 1,165 ms, of which the host-side
+automatic regularization is about 650 ms and the image placement
+about 500 ms.  That accounting left 2,060 ms, sixty percent of the
+call, in no wrapped region.  The seam list had no entry for the
+output gather, which is the defect this run's own numbers exposed.
+
+**The gather is the whole multi-device penalty, and it is the
+largest single cost of a denoise.**  mg50 varied one thing, whether
+`denoise` was asked for the host form or the device form, and
+measured both:
+
+| cell | devices | host form | device form | the gather |
+|---|---|---|---|---|
+| 1024 | 1 | 2.164 s | 1.223 s | 0.941 s |
+| 1024 | 2 | 3.307 s | 1.299 s | 2.009 s |
+| 1024 | 4 | 3.633 s | 1.344 s | 2.289 s |
+| 1664 | 1 | 8.513 s | 4.283 s | 4.230 s |
+| 1664 | 2 | 12.997 s | 4.648 s | 8.348 s |
+| 1664 | 4 | 13.863 s | 4.247 s | 9.617 s |
+
+Two readings follow, and they are the finding.  The gather is 43 to
+69 percent of a denoise call, at every count including one device.
+And the gather roughly doubles when the volume is sharded, from
+0.941 s to 2.009 s at the 1024-class and from 4.230 s to 8.348 s at
+the 1664-class, while the computation barely moves.  At the
+1024-class the whole one-to-two-device penalty is 1.143 s, of which
+the gather accounts for 1.068 s, or 93 percent.  At the 1664-class on
+four devices the computation is slightly FASTER than on one (4.247 s
+against 4.283 s) and the entire measured penalty is the gather.
+
+**In the device form the count penalty nearly disappears.**  Against
+one device, the device-form ratios read 0.942x and 0.910x at the
+1024-class and 0.921x and 1.009x at the 1664-class.  So a denoise
+that is left where it was computed costs about the same on four
+devices as on one, and at the largest measured cell it is at parity.
+The checksums agree across every arm to 1e-7, so all six arms of a
+cell reconstructed the same volume.
+
+The mechanism is in `Shards.gather`, which brings every shard to the
+host and then concatenates them on the sharded axis.  For a
+recon-like array that axis is the LAST one, so the concatenate reads
+and writes with the least favorable memory locality and allocates a
+second full-size host array.  A single-device gather is one
+contiguous copy with no concatenate, which is why sharding doubles
+the cost.
+
+Three consequences are recorded, none scheduled.  First, the two
+sentinel rows are right for what they govern: the automatic choice
+applies to the default call, and that call gathers.  They are
+MISLEADING for a caller that passes `output_sharded=True`, whose
+measured penalty is a few percent rather than the rows' 0.35x to
+0.67x; a plug-and-play or ADMM loop is exactly that caller, and an
+explicit `configure_devices` is how it should widen the denoiser.
+Second, the gather is a real optimization target, and the candidate
+is closed-form: allocate the host array once and copy each shard
+into its own slice, rather than concatenating per-shard arrays.
+Third, the same gather ends every multi-device reconstruction, where
+the same two seconds sits against a wall of minutes and is
+negligible; the cost is per volume, so it dominates cheap operations
+and disappears into expensive ones.
+
 ## 3. The crossover ladder (mg4)
 
 This section locates where each device count starts paying, which is

@@ -126,6 +126,99 @@ specialized code, so each body would need its own measured gate.  Worth
 riding along if cold-pass compile time ever becomes a problem, or as
 hygiene during kernel work.
 
+## The denoiser, and the plug-and-play composition
+
+The denoiser is the third model with no hand-written kernels, and its two
+floor rows are sentinels: no admission size has ever been measured, so the
+automatic path never widens a denoise for speed.  Two runs on 2026-08-20
+settled why, and the answer moved the question somewhere else entirely
+(findings §1.39).
+
+The ladder question is closed.  A four-cell ladder from the 1024-class to
+the 1664-class measured a FLAT ratio of about 0.65 at two devices and 0.60
+at four, across a 4.4 times range in volume.  Capacity takes the widening
+decision at the 1792-class, so that ladder covers every size at which the
+speed sentinel has any effect.  There is no admission size to find, and
+the sentinel rows are correct for what they govern.
+
+What they govern is the narrower point.  The measured penalty is almost
+entirely the OUTPUT GATHER, not the computation: at the 1024-class the
+whole one-to-two-device penalty is 1.143 s, of which the gather is
+1.068 s.  Left on the devices, a denoise costs about the same on four
+devices as on one, and at the 1664-class on four devices it is at parity.
+So the sentinel is right about the default call, which gathers, and
+misleading for a caller that passes `output_sharded=True`.
+
+That caller is the plug-and-play or ADMM loop, which alternates
+`prox_map` with `denoise` on a volume it wants to keep resident.  Three
+things blocked that composition until 2026-08-20, all verified on virtual
+CPU devices: `_shard_recon` and `_shard_sinogram` compared placements by
+object identity, so two models configured alike could not exchange
+shards; `vcd_recon` reached `prox_input` through `.shape` and `.reshape`,
+which a `Shards` container does not have; and there was no way to ask one
+model for another's device configuration.  The change that unblocks it
+landed the same day (staged): `Placement` gained value equality, the
+`prox_input` path gained a `Shards` branch, and `configure_devices`
+gained `like=other_model`, which copies the other model's device list
+after checking that the two recon shapes agree.  A three-iteration
+alternation now runs on two virtual CPU devices with every hop staying
+in the device form.
+
+The denoiser's own input gather was the next transfer, and it went the
+same day.  `denoise` used to bring a sharded input to the host whole,
+for the noise and regularization statistics, even when the caller
+supplied `sigma_noise`.  Neither statistic needs the volume: the
+regularization parameters reduce immediately to `image[::step]`, which
+is 21 rows of 1024, and the noise estimate strides to at most five
+million points.  Both subsamples are now assembled from the shards
+directly.  Rows and columns are not sharded, so every shard strides
+identically there; on the sharded axis, shard k's sampled positions
+begin at local offset `(-start_k) % stride`, so concatenating the
+per-shard blocks reproduces the strided volume exactly.  That
+exactness is a data-movement identity, and the tests gate it with
+exact equality rather than a tolerance.  The statistics path now moves
+about 2.5 percent of the volume at the 1024-class and 1.4 percent at
+the 1664-class, and no full gather runs at all.
+
+One transfer remains, and it is the sinogram side, which has the same
+blocker the volume side lost: `vcd_recon` reads `sinogram.shape` and
+`initialize_recon` calls `np.asarray` on it, so a `Shards` sinogram
+cannot be passed to `recon` or `prox_map` even though
+`prepare_sino_for_devices` returns one.  A loop therefore re-places its
+sinogram from the host on every `prox_map` call.  That is open item D9.
+
+A note for the next floors refresh.  These changes touched
+`_sharding.py`, which prices every family, and `denoising.py`, which
+prices the denoiser, so the shipped table now reports every family
+stale.  The staleness note is a true statement about the file hashes
+and a false alarm about cost: the placement change adds comparison
+methods that no timed path calls, and the denoiser change alters only
+what a SHARDED input does, while the floors protocol passes a host
+array and therefore runs the same work it always did.  The hashes were
+deliberately NOT re-recorded, because recording them without
+re-measuring is what hides a real change from the next reader.  Whoever
+runs the next refresh can either measure and paste as usual, or rule
+the change cost-neutral and bless it; the reasoning above is what that
+ruling would rest on.
+
+The guidance that follows is worth stating plainly, because it runs
+against the shipped table.  In a plug-and-play loop, configure the
+denoiser to match the reconstruction model and keep the volume on the
+devices.  The floors row says one device; it is answering a question
+about a call that gathers, and the loop never does.
+
+One optimization candidate is recorded, and it is not the sweep.
+`Shards.gather` brings every shard to the host and concatenates them on
+the sharded axis, which for a recon-like array is the LAST axis: the
+least favorable memory locality, plus a second full-size host
+allocation.  A single-device gather is one contiguous copy with no
+concatenate, which is why sharding roughly doubles the cost.  The
+candidate is to allocate the host array once and copy each shard into
+its own slice.  The gather is 43 to 69 percent of a denoise call at
+every device count, so this is the largest single line in a denoise; the
+same gather ends every multi-device reconstruction, where two seconds
+against a wall of minutes does not matter.
+
 ## The escalation path: hand-written kernels for multiaxis and translation
 
 The projectors module has anticipated this path since the layer design

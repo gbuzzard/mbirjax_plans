@@ -288,6 +288,21 @@ closed/preprocess_sharding_translation_multiaxis.md:273.)*
 
 **D8. Other open issues from `API_specification.md`.**
 
+**D9. A sharded sinogram cannot be passed to `recon` or `prox_map`.**
+`prepare_sino_for_devices` returns the device form, and its docstring
+implies the reconstruction entries take it, but they do not:
+`vcd_recon` reads `sinogram.shape` and `initialize_recon` calls
+`np.asarray` on it, and a `Shards` container has neither.  A caller
+must therefore hand in a host array, so a Plug-and-Play or ADMM loop
+re-places its sinogram from the host on every `prox_map` call.  This
+is the same defect the volume side had until 2026-08-20, and the fix
+has the same shape: accept the device form, validate it against the
+placement instead of against `.shape`, and leave the host path
+unchanged.  The volume side's repair is the worked example
+(`_flatten_prox_shards` and the `Shards` branch in `vcd_recon`).
+*(multigpu_plan_part_2.md, the denoiser and plug-and-play section;
+multigpu_findings.md §1.39.)*
+
 ## E. Decisions waiting on a person
 
 **E1. CLOSED 2026-08-18, by ruling.  The remedy for compiled
