@@ -41,11 +41,12 @@ complete.
 
 ```
 mbirtorch API
-├── 1. Reconstruction (model methods)
+├── 1. Reconstruction
+│   ├── One-call functions ......... recon_simple_parallel, recon_simple_cone
 │   ├── Projection ................. forward_project, back_project
 │   ├── Iterative reconstruction ... recon, prox_map
-│   ├── Direct reconstruction ...... fbp_recon, fdk_recon
-│   ├── Specialized reconstruction . split_sino_recon, recon_plastic_metal
+│   ├── Direct reconstruction ...... recon_fbp, recon_fdk
+│   ├── Specialized reconstruction . recon_split_sino, recon_plastic_metal
 │   └── Denoising .................. denoise
 ├── 2. Model management
 │   ├── Construction and copying ... ConeBeamModel(...), copy_ct_model
@@ -109,15 +110,22 @@ The thresholds were measured (both are sentinels: splitting never paid up to
 a billion voxels) and `denoise` now calls the device policy
 (entry_point_plan.md §9.9).
 
-**Issue 6: two helpers can refuse a problem they could handle.**
-`prepare_sino_for_devices` and `compute_hessian_diagonal` check memory
-against a full reconstruction, so on a problem too large for a full `recon`
-they raise even though their own work fits.  Proposal: decide whether these
-helpers should check against their own, smaller allocations, as the direct
-reconstructions now do.
+**Issue 6 (FIXED 2026-08-21): two helpers can refuse a problem they could handle.**
+`prepare_sino_for_devices` and `compute_hessian_diagonal` now pass the
+direct workload to the device policy.  The layout is still sized for a full
+reconstruction when one fits; on a problem too large for any full
+reconstruction, the check that can refuse is made against the helper's own
+smaller footprint, and a later full `recon` on such a layout re-runs the
+memory check rather than reusing it.  One recorded residue: a standalone
+`compute_hessian_diagonal` with default indices back-projects the unmasked
+grid, which the direct plan under-prices by up to 1.29x on that fallback
+path; noted for a ledger follow-up.
 
-**Issue 7: API name change - `recon_split_sino` and `recon_direct`.**
-These two name changes are proposed for consistency with `recon`.  
+**Issue 7 (FIXED 2026-08-21): reconstruction method names.**
+The reconstruction methods are renamed for consistency with `recon`:
+`recon_direct`, `recon_split_sino`, `recon_fbp`, and `recon_fdk`, and the
+iteration engine is private as `_vcd_recon`.  No aliases were kept, since
+the package has not had a release.
 
 # DETAILED DESCRIPTIONS
 
@@ -130,12 +138,13 @@ function in its subcategory.
 
 | Function | Primary input | Accepted forms | Default output | `output_sharded=True` |
 |---|---|---|---|---|
+| `recon_simple_parallel` / `recon_simple_cone` (module functions) | sinogram | numpy / tensor | (numpy recon, recon_dict) | — |
 | `forward_project` | recon | numpy / tensor / Shards | numpy sinogram | device-form sinogram |
 | `back_project` | sinogram | numpy / tensor / Shards | numpy recon | device-form recon |
 | `recon` | sinogram | numpy / tensor / Shards | (numpy recon, recon_dict) | (device-form recon, dict) |
 | `prox_map` | prox_input, sinogram | numpy / tensor / Shards | (numpy recon, dict) | (device-form recon, dict) |
-| `direct_recon` / `fbp_recon` / `fdk_recon` | sinogram | numpy / tensor / Shards | numpy recon | device-form recon |
-| `split_sino_recon` | sinogram | numpy / tensor (tensor converted to numpy at entry) | (numpy recon, dict) — no `output_sharded` kwarg | — |
+| `recon_direct` / `recon_fbp` / `recon_fdk` | sinogram | numpy / tensor / Shards | numpy recon | device-form recon |
+| `recon_split_sino` | sinogram | numpy / tensor (tensor converted to numpy at entry) | (numpy recon, dict) — no `output_sharded` kwarg | — |
 | `recon_plastic_metal` | sinogram | numpy / tensor (tensor converted to numpy at entry) | (numpy recon, dict) — no `output_sharded` kwarg | — |
 | `denoise` | image | numpy / tensor / Shards | (numpy image, dict) | (device form, dict) |
 
@@ -143,7 +152,7 @@ function in its subcategory.
 
 | Function | Primary input | Accepted forms | Default output | `output_sharded=True` |
 |---|---|---|---|---|
-| `vcd_recon` | sinogram | numpy / tensor / Shards | **always device form** + losses — no gather, no kwarg | — |
+| `_vcd_recon` | sinogram | numpy / tensor / Shards | **always device form** + losses — no gather, no kwarg | — |
 | `compute_hessian_diagonal` | weights (optional) | numpy / tensor / Shards | numpy | device form |
 | `prepare_sino_for_devices` | sinogram | numpy / tensor / Shards | **always device form** (that is its purpose); a pair when weights given | — |
 | `sparse_forward_project` / `sparse_back_project` | voxel values / sinogram | tensor / Shards | **mirrors the input form** — the one true form-mirroring pair on this surface | — |

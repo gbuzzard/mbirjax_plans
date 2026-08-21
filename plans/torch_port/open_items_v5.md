@@ -33,46 +33,29 @@ speed floors).
 
 ## Start here: the next session
 
-The 2026-08-21 session ran in two halves.  The first half closed G4
-(the inflated nightly memory readings were the recompile budget's
-eager fallback, not the instrument; findings §1.40) and evaluated
-every open D and J item against the code at b6e5699; each entry
-carries its verified detail under "Checked 2026-08-21".  The second
-half implemented the ready items: J3, D6, D5, D8 issue 3, D1, and
-then D9 are closed and staged, with their records in the closed
-sections below.  Greg closed D8 issue 4 the same day.  The full suite
-passes with the staged set in place (635 passed, none failing).
+The 2026-08-21 session closed G4 (the inflated nightly memory
+readings were the recompile budget's eager fallback, not the
+instrument; findings §1.40), evaluated every open D and J item
+against the code, and then implemented the queue as Greg ruled.
+Closed and staged, with records in the closed sections below: J3,
+D6, D5, D1, D2, D9, D8 issues 3, 6, and 7 (the method renames), and
+J2 (the one-call reconstruction functions), plus a tensor blank/dark
+scan repair found along the way.  Greg closed D8 issue 4.  The
+staged set passes the full suite (664 passed, none failing).
 
-What remains open, in the ranking's order:
+What remains open:
 
-- **D2 is small.**  The docstring-and-raise repair for the streaming
-  preprocessing entries, plus the stale denoise docstring; coordinate
-  with Charlie's docs session.
-- **Three rulings wait on a person: J2, D8 issue 7, and D8 issue 6.**
-  J2 needs its proposal reviewed.  Issue 7 is better settled before
-  the first release, to avoid a deprecation cycle.  Issue 6 needs a
-  decision on whether the helpers get their own ledger workload.
 - **Two surveys are schedulable.**  D4's worklist is enumerated, with
-  two tensor-only candidates already flagged.  J1 is well-bounded.
+  two tensor-only candidates already flagged.  J1 (the parallel split
+  reconstruction) is well-bounded.
 - **D7 holds** until H8 decides the kernel path, which may supersede
   it.
+- **Follow-ups recorded in place:** the ledger term for the unmasked
+  hessian back projection (D8 issue 6's residue), the GPU-scale
+  gather confirmation (J3), and external material that teaches the
+  old method names (D8 issue 7).
 
 ## D. Correctness and API-contract gaps
-
-**D2. The array-forms rule is not applied everywhere.**  The rule
-requires a function that does not implement the divided multi-GPU form
-to say so in its docstring and to raise at entry.  Checked 2026-08-21
-at b6e5699: the streaming preprocessing entries (`scan_to_sino` and
-its five siblings) still do neither, so a divided input dies inside
-`pipeline.map_view_batches` with an attribute error.  Their tensor-in,
-numpy-out behavior matches the API specification's preprocessing rule,
-so the repair reduces to the docstring statement and a named entry
-raise.  The denoiser classification conflict resolves toward the
-code.  `denoise` accepts the divided form, as the API table says.
-The stale side is its own docstring, which still reads "numpy or
-tensor".
-*(open_items K3; API_specification.md category rules;
-closed/entry_point_survey.md rows E6, D8.)*
 
 **D4. Re-sweep for missed multi-GPU support.**  The original survey
 grepped docstrings for "shard", which misses functions whose multi-GPU
@@ -95,24 +78,6 @@ the vertical axis, scatter on the horizontal) is testable one axis at a
 time against the stored reference results.
 *(open_items D4;
 closed/preprocess_sharding_translation_multiaxis.md:273.)*
-
-**D8. Other open issues from `API_specification.md`.**
-
-  * **Issue 6: two helpers can refuse a problem they could handle.**
-`prepare_sino_for_devices` and `compute_hessian_diagonal` check memory
-against a full reconstruction, so on a problem too large for a full `recon`
-they raise even though their own work fits.  Proposal: decide whether these
-helpers should check against their own, smaller allocations, as the direct
-reconstructions now do.  Checked 2026-08-21: both still call the policy
-with the default recon workload.  The ledger knows only the recon,
-direct, and denoise workload classes, so the repair needs a new ledger
-key and coverage rule rather than a changed argument.
-
-  * **Issue 7: API name change - `recon_split_sino` and `recon_direct`.**
-These two name changes are proposed for consistency with `recon`.
-Checked 2026-08-21: neither name exists yet.  Both are methods, so the
-work is a method rename with docs; renaming before the first release
-avoids a deprecation cycle.  The ruling is Greg's.
 
 ## G. Release, nightly, and automation
 
@@ -184,11 +149,6 @@ parallel's row-to-slice identity, so what remains is an integer split
 with a plain row overlap.  The docs currently teach the manual
 workaround (demos_and_faqs.rst:119).
 
-**J2. A functional recon interface.**  Provide a functional, not
-object-oriented, interface for basic parallel-beam and cone-beam
-reconstruction.  Checked 2026-08-21: no functional entry exists in the
-package; the proposal (two thin wrappers) awaits review.
-*(functional_interface_proposal.md item 10.)*
 
 # Closed items (2026-08-21)
 
@@ -412,6 +372,21 @@ and the test asserts nonzero content like its cube sibling.  One
 note: the dot builder seeds numpy's global random generator, which is
 pre-existing behavior of that builder.
 
+**D2. CLOSED 2026-08-21, staged.  The array-forms rule is not applied
+everywhere.**  The six streaming preprocessing entries now refuse the
+divided form at entry, with a message naming the function, the
+offending argument, and the fix, and their docstrings state the
+accepted forms.  The check lives beside the batching driver it
+protects (`pipeline.reject_shards`).  The `denoise` docstring gained
+the divided form the code already accepted, which resolves the
+classification conflict toward the code.  One adjacent defect was
+found and fixed in the same pass: a tensor blank or dark scan crashed
+the transmission computation through numpy's mean, and the three
+entries that take reference scans now bring them to host numpy at
+entry.  The entry-contract tests run in the default suite
+(tests/test_preprocess_entry_forms.py, 15 passing).
+*(open_items K3; closed/entry_point_survey.md rows E6, D8.)*
+
 **D9. CLOSED 2026-08-21, staged.  A sharded sinogram cannot be passed
 to `recon` or `prox_map`.**  The reconstruction entries now accept
 the device form that `prepare_sino_for_devices` returns, for the
@@ -438,10 +413,36 @@ golden keeps its old tag and loads through the accept-both path, so
 no regeneration was needed.
 
   * **Issue 4: CLOSED.  the FBP theory derivation has no pointer.**
-`fbp_recon`'s docstring linked to the derivation on the old package's
+The docstring linked to the derivation on the old package's
 documentation site; the link was removed with the other old-package
-references.  Proposal: copy the derivation into this package's documentation,
-or restore a citation.  The link is now at the top of `theory.rst`.
+references.  The link is now at the top of `theory.rst`.
+
+  * **Issue 6: FIXED 2026-08-21, staged.  Two helpers can refuse a
+problem they could handle.**  `prepare_sino_for_devices` and
+`compute_hessian_diagonal` now pass the direct workload to the device
+policy, as Greg ruled.  The layout is still sized for a full
+reconstruction when one fits.  On a problem too large for any full
+reconstruction, the check falls back to the helper's own footprint,
+and a later full `recon` on such a layout re-runs the memory check
+rather than reusing it; both behaviors are pinned by tests.  One
+recorded residue: a standalone `compute_hessian_diagonal` with
+default indices back-projects the unmasked grid, which the direct
+plan under-prices on that fallback path.  Measured against the direct
+plan's per-device peak, the dense default form needs 0.85x to 1.29x
+across the 128- to 1024-class at one to four devices, while the
+masked form is covered at 0.93x to 1.00x.  The exposure is narrow
+(a direct user call, default indices, at beyond-full-recon scale),
+and the candidate repair is a ledger term for the unmasked back
+projection.
+
+  * **Issue 7: FIXED 2026-08-21, staged.  Reconstruction method
+names.**  The methods are renamed for consistency with `recon`:
+`recon_direct`, `recon_split_sino`, `recon_fbp`, `recon_fdk`, and the
+iteration engine is private as `_vcd_recon`.  Clean renames, no
+aliases, since the package has not had a release: 160 replacements
+across 33 files, zero old names remaining, dispatch-by-identity sites
+and log labels included.  External material that teaches the old
+names (mbirjax_applications scripts) needs its own pass.
 
 ## E. Decisions waiting on a person
 
@@ -557,6 +558,24 @@ translation, then design and validate the interfaces.
   *(open_items H4.)*
 
 ## J. New features and improvements
+
+**J2. CLOSED 2026-08-21, staged.  A functional recon interface.**
+`recon_simple_parallel` and `recon_simple_cone` reconstruct in one
+call, with weights, sharpness, and max_iterations as the only knobs;
+they build the model internally and return `recon`'s (recon, dict)
+pair.  Greg named the functions and their homes (parallel_beam.py and
+cone_beam.py).  The proposal's filtered-back-projection claim was
+verified before it was documented: max_iterations=0 returns the
+direct reconstruction scaled to fit the data, bitwise equal to
+recon_fbp or recon_fdk up to that scale, and the scale measurably
+lowers the sinogram error.  Both functions are exported, documented
+on their model pages ahead of the class, and covered by twelve
+tests.  The wider docs placement Greg approved is applied: the
+quick-start page opens with the one-call example and shows the model
+form second for control, the API overview gains a One-Call
+Reconstruction section ahead of Geometry Models, and the README
+carries the one-line example.  The docs build with no warnings.
+*(functional_interface_proposal.md.)*
 
 **J3. CLOSED 2026-08-21, staged.  Refactor the gather.**
 `Shards.gather` now allocates the host array once and copies each
