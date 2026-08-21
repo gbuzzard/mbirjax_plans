@@ -33,59 +33,60 @@ speed floors).
 
 ## Start here: the next session
 
-1. **Read the first fixed night's memory rows (G4's follow-up).**
-   The per-trial peaks land with the next nightly that measures a
-   moved branch; one read says whether the old 26.6 GiB inflation
-   was warmup-only or recurs in warm trials.  (B6 closed 2026-08-20
-   with Greg's ruling on the refreshed floors; its entry below has
-   the record.)
-2. **Evaluate the next set of priorities.**  The primary candidates 
-   are the entries in D and J. Check the status of each item relative to the originating
-   document and the code.  Evaluate each item in terms of effort to close and 
-   value of the result if completed.  Use the style recommended for the executive summary in the writing guide.
+The 2026-08-21 session ran in two halves.  The first half closed G4
+(the inflated nightly memory readings were the recompile budget's
+eager fallback, not the instrument; findings §1.40) and evaluated
+every open D and J item against the code at b6e5699; each entry
+carries its verified detail under "Checked 2026-08-21".  The second
+half implemented the ready items: J3, D6, D5, D8 issue 3, D1, and
+then D9 are closed and staged, with their records in the closed
+sections below.  Greg closed D8 issue 4 the same day.  The full suite
+passes with the staged set in place (635 passed, none failing).
+
+What remains open, in the ranking's order:
+
+- **D2 is small.**  The docstring-and-raise repair for the streaming
+  preprocessing entries, plus the stale denoise docstring; coordinate
+  with Charlie's docs session.
+- **Three rulings wait on a person: J2, D8 issue 7, and D8 issue 6.**
+  J2 needs its proposal reviewed.  Issue 7 is better settled before
+  the first release, to avoid a deprecation cycle.  Issue 6 needs a
+  decision on whether the helpers get their own ledger workload.
+- **Two surveys are schedulable.**  D4's worklist is enumerated, with
+  two tensor-only candidates already flagged.  J1 is well-bounded.
+- **D7 holds** until H8 decides the kernel path, which may supersede
+  it.
 
 ## D. Correctness and API-contract gaps
 
-**D1. `stitch_arrays` mishandles mixed inputs.**  It silently moves
-tensors from different devices onto the first tensor's device, and it
-fails without a clear message on the divided multi-GPU form.  The
-proposal is to raise a named error in both cases, since its one
-internal caller always passes host arrays.
-*(open_items B6; API_specification.md Issue 2.)*
-
 **D2. The array-forms rule is not applied everywhere.**  The rule
 requires a function that does not implement the divided multi-GPU form
-to say so in its docstring and to raise at entry.  The streaming
-preprocessing entries (`scan_to_sino` and its siblings) do neither: a
-divided input fails deep inside the pipeline, and a tensor input
-returns numpy instead of mirroring its input form.  The rule document
-also classifies the denoiser one way while the code implements the
-other; one of the two should be amended.
-*(open_items K3; array_forms_rule.md;
+to say so in its docstring and to raise at entry.  Checked 2026-08-21
+at b6e5699: the streaming preprocessing entries (`scan_to_sino` and
+its five siblings) still do neither, so a divided input dies inside
+`pipeline.map_view_batches` with an attribute error.  Their tensor-in,
+numpy-out behavior matches the API specification's preprocessing rule,
+so the repair reduces to the docstring statement and a named entry
+raise.  The denoiser classification conflict resolves toward the
+code.  `denoise` accepts the divided form, as the API table says.
+The stale side is its own docstring, which still reads "numpy or
+tensor".
+*(open_items K3; API_specification.md category rules;
 closed/entry_point_survey.md rows E6, D8.)*
 
 **D4. Re-sweep for missed multi-GPU support.**  The original survey
 grepped docstrings for "shard", which misses functions whose multi-GPU
 support is implicit.  The recorded method is to trace downstream
 callees from each entry point that accepts the divided form, looking
-for tensor-only assumptions.
+for tensor-only assumptions.  The 2026-08-21 status check enumerated
+the sweep's worklist.  About twenty model methods and eight module
+functions carry a `Shards` branch today, and three entries refuse the
+form explicitly.  Two public methods are already flagged as
+tensor-only: `get_voxels_at_indices` and `reshape_recon` call
+`.reshape` with no `Shards` branch.  The remaining work is tracing
+the enumerated list.
 *(open_items J5;
 closed/preprocess_sharding_translation_multiaxis.md:209.)*
-
-**D5. Run-logging defects inherited from the original package.**  Two
-live models of one class write into each other's logs; the log file
-handle is never closed, so lines written after `split_sino_recon`
-merges and deletes its half-logs land in a deleted file; and
-`verbose=0` still creates an empty log file.  Candidate repairs are
-recorded: per-instance logger keys and a close call in the setup.
-*(current_plans.md item 11.)*
-
-**D6. Translation demo data generates an all-zero phantom.**  The
-translation geometry's flat, two-row volume breaks the generic phantom
-builders, in this package and the original both.  Charlie wants it
-fixed here before release.
-*(open_items D3;
-closed/preprocess_sharding_translation_multiaxis.md:240.)*
 
 **D7. The projection loop organization is unexamined across
 geometries.**  The multi-axis port carried over the original's choice of
@@ -97,41 +98,21 @@ closed/preprocess_sharding_translation_multiaxis.md:273.)*
 
 **D8. Other open issues from `API_specification.md`.**
 
-  * **Issue 3: the saved-file format tag names the old package.**
-`save_cone_preprocessing` writes `format = 'mbirjax_preprocessing_v1'` into
-its HDF5 files.  Proposal: write `'mbirtorch_preprocessing_v1'` in new files
-and accept both tags when loading, so existing files stay readable.
-
-  * **Issue 4: the FBP theory derivation has no pointer.**
-`fbp_recon`'s docstring linked to the derivation on the old package's
-documentation site; the link was removed with the other old-package
-references.  Proposal: copy the derivation into this package's documentation,
-or restore a citation.  Waiting on Charlie's decision.
-
   * **Issue 6: two helpers can refuse a problem they could handle.**
 `prepare_sino_for_devices` and `compute_hessian_diagonal` check memory
 against a full reconstruction, so on a problem too large for a full `recon`
 they raise even though their own work fits.  Proposal: decide whether these
 helpers should check against their own, smaller allocations, as the direct
-reconstructions now do.
+reconstructions now do.  Checked 2026-08-21: both still call the policy
+with the default recon workload.  The ledger knows only the recon,
+direct, and denoise workload classes, so the repair needs a new ledger
+key and coverage rule rather than a changed argument.
 
   * **Issue 7: API name change - `recon_split_sino` and `recon_direct`.**
-These two name changes are proposed for consistency with `recon`.  
-
-**D9. A sharded sinogram cannot be passed to `recon` or `prox_map`.**
-`prepare_sino_for_devices` returns the device form, and its docstring
-implies the reconstruction entries take it, but they do not:
-`vcd_recon` reads `sinogram.shape` and `initialize_recon` calls
-`np.asarray` on it, and a `Shards` container has neither.  A caller
-must therefore hand in a host array, so a Plug-and-Play or ADMM loop
-re-places its sinogram from the host on every `prox_map` call.  This
-is the same defect the volume side had until 2026-08-20, and the fix
-has the same shape: accept the device form, validate it against the
-placement instead of against `.shape`, and leave the host path
-unchanged.  The volume side's repair is the worked example
-(`_flatten_prox_shards` and the `Shards` branch in `vcd_recon`).
-*(multigpu_plan_part_2.md, the denoiser and plug-and-play section;
-multigpu_findings.md §1.39.)*
+These two name changes are proposed for consistency with `recon`.
+Checked 2026-08-21: neither name exists yet.  Both are methods, so the
+work is a method rename with docs; renaming before the first release
+avoids a deprecation cycle.  The ruling is Greg's.
 
 ## G. Release, nightly, and automation
 
@@ -150,28 +131,6 @@ to be read once, by Greg.
 A new mbirtorch_metrics repo and dashboard should become independent and record mbirtorch only, 
 in a format similar to the mbirjax dashboard prior to the addition of mbirtorch. 
 The mbirjax nightly runs will eventually be retired.  
-
-**G4. FIX LANDED 2026-08-19 (pushed); the mechanism behind the old
-readings stays open.  The nightly's multi-device memory columns were
-unreliable.**  A four-device 1024-class arm recorded a 26.6 GiB
-lead-device watermark where a fresh single reconstruction peaks at
-6.84 GiB.  The two easy mechanisms are refuted: reconstruction
-end-states free at refcount (mg42b, run locally), and the harness's
-trial loop already drops results and collects before each timed call.
-The fix is in
-`mbirjax_metrics/tooling/scaling_tests/torch_backend_writer.py`,
-pushed 2026-08-19, so the next nightly run carries it: the peak
-counters reset before every iteration, the row's `mem_mb` is the
-largest single-call peak among the warm trials, and the warmup and
-per-trial peaks are recorded beside it, so an inflated call is visible
-by itself.  Three consequences to expect: multi-device memory series
-may step down (an improvement, not a regression; the record book
-keeps the min, so baselines ratchet down); a recurrence of the old
-inflation then trips the HARD memory gate instead of hiding; and the
-per-trial lists localize the open mechanism on the next night it
-appears.  Reading the first fixed night's rows is the follow-up.
-*(multigpu_findings.md §1.35; mg42b_cycle_check.py.)*
-
 
 ## H. Scheduled and back-burner work
 
@@ -217,21 +176,19 @@ at 68 GB on one device.
 
 **J1. Add a ParallelBeam version of split_sino_recon.**  This should be similar to the ConeBeam version, but the 
 alignment of recon slices and detector rows means the subdivisions can be more or less arbitrary.
+Checked 2026-08-21: the base class raises `NotImplementedError` and cone
+has the only implementation, about 260 lines.  Most of those lines
+handle cone geometry: magnification scaling, divergence widening, the
+cut-row search, and the grid alignment.  All of these vanish under
+parallel's row-to-slice identity, so what remains is an integer split
+with a plain row overlap.  The docs currently teach the manual
+workaround (demos_and_faqs.rst:119).
 
 **J2. A functional recon interface.**  Provide a functional, not
 object-oriented, interface for basic parallel-beam and cone-beam
-reconstruction.
+reconstruction.  Checked 2026-08-21: no functional entry exists in the
+package; the proposal (two thin wrappers) awaits review.
 *(functional_interface_proposal.md item 10.)*
-
-**J3. Refactor `gather_recon`.**  Shards.gather brings every shard to the host and concatenates 
-them on the sharded axis, which for a recon-like array is the LAST axis: the least favorable 
-memory locality, plus a second full-size host allocation. A single-device gather is one 
-contiguous copy with no concatenate, which is why sharding roughly doubles the cost for `denoise`. 
-The candidate is to allocate the host array once and copy each shard into its own slice. 
-The gather is 43 to 69 percent of a denoise call at every device count, so this is the largest 
-single line in a denoise; the same gather ends every multi-device reconstruction, where two 
-seconds against a wall of minutes does not matter much but would not hurt.
-*(`multigpu_plan_part_2.md`, end of denoiser intro.)*
 
 # Closed items (2026-08-21)
 
@@ -425,6 +382,66 @@ its only multi-batch residency is the deliberate transfer-ahead
 overlap, which the memory ledger charges.  No code change was needed.
 *(open_items K1; closed/backloop_attribution.md §5 item 3.)*
 
+**D1. CLOSED 2026-08-21, staged.  `stitch_arrays` mishandles mixed
+inputs.**  It now refuses what it silently mishandled: tensors on
+more than one device raise an error naming the devices, and a
+divided-form input raises an error directing the caller to gather to
+the host first.  A new test file pins the working forms' values and
+covers both refusals.  *(API_specification.md Issue 2, marked fixed;
+tests/test_utilities.py.)*
+
+**D5. CLOSED 2026-08-21, staged.  Run-logging defects inherited from
+the original package.**  All four defects are fixed.  Each model
+instance now has its own logger, named by the class plus a
+never-reused counter, and the constructor shares it with the runs.
+The log file handler closes when a run finishes and reopens in append
+mode when a later call continues the run, so the half-log merges
+delete closed files.  The file handler is created with delay=True, so
+a verbose=0 run creates no empty file while a warning would still
+land.  The denoiser's matching close landed in the same pass.
+test_logging grew the two-instance, closed-handle, and no-empty-file
+cases and passes 18.  One recorded residue: per-instance loggers
+persist in Python's logger registry for the life of the process, a
+few KB per model.
+
+**D6. CLOSED 2026-08-21, staged.  Translation demo data generates an
+all-zero phantom.**  `generate_demo_data(model_type='translation')`
+now builds its phantom with `gen_translation_phantom` (the dot
+pattern), so the demo projects real content where it projected zeros,
+and the test asserts nonzero content like its cube sibling.  One
+note: the dot builder seeds numpy's global random generator, which is
+pre-existing behavior of that builder.
+
+**D9. CLOSED 2026-08-21, staged.  A sharded sinogram cannot be passed
+to `recon` or `prox_map`.**  The reconstruction entries now accept
+the device form that `prepare_sino_for_devices` returns, for the
+sinogram and the weights both, so a Plug-and-Play loop pays the
+host-to-device transfer once instead of on every call.  The repair
+follows the denoiser's template: `subsample_views` assembles the
+statistics subsample from the shards exactly, `initialize_recon`
+validates per shard on the shard's own device, and `vcd_recon`'s
+entry checks the per-shard shapes the way the prox input's branch
+does.  The two paths compute identical regularization parameters,
+and the reconstruction difference sits at the run-to-run floor,
+forty times under the file's gate.  Twenty-two tests landed with it
+(test_device_policy passes 108).  The docstring and multi-GPU-page
+promises this item flagged are now true.
+*(multigpu_plan_part_2.md, the denoiser and plug-and-play section.)*
+
+**D8. Other items.**
+
+  * **Issue 3: FIXED 2026-08-21, staged.  The saved-file format tag
+names the old package.**  New files carry
+`'mbirtorch_preprocessing_v1'`; the loader accepts both tags and
+files with no tag, and rejects an unknown tag by name.  The stored
+golden keeps its old tag and loads through the accept-both path, so
+no regeneration was needed.
+
+  * **Issue 4: CLOSED.  the FBP theory derivation has no pointer.**
+`fbp_recon`'s docstring linked to the derivation on the old package's
+documentation site; the link was removed with the other old-package
+references.  Proposal: copy the derivation into this package's documentation,
+or restore a citation.  The link is now at the top of `theory.rst`.
 
 ## E. Decisions waiting on a person
 
@@ -483,6 +500,23 @@ edits are committed (mbirtorch 88abb4c).
 **F2. CLOSED 2026-08-19.  Two demo-side documentation pieces.**
 Charlie finished both.  → closed/demo_consolidation.md:229, :251.
 
+## G. Release, nightly, and automation
+
+**G4. CLOSED 2026-08-21.  The nightly's inflated memory readings
+were the recompile budget, not the instrument.**  The first two
+nights on the fixed writer answered the open question.  The inflated
+readings recur in warm trials, so they were never a warmup effect,
+and they vanish exactly when the recompile-budget remedy enters the
+measured tip.
+The late-running 1024-class one- and two-device arms had been
+falling back to eager execution after the compiled-variant cap
+filled, and eager execution's materialized intermediates were the
+extra 0.6 to 3.2 GB.  The record book ratcheted down, both nights
+gated PASS, and a future eager fallback now trips the HARD memory
+gate.  One correction rides the closure: the 26.6 GiB reading was
+always the ONE-device 1024-class row on a four-GPU night, not a
+four-device arm's row.  → multigpu_findings.md §1.40.
+
 ## H. Scheduled and back-burner work
 
 **H2. MOVED TO D11 2026-08-21: A functional recon interface.**  Provide a functional, not
@@ -522,6 +556,26 @@ translation, then design and validate the interfaces.
   the copies here are corrected, and upstream is winding down.
   *(open_items H4.)*
 
+## J. New features and improvements
+
+**J3. CLOSED 2026-08-21, staged.  Refactor the gather.**
+`Shards.gather` now allocates the host array once and copies each
+shard into its own slice of it.  Measured on CPU, the new gather is
+3.3 to 3.6 times faster on last-axis sharding and 2.0 times on the
+view axis.  The speed comes from torch's multithreaded copy; the
+removed second full-size allocation is the memory half of the win.
+Equivalence was checked byte-exactly over 832 CPU and 252 MPS
+configurations, and two new tests pin the round trip and the
+container-consistency errors.  Two findings ride the closure.  Metal
+refuses copies into destinations off a 4-byte boundary, which only 1-
+and 2-byte dtypes can hit; a per-shard host staging fallback covers
+it.  And a mixed-dtype shard list, formerly promoted by concatenate,
+would now cast to the first dtype; every construction site builds
+uniform shards today, and a dtype check in the constructor is the
+recorded candidate.  The denoise-scale improvement on GPU awaits a
+cluster confirmation.
+*(multigpu_plan_part_2.md, end of the denoiser section;
+multigpu_findings.md §1.39; _sharding.py.)*
 
 ## The current_plans.md migration (2026-08-19)
 

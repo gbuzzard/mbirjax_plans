@@ -92,22 +92,17 @@ as "open issue N".
 
 **Issue 1 (FIXED 2026-08-16): `interpolate_defective_pixels` accepted only a torch tensor.**
 
-**Issue 2: `stitch_arrays` mishandles mixed inputs.**
-When the input tensors sit on different devices, it silently moves them all to
-the first tensor's device.  It also fails on the divided GPU form without a
-clear message.  Proposal: raise an error naming the problem in both cases,
-since its one internal caller (`split_sino_recon`) always passes host arrays.
+**Issue 2 (FIXED 2026-08-21): `stitch_arrays` mishandles mixed inputs.**
+It now raises a named error in both cases: tensors on more than one device,
+and any element in the divided GPU form.
 
-**Issue 3: the saved-file format tag names the old package.**
-`save_cone_preprocessing` writes `format = 'mbirjax_preprocessing_v1'` into
-its HDF5 files.  Proposal: write `'mbirtorch_preprocessing_v1'` in new files
-and accept both tags when loading, so existing files stay readable.
+**Issue 3 (FIXED 2026-08-21): the saved-file format tag names the old package.**
+New files carry `'mbirtorch_preprocessing_v1'`; the loader accepts both tags
+and files with no tag, and rejects an unknown tag by name.
 
-**Issue 4: the FBP theory derivation has no pointer.**
-`fbp_recon`'s docstring linked to the derivation on the old package's
-documentation site; the link was removed with the other old-package
-references.  Proposal: copy the derivation into this package's documentation,
-or restore a citation.  Waiting on Charlie's decision.
+**Issue 4 (FIXED 2026-08-21): the FBP theory derivation has no pointer.**
+The derivation download link is at the top of the documentation's theory
+page (`theory.rst`).
 
 **Issue 5 (FIXED 2026-08-16): `denoise` does not yet join the automatic GPU choice.**
 The thresholds were measured (both are sentinels: splitting never paid up to
@@ -263,7 +258,7 @@ host numpy.
 | Function | Input | Output |
 |---|---|---|
 | `median_filter3d` | numpy / tensor | same form as the input |
-| `stitch_arrays` | list of numpy / tensor | one array (open issue 2) |
+| `stitch_arrays` | list of numpy / tensor | one array (issue 2 fixed: mixed devices and the divided form now raise) |
 | `apply_cylindrical_mask` | numpy / tensor / Shards | same form as the input |
 | `clear_cache` | — | — (empties the on-disk compile cache) |
 | `get_memory_stats` | — | per-device memory report |

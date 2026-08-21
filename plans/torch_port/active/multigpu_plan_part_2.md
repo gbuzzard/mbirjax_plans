@@ -180,12 +180,13 @@ exact equality rather than a tolerance.  The statistics path now moves
 about 2.5 percent of the volume at the 1024-class and 1.4 percent at
 the 1664-class, and no full gather runs at all.
 
-One transfer remains, and it is the sinogram side, which has the same
-blocker the volume side lost: `vcd_recon` reads `sinogram.shape` and
-`initialize_recon` calls `np.asarray` on it, so a `Shards` sinogram
-cannot be passed to `recon` or `prox_map` even though
-`prepare_sino_for_devices` returns one.  A loop therefore re-places its
-sinogram from the host on every `prox_map` call.  That is open item D9.
+The sinogram transfer landed 2026-08-21 (staged), closing item D9.
+The reconstruction entries accept the device form that
+`prepare_sino_for_devices` returns, for the sinogram and the weights
+both, so the loop's every hop now stays on the devices.  The repair
+mirrors the denoiser's: the statistics subsample assembles from the
+shards exactly, the input checks run per shard on the shard's own
+device, and the entry shape check mirrors the prox input's branch.
 
 A note for the next floors refresh.  These changes touched
 `_sharding.py`, which prices every family, and `denoising.py`, which

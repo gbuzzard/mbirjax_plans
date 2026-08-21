@@ -2575,6 +2575,78 @@ the same two seconds sits against a wall of minutes and is
 negligible; the cost is per volume, so it dominates cheap operations
 and disappears into expensive ones.
 
+### 1.40 The first two nights on the fixed writer: the inflated
+### memory readings were the recompile budget, not the instrument
+### (2026-08-21, read from the committed run files)
+
+Read 2026-08-21 from the two nightly run files committed since the
+per-trial memory fix landed (mbirjax_metrics be56fd0, pushed
+2026-08-19).  The night of 2026-08-20 measured mbirtorch 8959e324
+and the night of 2026-08-21 measured b6e5699, both on four H100s
+with one warmup and one warm trial at the 1024-class.  The files are
+`regression_gpu-torch_20260819T212248Z_8959e324.yaml` and
+`regression_gpu-torch_20260820T191915Z_b6e56997.yaml` under
+`results/gpu-torch/greg_dev/`.  Both nights gated PASS with no hard
+or soft trips.
+
+**The old inflation was never a warmup effect.**  On both nights,
+every row's warmup peak equals its warm-trial peak, including the
+inflated rows.  The first night reproduced the old readings exactly:
+the 1024-class VCD arm read 26,612 MB at one device and 13,370 MB at
+two, in both geometries, in the warm trial as much as in the warmup.
+So the readings were real memory in every iteration.  G4 asked
+whether the inflation was warmup-only or recurring, and the answer
+is recurring.
+
+**The second night removed the inflation, and the lineage names the
+mechanism.**  On the night of 2026-08-21 the parallel rows dropped
+to 23,418 MB at one device and 12,055 MB at two, and the cone rows
+to 23,503 and 12,767.  The four-device rows did not move.  These
+dropped values match the 2026-08-18 two-GPU interactive run
+(c761b244) within 2 MB at all four cells.  The only relevant change
+between the two measured tips is the recompile-budget remedy:
+8959e324 predates it, and b6e5699 contains it (mbirtorch commits
+c012379 and 214ed15; findings §1.37).  These readings indicate the
+same mechanism B6 found for speed: the nightly runs all its arms in
+one process, the
+compiled-variant cap filled as the arms accumulated, and the
+late-running 1024-class one- and two-device arms fell back to eager
+execution.  Eager execution materializes every intermediate, which
+is the extra 0.6 to 3.2 GB.  The four-device arms run before the cap
+fills, so they never inflated.  The two-GPU interactive run had no
+four-device arms ahead of the 1024-class, which is why it measured
+the clean values on the same pre-remedy code.
+
+**Two recorded framings are corrected.**  The plan entry said a
+four-device arm recorded the 26.6 GiB watermark.  The run files show
+the reading was always the ONE-device 1024-class row on a four-GPU
+night, and no four-device row ever read it.  The ledger
+calibration input said the four-device arm transiently pushes the
+lead device 3.1 GB above the one-device arm's own peak.  No such
+cross-arm transient exists.  The one-device arm itself ran eager,
+and its own peak was 3.2 GB higher than its compiled form.  The
+ledger conclusions of §1.35 stand: they were drawn from fresh
+compiled processes, which the probe measured correctly.
+
+**The record book reacted as G4 predicted.**  The second night set
+new minimum memory records at the affected rows, so the baselines
+ratcheted down.  A future eager fallback at these cells now trips
+the HARD memory gate instead of hiding.  The per-trial lists did
+their diagnostic job on their first exercise, and G4 closes with
+this read.
+
+One live flag rides the second night.  Its automatic-choice check
+passed, with the settle choosing two devices of four as the floors
+admit, but the check carries a floors staleness note.  The note
+fired because b8b2d61 touched `_sharding.py` and b6e5699 touched
+`denoising.py`, both of which price floor rows.  The plan already
+records the reasoning for ruling
+those changes cost-neutral: neither alters what a host-array timing
+run executes (multigpu_plan_part_2.md, the note for the next floors
+refresh).  The note persists on every future night until someone
+either re-measures with `dev_scripts/refresh_widening_floors.py` or
+blesses the hashes on that reasoning.
+
 ## 3. The crossover ladder (mg4)
 
 This section locates where each device count starts paying, which is
