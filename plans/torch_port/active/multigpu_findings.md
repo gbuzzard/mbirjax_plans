@@ -2647,6 +2647,77 @@ refresh).  The note persists on every future night until someone
 either re-measures with `dev_scripts/refresh_widening_floors.py` or
 blesses the hashes on that reasoning.
 
+### 1.41 The divided-form sweep of the public API: one entry gained
+### real support, fourteen gained refusals (2026-08-21, verified on
+### the working tree over bf58c39)
+
+The original survey for divided-form support grepped docstrings for
+"shard", which misses entries whose handling is implicit in the
+code.  This sweep enumerated every public method and module function
+that takes an array-like data input and handed each one a real
+two-shard CPU `Shards`.  Each failure was traced to its deciding
+line rather than judged from the entry alone.
+
+**Most of the surface already handles the form.**  Over thirty
+entries carry the divided form end to end.  These include the
+projectors, `recon`, `prox_map`, the direct reconstructions in all
+four geometries, the denoiser, and the HDF5 writers.  Three entries
+refused the form cleanly before the sweep: `recon_split_sino`,
+`recon_plastic_metal`, and `stitch_arrays`.  The preprocessing
+entries already refused it through their shared check.
+
+**Fifteen entries broke below the entry with misleading errors.**
+The failures were a missing attribute, an unsupported operand, or a
+numpy error raised long after `np.asarray` had silently built a 0-d
+object array.  The worst diagnosis came from `recon` and `prox_map`,
+which told the caller their divided initializer had shape `()`,
+because `np.shape` of a `Shards` is `()`.  The fifteen were
+`get_voxels_at_indices`, `auto_set_sigma_y`,
+`get_forward_model_loss`, `get_forward_lin_quad`, `reshape_recon`,
+`recon` and `prox_map` on `init_recon`, `recon_simple_parallel`,
+`recon_simple_cone`, `gen_weights_mar`, `median_filter3d`,
+`qggmrf_loss`, `qggmrf_gradient_and_hessian_at_indices`, and the two
+differentiable projector wrappers.
+
+**One entry gained real support.**  `get_voxels_at_indices` now
+indexes each shard on its own device and returns a container over
+the same placement.  The flattening touches only the row and column
+axes, and the selection touches only rows, so the shard axis is
+never crossed.  The gathered result therefore equals the whole-array
+result exactly, and the gate asserts bitwise equality on an uneven
+4+3 slice split.
+
+**The other fourteen gained the entry refusal.**  The shared check
+moved from the preprocessing pipeline into
+`_sharding.reject_shards`, and the pipeline aliases it, so one copy
+owns the wording.  Every refusal names the function, the offending
+argument, and `shards.gather()` as the fix.  One refusal sits in the
+innermost compiled kernel, `qggmrf_gradient_and_hessian_at_indices`,
+so its cost was checked with `torch._dynamo.explain`: one graph and
+zero graph breaks.  The `isinstance` folds at trace time.
+
+**Review added one refusal the sweep missed.**  Cone's
+`recon_split_sino` refused a divided sinogram and weights but let a
+divided `init_recon` through to host slicing.  The refusal now
+covers all three arguments.
+
+**Candidates for real support later, each blocked by a design
+question.**  `recon(init_recon=...)` needs the whole-volume shape
+check reconstructed across shards, and the optimal scaling of the
+initializer raises a lifetime question for a caller-owned divided
+array.  `reshape_recon` targets the whole volume's slice count,
+which no shard has.  `get_forward_model_loss` and
+`get_forward_lin_quad` reduce to scalars, which needs a cross-device
+reduction and a choice of where the scalar lands; the VCD loop
+already solves this per shard, with partials combined by the caller.
+`median_filter3d` needs a halo exchange, the same machinery the
+qGGMRF kernel takes as explicit halo arguments.  The one-call
+reconstruction functions read the geometry off the sinogram's shape
+and would also need to reconcile the incoming placement with the new
+model's own device choice.  `auto_set_sigma_y` points its refusal at
+`subsample_views`, which already provides the reduction a caller
+needs.
+
 ## 3. The crossover ladder (mg4)
 
 This section locates where each device count starts paying, which is

@@ -33,43 +33,25 @@ speed floors).
 
 ## Start here: the next session
 
-The 2026-08-21 session closed G4 (the inflated nightly memory
-readings were the recompile budget's eager fallback, not the
-instrument; findings §1.40), evaluated every open D and J item
-against the code, and then implemented the queue as Greg ruled.
-Closed and staged, with records in the closed sections below: J3,
-D6, D5, D1, D2, D9, D8 issues 3, 6, and 7 (the method renames), and
-J2 (the one-call reconstruction functions), plus a tensor blank/dark
-scan repair found along the way.  Greg closed D8 issue 4.  The
-staged set passes the full suite (664 passed, none failing).
+The 2026-08-21 session closed G4 (findings §1.40), implemented the
+queue Greg ruled on (J3, D6, D5, D1, D2, D9, D8 issues 3, 6, and 7,
+and J2; all committed at bf58c39), closed D4 (the divided-form
+sweep; findings §1.41), and closed J1: parallel `recon_split_sino`
+reconstructs in N parts, with the part count taken from
+`slices_per_part` or estimated from the memory ledger.  The suite
+passes at 679 and the docs build with no warnings.
 
 What remains open:
 
-- **Two surveys are schedulable.**  D4's worklist is enumerated, with
-  two tensor-only candidates already flagged.  J1 (the parallel split
-  reconstruction) is well-bounded.
 - **D7 holds** until H8 decides the kernel path, which may supersede
   it.
 - **Follow-ups recorded in place:** the ledger term for the unmasked
   hessian back projection (D8 issue 6's residue), the GPU-scale
-  gather confirmation (J3), and external material that teaches the
-  old method names (D8 issue 7).
+  gather confirmation (J3), external material that teaches the old
+  method names (D8 issue 7), and the divided-form support candidates
+  (findings §1.41).
 
 ## D. Correctness and API-contract gaps
-
-**D4. Re-sweep for missed multi-GPU support.**  The original survey
-grepped docstrings for "shard", which misses functions whose multi-GPU
-support is implicit.  The recorded method is to trace downstream
-callees from each entry point that accepts the divided form, looking
-for tensor-only assumptions.  The 2026-08-21 status check enumerated
-the sweep's worklist.  About twenty model methods and eight module
-functions carry a `Shards` branch today, and three entries refuse the
-form explicitly.  Two public methods are already flagged as
-tensor-only: `get_voxels_at_indices` and `reshape_recon` call
-`.reshape` with no `Shards` branch.  The remaining work is tracing
-the enumerated list.
-*(open_items J5;
-closed/preprocess_sharding_translation_multiaxis.md:209.)*
 
 **D7. The projection loop organization is unexamined across
 geometries.**  The multi-axis port carried over the original's choice of
@@ -136,19 +118,6 @@ sharding from shrinking per-device peaks, and multiaxis 1024 models
 at 68 GB on one device.
 *(torch_port/active/multigpu_plan_part_2.md; multigpu_findings.md
 §1.36.)*
-
-## J. New features and improvements
-
-**J1. Add a ParallelBeam version of split_sino_recon.**  This should be similar to the ConeBeam version, but the 
-alignment of recon slices and detector rows means the subdivisions can be more or less arbitrary.
-Checked 2026-08-21: the base class raises `NotImplementedError` and cone
-has the only implementation, about 260 lines.  Most of those lines
-handle cone geometry: magnification scaling, divergence widening, the
-cut-row search, and the grid alignment.  All of these vanish under
-parallel's row-to-slice identity, so what remains is an integer split
-with a plain row overlap.  The docs currently teach the manual
-workaround (demos_and_faqs.rst:119).
-
 
 # Closed items (2026-08-21)
 
@@ -403,6 +372,22 @@ forty times under the file's gate.  Twenty-two tests landed with it
 promises this item flagged are now true.
 *(multigpu_plan_part_2.md, the denoiser and plug-and-play section.)*
 
+**D4. CLOSED 2026-08-21, staged.  Re-sweep for missed multi-GPU
+support.**  The sweep enumerated every public entry that takes array
+data and handed each one a real two-shard CPU `Shards`.  Over thirty
+entries already carried the form end to end.  Fifteen broke below
+the entry with misleading errors.  One of those,
+`get_voxels_at_indices`, gained a real per-shard branch with a
+bitwise gate.  The other fourteen gained the shared entry refusal,
+which now lives in `_sharding.reject_shards` with the preprocessing
+pipeline aliasing it.  Review added the divided `init_recon` case to
+cone's `recon_split_sino` refusal.  The candidates for real support
+later are recorded with their design questions.  The suite passes at
+669 with the new gates.
+*(open_items J5;
+closed/preprocess_sharding_translation_multiaxis.md:209;
+multigpu_findings.md §1.41.)*
+
 **D8. Other items.**
 
   * **Issue 3: FIXED 2026-08-21, staged.  The saved-file format tag
@@ -595,6 +580,30 @@ recorded candidate.  The denoise-scale improvement on GPU awaits a
 cluster confirmation.
 *(multigpu_plan_part_2.md, end of the denoiser section;
 multigpu_findings.md §1.39; _sharding.py.)*
+
+**J1. CLOSED 2026-08-21, staged.  Add a ParallelBeam version of
+recon_split_sino.**  The parallel method splits the detector rows
+into N overlapping parts rather than two halves, per Greg's
+direction of the same day.  Row r is slice r in this geometry, so
+the parts decouple exactly in the forward model and the overlap only
+feeds the prior across each seam.  A `slices_per_part` argument sets
+the kept slices per part, bounded below by twice `half_overlap` so
+the seam overlaps of a part cannot collide.  The default asks the
+device-policy memory ledger for the fewest parts whose largest part
+fits.  That question is answered by a new read-only predicate,
+`TomographyModel._fits_available_devices`, which prices a candidate
+model the way `_apply_device_policy` would while settling nothing on
+it.  One part means a plain `recon`.  The split matches `recon` at
+NRMSE 0.032 to 0.038 on the gate phantom, gated at 0.1, with the
+measured values kept in the test comments.  Ten tests landed, the
+docs FAQ now teaches the method for both geometries, and each
+geometry page renders its own override's docstring.  The preflight
+memory-remedy text names the method for parallel as well as cone.
+One test note: a bitwise repeat of a CPU reconstruction needs one
+torch thread, because float32 reductions differ run to run at the
+default thread count.
+*(demos_and_faqs.rst; usr_parallel_beam_model.rst;
+usr_cone_beam_model.rst; tests/test_split_sino.py.)*
 
 ## The current_plans.md migration (2026-08-19)
 

@@ -155,7 +155,8 @@ function in its subcategory.
 | `_vcd_recon` | sinogram | numpy / tensor / Shards | **always device form** + losses — no gather, no kwarg | — |
 | `compute_hessian_diagonal` | weights (optional) | numpy / tensor / Shards | numpy | device form |
 | `prepare_sino_for_devices` | sinogram | numpy / tensor / Shards | **always device form** (that is its purpose); a pair when weights given | — |
-| `sparse_forward_project` / `sparse_back_project` | voxel values / sinogram | tensor / Shards | **mirrors the input form** — the one true form-mirroring pair on this surface | — |
+| `sparse_forward_project` / `sparse_back_project` | voxel values / sinogram | tensor / Shards | **mirrors the input form** | — |
+| `get_voxels_at_indices` | recon | numpy / tensor / Shards | **mirrors the input form** — a divided recon returns divided over the same placement | — |
 
 ## 2. Model management
 
