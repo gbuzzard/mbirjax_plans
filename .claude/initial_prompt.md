@@ -4,12 +4,12 @@ both and contains plans related to both.  `mbirjax_metrics` is the nightly
 regression engine and dashboard and is also parallel to both.
 
 This session's task: the opening list in
-`mbirjax_plans/plans/open_items_v4.md`, following that file's
-"Start here" note.  The item entries in v4 carry the detail; work from them, not
+`mbirjax_plans/plans/open_items_v5.md`, following that file's
+"Start here" note.  The item entries in v5 carry the detail; work from them, not
 from this file.
 
 Update
-`mbirjax_plans/plans/open_items_v4.md` as you complete items.
+`mbirjax_plans/plans/open_items_v5.md` as you complete items.
 
 **IMPORTANT — workflow protocol:** stage only (`git add` by explicit file
 name), never `git commit` unless Greg directs it (he commits from
