@@ -236,10 +236,32 @@ Each increment lands only after its gates pass review.
 6. **Floors refresh scoped to multiaxis, and the ledger
    re-price.**  This is where the recorded 2x conservatism at the
    multiaxis 1024-class is corrected against measured peaks.
+   Landed 2026-08-22, widened to the FULL refresh (mg56, job
+   15435735; findings §1.47) because eight cost inputs had
+   drifted across every family.  The multiaxis two-device floor
+   holds at the 512-class; the four-device floor rises to the
+   1024-class, placed by hand on mg56's thin 768-class reading
+   and mg55's 1.64x at the 1024-class.  Cone's four-device floor
+   falls one class; parallel and translation reproduce; the
+   denoiser stays a sentinel with its top-cell ratios up.  The
+   cost hashes and table checksum are re-recorded, the staleness
+   note is clear, and the floors test states the new split.  The
+   ledger half needed no code change: mg55's pricing rows showed
+   the kernel route modeled to within 7 percent, and the 2x note
+   stands only for the torch-body fallback.
 7. **The translation memo.**  What the campaign cost, what
    transferred (shims, gates, test templates, launch discipline),
    the measured multiaxis wins, and the translation-specific
    unknowns, so the translation decision is priced from evidence.
+   Landed 2026-08-22: active/translation_kernel_memo.md.  The
+   price is one to two working days and three to six GPU-hours on
+   the reuse inventory; the need test is not met today, and the
+   memo names the three triggers that would re-open it.  With
+   this, every increment of the campaign has landed.  The
+   follow-ups that remain are recorded in place: the tile-constant
+   tuning sweep (increment 4's note), the denoiser ladder
+   extension (the mg56 floors notes), and D7's translation half
+   (the memo).
 
 ## Gates
 

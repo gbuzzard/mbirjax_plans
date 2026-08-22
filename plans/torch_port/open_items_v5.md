@@ -44,13 +44,13 @@ build with no warnings.
 
 What remains open:
 
-- **H8's two decision measurements are done** (mg51 and mg52,
-  findings §1.42 and §1.43).  The compiled bodies already meet or
-  beat mbirjax everywhere, so the kernel decision now rests on the
-  measured absolute limits and on 2048-class capacity, and it waits
-  on Greg's ruling.
-- **D7 holds** until H8 decides the kernel path, which may supersede
-  it.
+- **H8's multiaxis kernel campaign is COMPLETE** (every increment
+  landed 2026-08-22; active/multiaxis_kernel_plan.md).  Translation
+  kernels wait on the triggers in
+  active/translation_kernel_memo.md.
+- **D7's multiaxis half is closed by measurement** (findings
+  §1.45): the gather-vertical forward organization won.  The
+  translation half holds.
 - **Follow-ups recorded in place:** the ledger term for the unmasked
   hessian back projection (D8 issue 6's residue), the GPU-scale
   gather confirmation (J3), external material that teaches the old
@@ -64,6 +64,13 @@ geometries.**  The multi-axis port carried over the original's choice of
 which loops scatter and which gather.  Charlie's hypothesis (gather on
 the vertical axis, scatter on the horizontal) is testable one axis at a
 time against the stored reference results.
+2026-08-22: the multiaxis half is CLOSED by measurement.  The
+multiaxis forward kernel ships the organization Charlie
+hypothesized, gather on the vertical axis and scatter on the
+horizontal, and the composed route built on it runs 4.0x to 4.6x
+faster than the torch bodies' scatter-organized route at every
+floors cell (findings §1.45; active/multiaxis_kernel_plan.md).
+The translation half holds with translation.
 *(open_items D4;
 closed/preprocess_sharding_translation_multiaxis.md:273.)*
 
@@ -113,32 +120,24 @@ serial today); and the suite overall is worth a simplification and
 speed pass.
 *(current_plans.md item 11, two bullets.)*
 
-**H8. Multi-device speed, part 2: the torch-body geometries.**  The
-recompile-budget remedy's two structural alternatives (a budget per
-device instance, and pre-marked dynamic dimensions), and the
-hand-written-kernel path for multiaxis and translation with its two
-entry gates: a counter run on the compiled bodies, and a
-cross-framework anchor against mbirjax.  The kernel path's strongest
-case is capacity rather than speed: the torch bodies' transients keep
-sharding from shrinking per-device peaks, and multiaxis 1024 models
-at 68 GB on one device.
-Both entry gates ran 2026-08-21 and -22, and the decision material
-is complete.  The counter run (mg51, findings §1.42): the device
-limits the 512-class, per-batch host work nearly paces the
-1024-class, and the top kernels move gigabytes of intermediates per
-launch, with the back direction at the memory ceiling.  The
-cross-framework anchor (mg52, findings §1.43): mbirtorch meets or
-beats mbirjax at every cell, by 1.39x at the multiaxis 1024-class
-and 1.29x at the translation production cell, with values agreeing
-at the 2e-5 level.  So there is no catching-up motive; the kernel
-case rests on the absolute inefficiencies both frameworks share and
-on 2048-class capacity.  The ruling is Greg's, under the recorded
-rule: need above the 1024-class.  Two small follow-ups are recorded
-in the findings: naming the host-side per-batch mechanism (the
-profiler's host-op table), and the ledger pricing the multiaxis
-1024-class at 2x its measured peak.
-*(torch_port/active/multigpu_plan_part_2.md; multigpu_findings.md
-§1.36, §1.42, §1.43.)*
+**H8. Multi-device speed, part 2: the torch-body geometries.**
+Greg ruled 2026-08-22: build hand-written kernels for the multiaxis
+geometry now; translation waits and is priced by the multiaxis
+work.  The case in brief: the compiled bodies are limited by the
+GPU itself and move gigabytes of temporary data per launch,
+mbirjax demonstrates no speed these bodies lack, and above the
+1024-class the temporaries' memory cost blocks reconstruction
+outright.  The campaign ran to completion on 2026-08-22; the
+plan and every increment's record are in
+active/multiaxis_kernel_plan.md, and the translation price is in
+active/translation_kernel_memo.md.  The decision evidence is
+findings §1.42 to §1.44, with run detail in
+mg51_multiaxis_counters.md, mg52_framework_anchor.md, and
+mg53_host_cost_split.md beside the experiment scripts.  The
+recompile-budget remedy's two structural alternatives stay in
+reserve in active/multigpu_plan_part_2.md.
+*(torch_port/active/multiaxis_kernel_plan.md;
+multigpu_findings.md §1.36, §1.42-§1.44.)*
 
 # Closed items (2026-08-21)
 

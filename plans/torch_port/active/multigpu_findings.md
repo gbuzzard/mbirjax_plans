@@ -2841,6 +2841,242 @@ target, where sharding is known not to divide torch-body peaks.
 The decision rule stays the recorded one: need above the
 1024-class, not elegance.
 
+### 1.44 The 1024-class "host pacing" is device back-pressure
+### through a full launch queue, not host work (2026-08-22, mg53,
+### job 15429313)
+
+mg51 left one follow-up: about 35 ms of host time per view batch
+at the multiaxis 1024-class that was neither the launch API nor
+the synchronize.  mg53 split that time on one H100 with four
+instruments and one ablation: a timing leg tied to mg51's
+semantics, a wrapper on the bound body separating host time
+inside the compiled callable from the driver loop around it, a
+profiler host-operator table, torch's own synchronization
+warnings, and a re-timing under a different allocator setting in
+a fresh process.  The job ran 12m40s and exited healthy; the run
+detail is in mg53_host_cost_split.md.  The warm walls and
+enqueues reproduce mg51's numbers (38.053/34.956 s forward and
+23.647/19.347 s back at the 1024-class, against mg51's
+38.05/34.95 and 23.64/19.35), which ties the two instruments.
+
+**The host time is the device's own rate reflected back through a
+full launch queue.**  The profiler names the mechanism: an event
+called "Command Buffer Full" carries 35.27 s of the forward
+call's profiled host time (91 percent of self CPU) and 19.34 s of
+the back's (81 percent).  The runtime queues kernel launches, and
+when the outstanding launches exceed the queue's depth, the next
+launch call blocks until the device drains one; that blocked
+interval is recorded under this name, separately from the launch
+rows.  This separation is why mg51's runtime launch rows read
+only 6.4 ms and the time seemed unaccounted.  The wrapped-body
+split agrees with the profiler: 84 percent of the forward
+enqueue lands inside body calls (29.43 of 34.96 s), and the rest
+lands in the driver's own enqueued assembly operations, which
+block on the same queue.
+
+**Every other candidate measured zero or trivial.**  The compiled
+dispatch costs 0.16 ms per batch: the compiled-graph call, the
+compiled-region entry, and the dynamo cache lookup sum to 167 ms
+over 1024 batches.  The allocator recorded zero device
+allocations, zero frees, and zero retries across the measured
+calls at both cells, and the expandable-segments ablation moved
+no wall by more than 0.5 percent.  The synchronization detector
+captured zero warnings at every cell and direction.
+
+**What this corrects.**  §1.42 read the 1024-class as the host
+within 8 to 18 percent of pacing both directions.  The causality
+is the reverse.  The device is the limit at both cells; at the
+1024-class each call issues 12,288 launches, far past the queue
+depth, so the host clock reads the device's rate minus the
+buffered tail.  At the 512-class a whole call's launches fit in
+the queue, which is why its enqueue reads 10 ms.  There is no
+per-batch host work worth remedying.
+
+**What this does to the kernel case.**  The speed argument loses
+its host-pacing part and keeps its device-side parts: the back's
+top kernels at the memory ceiling, and every batch moving
+gigabytes of slab intermediates that a fused kernel does not
+materialize.  The capacity case is untouched and remains the
+strongest.  One instrument lesson is recorded: the runtime's
+launch rows exclude queue-blocked time, which the profiler
+reports under its own event name, so an enqueue clock near the
+wall does not by itself say the host is doing work.
+
+### 1.45 The multiaxis kernels' first composed measurement: 4.0x
+### to 4.6x over the compiled bodies at every floors cell, the
+### same values, and the slab class gone from the peaks
+### (2026-08-22, mg54, job 15432699)
+
+The multiaxis geometry gained hand-written forward and back
+kernels this day and began selecting them wherever the per-device
+value self-check passes, with no composed speed measurement
+behind that selection.  mg54 made the first one, on one H100.
+Each cell ran the kernel route and the torch-body route in fresh
+processes on the same staged sinogram, the exact bytes mg52
+measured, under the floors protocol: seed 13, a cold pass, then
+the warm median of three 3-iteration reconstructions.  The run
+detail is in mg54_multiaxis_kernel_ab.md.
+
+**The kernel route is 4.0x to 4.6x faster, and the lead grows
+with size.**
+
+| cell | kernel | torch | kernel/torch | mbirjax (mg52) |
+|---|---|---|---|---|
+| (512, 448, 384) | 2.90 s | 11.41 s | 0.25 | 11.06 s |
+| (768, 672, 576) | 12.71 s | 55.99 s | 0.23 | 60.06 s |
+| (1024, 1008, 992) | 67.64 s | 309.92 s | 0.22 | 431.07 s |
+
+The torch arms reproduce the recorded floors walls at 0.995 to
+1.001, which ties this instrument to every earlier one.  Read
+against the mg52 anchor, the kernel route at the 1024-class runs
+6.4x faster than mbirjax on the same staged input.
+
+**The values are the same.**  The float64 fingerprints of the
+final reconstructions agree between the two routes at 1.6e-7
+relative or better at every cell.
+
+**The peaks lose the slab class.**  Peak device allocation reads
+1.96 GB against 11.38 at the 512-class, 6.54 against 15.12 at the
+768-class, and 24.11 against 34.75 at the 1024-class.  The
+remaining kernel-route peak is the problem's own arrays and the
+engine's state.  Those are the terms sharding divides, which is
+what the multi-device and 2048-class measurements test next.
+
+**The batch structure moved exactly as the kernels' cost model
+predicts.**  The kernel bodies declare per-view costs with no
+gather slab, so the driver chose 128-view batches at every cell,
+where the torch bodies were forced to 9, 2, and 1 view.  One
+projection call at the 1024-class is 8 body calls instead of
+1024.  The measured single call: the forward runs 8.97 s of wall
+with 7.82 s of enqueue, and the back runs 4.80 s of wall with
+5.6 ms of enqueue, against the torch bodies' 38.05 and 23.65 s
+(§1.42).  The back's launch-queue pressure is gone entirely; the
+forward keeps some, across its 8 large launches.
+
+**This closes item D7's multiaxis half by measurement.**  The
+shipped forward kernel gathers on the vertical axis and scatters
+on the horizontal, which is the organization Charlie
+hypothesized.  The composed route built on that organization runs
+4.0x to 4.6x faster than the torch route, whose forward scatters
+on the vertical axis.  The scatter-mirror kernel form stays
+unbuilt: it was the fallback for a disappointment that did not
+occur.  D7's translation half stays open with translation.
+
+**What this does to the campaign.**  The kernels now hold their
+default-on selection under the first campaign's own standard,
+a composed win at every measured cell.  The tile constants are
+still the cone kernels' adopted values, so a tuning sweep is a
+recorded follow-up that can only add to these numbers.  The
+capacity question moves to the multi-device and 2048-class
+measurements.
+
+### 1.46 Sharding divides the kernel-route peaks, four devices
+### run the 1024-class 2.97x faster, and the 2048-class multiaxis
+### reconstruction completes on the standard node (2026-08-22,
+### mg55, job 15434826)
+
+Two questions remained that only several devices could answer:
+whether sharding divides the per-device peaks now that the torch
+bodies' temporaries are gone, and whether the 2048-class runs at
+all.  mg55 answered both on one four-H100 node, kernel route
+throughout, every arm asserting both kernels bound, the 1024
+input reused from the earlier runs by md5.  The run detail is in
+mg55_multiaxis_scale.md.
+
+**The 1024-class now scales, in speed and in memory.**
+
+| devices | warm | speedup | busiest peak | peak ratio |
+|---|---|---|---|---|
+| 1 | 67.63 s | 1.00x | 24.11 GB | 1.00x |
+| 2 | 37.43 s | 1.81x | 12.95 GB | 0.54x |
+| 4 | 22.75 s | 2.97x | 7.49 GB | 0.31x |
+
+The one-device arm reproduces mg54.  The fingerprints agree
+across counts at 5.4e-9 relative or better, and every count
+follows the identical forward-model error trajectory.  The
+comparison with history: the torch bodies LOST at two devices at
+this cell before the recompile remedy (0.80x, §1.36), and their
+peaks barely shrank under sharding.  The kernel route's busiest
+peak now halves with each doubling.  Four devices run this cell
+in 22.75 s, which is 13.6x the torch route's one-device wall and
+19x the recorded mbirjax wall on the same staged input.
+
+**The 2048-class demonstration completed.**  Cell (2048, 2016,
+1984), recon (1984, 1984, 2297), 9.0e9 voxels.  The four-device
+arm built its own input in 90 s (one full forward projection of
+the volume through the kernels took 51 s), then reconstructed:
+cold 355.95 s, warm 298.81 s at 0.1 percent spread, per-device
+peaks 50.59 / 50.27 / 50.27 / 48.61 GB, forward-model error
+falling across the iterations.  The two-device arm ran out of
+memory and is recorded as that result: this cell fits the node at
+four devices and not at two.  No torch-body route can run this
+cell at any device count, which was the capacity case the
+campaign was ruled on.
+
+**The memory ledger is nearly exact on the kernel route.**  Its
+modeled busiest-device peaks against the measured ones: 1.03x,
+1.07x, and 1.03x at the 1024-class counts, and 1.07x at the
+2048-class on four devices.  It models the 2048-class at 194 GB
+on one device and 103 GB per device on two, so it correctly
+refuses the count that measured out of memory and correctly
+admits the one that completed.  These readings resolve the
+recorded 2x-conservatism follow-up (§1.43): that factor described
+the TORCH-body pricing at the multiaxis 1024-class, and the
+kernel route the geometry now selects is priced to within 7
+percent.  The torch-body 2x stands only for the fallback path.
+
+**What remains of the campaign's measurement phase.**  The
+widening floors for multiaxis are still the sentinel values of
+the torch-body era, and the kernel route's measured knees (1.81x
+at two devices, 2.97x at four at the 1024-class) say real floors
+now exist to record.  The closing floors refresh re-measures the
+family and blesses the cost hashes it froze.
+
+### 1.47 The full floors refresh on the kernel tree: the
+### multiaxis four-device floor rises to the 1024-class, cone's
+### falls a class, every other floor reproduces, and the
+### staleness note clears (2026-08-22, mg56, job 15435735)
+
+Eight cost inputs had drifted since mg48: the multiaxis kernel
+work and six files from earlier commits.  mg56 therefore ran the
+full refresh, every family at every planned row, on four H100s
+against the committed kernel tree (c024ec9), in 38m51s against
+mg48's 1h34m; the kernels cut the multiaxis arms about four-fold.
+44 arms ran, warm spreads mostly under 3 percent.  The verdicts,
+the pasted floors, and the run detail are in mg56_floors.md.
+
+**The multiaxis knees moved the way a four-fold one-device
+speedup predicts.**  The two-device floor holds at the 512-class
+(0.86x at the 384-class, 1.38x at the 512-class, 1.72x at the
+768-class): the one-device and two-device walls fell together, so
+the knee stayed.  The four-device floor RISES from the 512-class
+to the 1024-class.  mg56 read 0.70x at the 512-class and a thin
+1.09x at the 768-class, under the margin, with nothing larger on
+its ladder; the winning reading is mg55's 1.64x at the
+1024-class under the same protocol, and the coarse rule's
+round-up lands on the same cell.  The row is placed by hand on
+those two instruments, and its note says so.  The reading makes
+physical sense: when one device is this fast, small cells no
+longer amortize a four-way fan-out.
+
+**Cone's four-device floor falls one class.**  The 768-class read
+1.15x against two devices, clearing the margin it had missed at
+every measurement since the width padding landed, with 1.64x at
+the 1024-class.  Parallel and translation reproduce mg48 within
+their spreads and every floor holds.  The denoiser stays a
+sentinel at both counts, but the top-cell ratios rose from
+0.67x/0.61x to 0.93x/0.90x after the denoiser performance
+commit, so a larger ladder may yet find admission.
+
+**The bookkeeping closes clean.**  The floors, the fifteen cost
+hashes (triton_multiaxis.py now among them), and the table
+checksum were re-recorded together; the staleness note reads
+None, the floors test battery passes at 30, and the suite holds
+696.  One test moved with the floors: the multiaxis admission
+test now states the split behavior (two devices from the
+512-class, four from the 1024-class) instead of the torch-body
+era's shared 512-class floor.
+
 ## 3. The crossover ladder (mg4)
 
 This section locates where each device count starts paying, which is
