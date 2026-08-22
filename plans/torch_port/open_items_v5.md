@@ -33,44 +33,31 @@ speed floors).
 
 ## Start here: the next session
 
-The 2026-08-21 session closed G4 (findings §1.40), implemented the
-queue Greg ruled on (J3, D6, D5, D1, D2, D9, D8 issues 3, 6, and 7,
-and J2), closed D4 (the divided-form sweep; findings §1.41), and
-closed J1: parallel `recon_split_sino` reconstructs in N parts, with
-the part count taken from `slices_per_part` or estimated from the
-memory ledger.  Greg committed all of it in 42574f8; the tip is
-4bb3be5 at version 0.0.2.  The suite passes at 679 and the docs
-build with no warnings.
-
-What remains open:
-
-- **H8's multiaxis kernel campaign is COMPLETE** (every increment
-  landed 2026-08-22; active/multiaxis_kernel_plan.md).  Translation
-  kernels wait on the triggers in
-  active/translation_kernel_memo.md.
-- **D7's multiaxis half is closed by measurement** (findings
-  §1.45): the gather-vertical forward organization won.  The
-  translation half holds.
-- **Follow-ups recorded in place:** the ledger term for the unmasked
-  hessian back projection (D8 issue 6's residue), the GPU-scale
-  gather confirmation (J3), external material that teaches the old
-  method names (D8 issue 7), and the divided-form support candidates
-  (findings §1.41).
+- **Two items wait on triggers, not on work**: H8-translation
+  (translation kernels; the triggers are in
+  active/translation_kernel_memo.md) and D7-translation, which
+  would close inside that campaign.
+- **The nearest actionable items concern the release**: G1, the
+  release-workflow remainder, and G3, the mbirtorch_metrics
+  migration.  The self-contained code items are H1 (cache the MAR
+  fitting matrix) and H6 (the test-suite quality and cost pass).
+- **Possible future work with no open item of its own**, each
+  written down where it arose and promoted to an open item only if
+  it becomes worth doing: the ledger term for the unmasked hessian
+  back projection (D8 issue 6's residue), the GPU-scale gather
+  confirmation (J3), the divided-form support candidates
+  (findings §1.41), and the multiaxis tile-constant tuning sweep
+  (the campaign plan's increment 4 note).
 
 ## D. Correctness and API-contract gaps
 
-**D7. The projection loop organization is unexamined across
-geometries.**  The multi-axis port carried over the original's choice of
-which loops scatter and which gather.  Charlie's hypothesis (gather on
-the vertical axis, scatter on the horizontal) is testable one axis at a
-time against the stored reference results.
-2026-08-22: the multiaxis half is CLOSED by measurement.  The
-multiaxis forward kernel ships the organization Charlie
-hypothesized, gather on the vertical axis and scatter on the
-horizontal, and the composed route built on it runs 4.0x to 4.6x
-faster than the torch bodies' scatter-organized route at every
-floors cell (findings §1.45; active/multiaxis_kernel_plan.md).
-The translation half holds with translation.
+**D7-translation. The projection loop organization for translation
+is unexamined.**  The translation port carried over the original's
+choice of which loops scatter and which gather.  The question is
+decided inside kernel design if a translation kernel campaign runs
+(active/translation_kernel_memo.md); the same question for
+multiaxis closed in favor of Charlie's hypothesis (D7-multiaxis,
+in the closed items).
 *(open_items D4;
 closed/preprocess_sharding_translation_multiaxis.md:273.)*
 
@@ -81,11 +68,6 @@ default and its token matter only at the first tagged release;
 `release.yml` and the optional documentation preview are unwritten; the
 wheel-check developer script is unwritten.  The version policy is E7.
 *(open_items I1; closed/release_workflow.md:26.)*
-
-**G2. Read the dependency watch's first quiet week.**  The watch is live
-and armed; its first week of watchdog lines on the gautschi nightly is
-to be read once, by Greg.
-*(open_items I2; closed/python_matrix_nightly_check.md:352.)*
 
 **G3. Migrate to mbirtorch_metrics and retire the mbirjax dashboard.** 
 A new mbirtorch_metrics repo and dashboard should become independent and record mbirtorch only, 
@@ -120,24 +102,17 @@ serial today); and the suite overall is worth a simplification and
 speed pass.
 *(current_plans.md item 11, two bullets.)*
 
-**H8. Multi-device speed, part 2: the torch-body geometries.**
-Greg ruled 2026-08-22: build hand-written kernels for the multiaxis
-geometry now; translation waits and is priced by the multiaxis
-work.  The case in brief: the compiled bodies are limited by the
-GPU itself and move gigabytes of temporary data per launch,
-mbirjax demonstrates no speed these bodies lack, and above the
-1024-class the temporaries' memory cost blocks reconstruction
-outright.  The campaign ran to completion on 2026-08-22; the
-plan and every increment's record are in
-active/multiaxis_kernel_plan.md, and the translation price is in
-active/translation_kernel_memo.md.  The decision evidence is
-findings §1.42 to §1.44, with run detail in
-mg51_multiaxis_counters.md, mg52_framework_anchor.md, and
-mg53_host_cost_split.md beside the experiment scripts.  The
-recompile-budget remedy's two structural alternatives stay in
-reserve in active/multigpu_plan_part_2.md.
-*(torch_port/active/multiaxis_kernel_plan.md;
-multigpu_findings.md §1.36, §1.42-§1.44.)*
+**H8-translation. Translation kernels wait on measured triggers.**
+The multiaxis campaign (H8-multiaxis, in the closed items) priced
+a translation campaign at one to two working days and three to six
+GPU-hours, and found the need test unmet today.  Three triggers
+would start it: a workload above the production scan, a
+multi-device translation demand, or detector growth toward the
+recorded 6K by 10K panels.  The recompile-budget remedy's two
+structural alternatives stay in reserve, and the multiaxis
+tile-constant tuning sweep is recorded upside.
+*(torch_port/active/translation_kernel_memo.md;
+active/multigpu_plan_part_2.md.)*
 
 # Closed items (2026-08-21)
 
@@ -319,19 +294,7 @@ mg43_autochoice_gautschi.sbatch.)*
 
 ## D. Correctness and API-contract gaps
 
-**D3. CLOSED 2026-08-19, by verification -- the defect no longer
-exists.  A leftover-memory pattern in the forward driver.**  The
-record described a pre-fix snapshot: the same commit that fixed the
-back loop (mbirtorch a880d9c, 2026-08-10) added the release to the
-banded forward too, and the banded forward was later removed whole
-(bfbd286).  The current forward driver, the cylinder transfer,
-releases each cylinder batch after its projection is issued
-(``full_cyl = None`` in ``_sparse_forward_project_cylinders``), and
-its only multi-batch residency is the deliberate transfer-ahead
-overlap, which the memory ledger charges.  No code change was needed.
-*(open_items K1; closed/backloop_attribution.md §5 item 3.)*
-
-**D1. CLOSED 2026-08-21, staged.  `stitch_arrays` mishandles mixed
+**D1. CLOSED 2026-08-21.  `stitch_arrays` mishandles mixed
 inputs.**  It now refuses what it silently mishandled: tensors on
 more than one device raise an error naming the devices, and a
 divided-form input raises an error directing the caller to gather to
@@ -339,29 +302,7 @@ the host first.  A new test file pins the working forms' values and
 covers both refusals.  *(API_specification.md Issue 2, marked fixed;
 tests/test_utilities.py.)*
 
-**D5. CLOSED 2026-08-21, staged.  Run-logging defects inherited from
-the original package.**  All four defects are fixed.  Each model
-instance now has its own logger, named by the class plus a
-never-reused counter, and the constructor shares it with the runs.
-The log file handler closes when a run finishes and reopens in append
-mode when a later call continues the run, so the half-log merges
-delete closed files.  The file handler is created with delay=True, so
-a verbose=0 run creates no empty file while a warning would still
-land.  The denoiser's matching close landed in the same pass.
-test_logging grew the two-instance, closed-handle, and no-empty-file
-cases and passes 18.  One recorded residue: per-instance loggers
-persist in Python's logger registry for the life of the process, a
-few KB per model.
-
-**D6. CLOSED 2026-08-21, staged.  Translation demo data generates an
-all-zero phantom.**  `generate_demo_data(model_type='translation')`
-now builds its phantom with `gen_translation_phantom` (the dot
-pattern), so the demo projects real content where it projected zeros,
-and the test asserts nonzero content like its cube sibling.  One
-note: the dot builder seeds numpy's global random generator, which is
-pre-existing behavior of that builder.
-
-**D2. CLOSED 2026-08-21, staged.  The array-forms rule is not applied
+**D2. CLOSED 2026-08-21.  The array-forms rule is not applied
 everywhere.**  The six streaming preprocessing entries now refuse the
 divided form at entry, with a message naming the function, the
 offending argument, and the fix, and their docstrings state the
@@ -376,23 +317,19 @@ entry.  The entry-contract tests run in the default suite
 (tests/test_preprocess_entry_forms.py, 15 passing).
 *(open_items K3; closed/entry_point_survey.md rows E6, D8.)*
 
-**D9. CLOSED 2026-08-21, staged.  A sharded sinogram cannot be passed
-to `recon` or `prox_map`.**  The reconstruction entries now accept
-the device form that `prepare_sino_for_devices` returns, for the
-sinogram and the weights both, so a Plug-and-Play loop pays the
-host-to-device transfer once instead of on every call.  The repair
-follows the denoiser's template: `subsample_views` assembles the
-statistics subsample from the shards exactly, `initialize_recon`
-validates per shard on the shard's own device, and `vcd_recon`'s
-entry checks the per-shard shapes the way the prox input's branch
-does.  The two paths compute identical regularization parameters,
-and the reconstruction difference sits at the run-to-run floor,
-forty times under the file's gate.  Twenty-two tests landed with it
-(test_device_policy passes 108).  The docstring and multi-GPU-page
-promises this item flagged are now true.
-*(multigpu_plan_part_2.md, the denoiser and plug-and-play section.)*
+**D3. CLOSED 2026-08-19, by verification -- the defect no longer
+exists.  A leftover-memory pattern in the forward driver.**  The
+record described a pre-fix snapshot: the same commit that fixed the
+back loop (mbirtorch a880d9c, 2026-08-10) added the release to the
+banded forward too, and the banded forward was later removed whole
+(bfbd286).  The current forward driver, the cylinder transfer,
+releases each cylinder batch after its projection is issued
+(``full_cyl = None`` in ``_sparse_forward_project_cylinders``), and
+its only multi-batch residency is the deliberate transfer-ahead
+overlap, which the memory ledger charges.  No code change was needed.
+*(open_items K1; closed/backloop_attribution.md §5 item 3.)*
 
-**D4. CLOSED 2026-08-21, staged.  Re-sweep for missed multi-GPU
+**D4. CLOSED 2026-08-21.  Re-sweep for missed multi-GPU
 support.**  The sweep enumerated every public entry that takes array
 data and handed each one a real two-shard CPU `Shards`.  Over thirty
 entries already carried the form end to end.  Fifteen broke below
@@ -408,9 +345,39 @@ later are recorded with their design questions.  The suite passes at
 closed/preprocess_sharding_translation_multiaxis.md:209;
 multigpu_findings.md §1.41.)*
 
+**D5. CLOSED 2026-08-21.  Run-logging defects inherited from
+the original package.**  All four defects are fixed.  Each model
+instance now has its own logger, named by the class plus a
+never-reused counter, and the constructor shares it with the runs.
+The log file handler closes when a run finishes and reopens in append
+mode when a later call continues the run, so the half-log merges
+delete closed files.  The file handler is created with delay=True, so
+a verbose=0 run creates no empty file while a warning would still
+land.  The denoiser's matching close landed in the same pass.
+test_logging grew the two-instance, closed-handle, and no-empty-file
+cases and passes 18.  One recorded residue: per-instance loggers
+persist in Python's logger registry for the life of the process, a
+few KB per model.
+
+**D6. CLOSED 2026-08-21.  Translation demo data generates an
+all-zero phantom.**  `generate_demo_data(model_type='translation')`
+now builds its phantom with `gen_translation_phantom` (the dot
+pattern), so the demo projects real content where it projected zeros,
+and the test asserts nonzero content like its cube sibling.  One
+note: the dot builder seeds numpy's global random generator, which is
+pre-existing behavior of that builder.
+
+**D7-multiaxis. CLOSED 2026-08-22: The projection loop
+organization for multiaxis.**  Decided by construction and
+measurement in the kernel campaign.  The shipped forward kernel
+gathers on the vertical axis and scatters on the horizontal,
+which is Charlie's hypothesis, and the composed route runs 4.0x
+to 4.6x faster than the scatter-organized torch route at every
+measured cell.  → findings §1.45; active/multiaxis_kernel_plan.md.
+
 **D8. Other items.**
 
-  * **Issue 3: FIXED 2026-08-21, staged.  The saved-file format tag
+  * **Issue 3: CLOSED 2026-08-21.  The saved-file format tag
 names the old package.**  New files carry
 `'mbirtorch_preprocessing_v1'`; the loader accepts both tags and
 files with no tag, and rejects an unknown tag by name.  The stored
@@ -422,7 +389,7 @@ The docstring linked to the derivation on the old package's
 documentation site; the link was removed with the other old-package
 references.  The link is now at the top of `theory.rst`.
 
-  * **Issue 6: FIXED 2026-08-21, staged.  Two helpers can refuse a
+  * **Issue 6: CLOSED 2026-08-21.  Two helpers can refuse a
 problem they could handle.**  `prepare_sino_for_devices` and
 `compute_hessian_diagonal` now pass the direct workload to the device
 policy, as Greg ruled.  The layout is still sized for a full
@@ -440,14 +407,30 @@ masked form is covered at 0.93x to 1.00x.  The exposure is narrow
 and the candidate repair is a ledger term for the unmasked back
 projection.
 
-  * **Issue 7: FIXED 2026-08-21, staged.  Reconstruction method
+  * **Issue 7: CLOSED 2026-08-21.  Reconstruction method
 names.**  The methods are renamed for consistency with `recon`:
 `recon_direct`, `recon_split_sino`, `recon_fbp`, `recon_fdk`, and the
 iteration engine is private as `_vcd_recon`.  Clean renames, no
 aliases, since the package has not had a release: 160 replacements
 across 33 files, zero old names remaining, dispatch-by-identity sites
-and log labels included.  External material that teaches the old
-names (mbirjax_applications scripts) needs its own pass.
+and log labels included.  External material that used the old
+names (mbirtorch_applications scripts) got its own pass.
+
+**D9. CLOSED 2026-08-21.  A sharded sinogram cannot be passed
+to `recon` or `prox_map`.**  The reconstruction entries now accept
+the device form that `prepare_sino_for_devices` returns, for the
+sinogram and the weights both, so a Plug-and-Play loop pays the
+host-to-device transfer once instead of on every call.  The repair
+follows the denoiser's template: `subsample_views` assembles the
+statistics subsample from the shards exactly, `initialize_recon`
+validates per shard on the shard's own device, and `vcd_recon`'s
+entry checks the per-shard shapes the way the prox input's branch
+does.  The two paths compute identical regularization parameters,
+and the reconstruction difference sits at the run-to-run floor,
+forty times under the file's gate.  Twenty-two tests landed with it
+(test_device_policy passes 108).  The docstring and multi-GPU-page
+promises this item flagged are now true.
+*(multigpu_plan_part_2.md, the denoiser and plug-and-play section.)*
 
 ## E. Decisions waiting on a person
 
@@ -508,6 +491,17 @@ Charlie finished both.  → closed/demo_consolidation.md:229, :251.
 
 ## G. Release, nightly, and automation
 
+**G2. CLOSED 2026-08-22: Read the dependency watch's first quiet
+week.**  The week cannot be read as written: the rolling nightly
+job reuses one log file and overwrites it each night, so only the
+current night's watchdog lines survive.  The surviving evidence
+covers the intent.  The current night's line is present and
+healthy (the checker fetched at a pinned hash, verdict quiet, the
+one nightly pull request #3 correctly shown as merged), the
+watch's first live proposal cycle completed on 2026-08-12, and
+the metrics history shows the nightly ran every night since the
+watch went live.  → closed/python_matrix_nightly_check.md:352.
+
 **G4. CLOSED 2026-08-21.  The nightly's inflated memory readings
 were the recompile budget, not the instrument.**  The first two
 nights on the fixed writer answered the open question.  The inflated
@@ -545,6 +539,18 @@ would have been on jax.  When picked up: run their examples, scope a
 translation, then design and validate the interfaces.
 *(current_plans.md item 10; port_plan.md §1.)*
 
+**H8-multiaxis. CLOSED 2026-08-22: Hand-written kernels for the
+multiaxis geometry.**  Ruled and run to completion in one day.
+Triton forward and back kernels, routed behind per-device value
+self-checks with the torch bodies as tested fallback, measured at
+4.0x to 4.6x on one device with identical values, 1.81x at two
+devices and 2.97x at four with per-device peaks that halve at
+each doubling, the first 2048-class multiaxis reconstruction
+(four devices, 298.81 s warm), the memory ledger validated to 7
+percent on the kernel route, and a full floors refresh.  → the
+plan and every increment's record:
+active/multiaxis_kernel_plan.md; findings §1.42 to §1.47.
+
 ## I. Accepted gaps and monitor-only notes
 
 * **Cone 1024 above one device is uncovered in the cross-framework
@@ -564,44 +570,7 @@ translation, then design and validate the interfaces.
 
 ## J. New features and improvements
 
-**J2. CLOSED 2026-08-21, staged.  A functional recon interface.**
-`recon_simple_parallel` and `recon_simple_cone` reconstruct in one
-call, with weights, sharpness, and max_iterations as the only knobs;
-they build the model internally and return `recon`'s (recon, dict)
-pair.  Greg named the functions and their homes (parallel_beam.py and
-cone_beam.py).  The proposal's filtered-back-projection claim was
-verified before it was documented: max_iterations=0 returns the
-direct reconstruction scaled to fit the data, bitwise equal to
-recon_fbp or recon_fdk up to that scale, and the scale measurably
-lowers the sinogram error.  Both functions are exported, documented
-on their model pages ahead of the class, and covered by twelve
-tests.  The wider docs placement Greg approved is applied: the
-quick-start page opens with the one-call example and shows the model
-form second for control, the API overview gains a One-Call
-Reconstruction section ahead of Geometry Models, and the README
-carries the one-line example.  The docs build with no warnings.
-*(functional_interface_proposal.md.)*
-
-**J3. CLOSED 2026-08-21, staged.  Refactor the gather.**
-`Shards.gather` now allocates the host array once and copies each
-shard into its own slice of it.  Measured on CPU, the new gather is
-3.3 to 3.6 times faster on last-axis sharding and 2.0 times on the
-view axis.  The speed comes from torch's multithreaded copy; the
-removed second full-size allocation is the memory half of the win.
-Equivalence was checked byte-exactly over 832 CPU and 252 MPS
-configurations, and two new tests pin the round trip and the
-container-consistency errors.  Two findings ride the closure.  Metal
-refuses copies into destinations off a 4-byte boundary, which only 1-
-and 2-byte dtypes can hit; a per-shard host staging fallback covers
-it.  And a mixed-dtype shard list, formerly promoted by concatenate,
-would now cast to the first dtype; every construction site builds
-uniform shards today, and a dtype check in the constructor is the
-recorded candidate.  The denoise-scale improvement on GPU awaits a
-cluster confirmation.
-*(multigpu_plan_part_2.md, end of the denoiser section;
-multigpu_findings.md §1.39; _sharding.py.)*
-
-**J1. CLOSED 2026-08-21, staged.  Add a ParallelBeam version of
+**J1. CLOSED 2026-08-21.  Add a ParallelBeam version of
 recon_split_sino.**  The parallel method splits the detector rows
 into N overlapping parts rather than two halves, per Greg's
 direction of the same day.  Row r is slice r in this geometry, so
@@ -624,6 +593,43 @@ torch thread, because float32 reductions differ run to run at the
 default thread count.
 *(demos_and_faqs.rst; usr_parallel_beam_model.rst;
 usr_cone_beam_model.rst; tests/test_split_sino.py.)*
+
+**J2. CLOSED 2026-08-21.  A functional recon interface.**
+`recon_simple_parallel` and `recon_simple_cone` reconstruct in one
+call, with weights, sharpness, and max_iterations as the only knobs;
+they build the model internally and return `recon`'s (recon, dict)
+pair.  Greg named the functions and their homes (parallel_beam.py and
+cone_beam.py).  The proposal's filtered-back-projection claim was
+verified before it was documented: max_iterations=0 returns the
+direct reconstruction scaled to fit the data, bitwise equal to
+recon_fbp or recon_fdk up to that scale, and the scale measurably
+lowers the sinogram error.  Both functions are exported, documented
+on their model pages ahead of the class, and covered by twelve
+tests.  The wider docs placement Greg approved is applied: the
+quick-start page opens with the one-call example and shows the model
+form second for control, the API overview gains a One-Call
+Reconstruction section ahead of Geometry Models, and the README
+carries the one-line example.  The docs build with no warnings.
+*(functional_interface_proposal.md.)*
+
+**J3. CLOSED 2026-08-21.  Refactor the gather.**
+`Shards.gather` now allocates the host array once and copies each
+shard into its own slice of it.  Measured on CPU, the new gather is
+3.3 to 3.6 times faster on last-axis sharding and 2.0 times on the
+view axis.  The speed comes from torch's multithreaded copy; the
+removed second full-size allocation is the memory half of the win.
+Equivalence was checked byte-exactly over 832 CPU and 252 MPS
+configurations, and two new tests pin the round trip and the
+container-consistency errors.  Two findings ride the closure.  Metal
+refuses copies into destinations off a 4-byte boundary, which only 1-
+and 2-byte dtypes can hit; a per-shard host staging fallback covers
+it.  And a mixed-dtype shard list, formerly promoted by concatenate,
+would now cast to the first dtype; every construction site builds
+uniform shards today, and a dtype check in the constructor is the
+recorded candidate.  The denoise-scale improvement on GPU awaits a
+cluster confirmation.
+*(multigpu_plan_part_2.md, end of the denoiser section;
+multigpu_findings.md §1.39; _sharding.py.)*
 
 ## The current_plans.md migration (2026-08-19)
 
