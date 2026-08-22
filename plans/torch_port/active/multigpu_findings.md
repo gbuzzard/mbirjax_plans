@@ -2649,7 +2649,7 @@ blesses the hashes on that reasoning.
 
 ### 1.41 The divided-form sweep of the public API: one entry gained
 ### real support, fourteen gained refusals (2026-08-21, verified on
-### the working tree over bf58c39)
+### the tree committed as 42574f8)
 
 The original survey for divided-form support grepped docstrings for
 "shard", which misses entries whose handling is implicit in the
@@ -2717,6 +2717,129 @@ and would also need to reconcile the incoming placement with the new
 model's own device choice.  `auto_set_sigma_y` points its refusal at
 `subsample_views`, which already provides the reduction a caller
 needs.
+
+### 1.42 What the compiled multiaxis bodies are bound on: the
+### device at the 512-class, per-batch host work at the 1024-class,
+### and gigabytes of intermediate traffic at both (2026-08-21, mg51,
+### job 15424602)
+
+The kernel decision for multiaxis needed its first direct
+measurement: what one compiled projection call actually runs, and
+what limits it.  One H100 ran the production projection funnels at
+the two floors cells under the floors protocol, with a plain-clock
+timing leg, a torch-profiler leg, and Nsight Compute on the top
+generated kernels.  The instrument was healthy throughout, and the
+run detail is in mg51_multiaxis_counters.md.
+
+**The limit changes with size.**  At the 512-class the host issues a
+forward call in 10 ms and the device runs it for 1.16 s, so the
+device is the limit.  At the 1024-class the host takes 34.95 s to
+issue the same call against a 38.05 s device span, and the back
+direction reads 19.35 s against 23.64 s.  The host is within 8 to 18
+percent of pacing both directions at the production-class size.
+This sharpens §1.36's reconstruction-level reading to the single
+call.
+
+**The host cost is not the launch API.**  A forward call at the
+1024-class is 12,288 kernel launches, but the runtime recorded one
+launch call per view batch, 6.4 ms in total.  The remaining host
+time is per-batch work outside launching and outside the
+synchronize: about 35 ms per view batch at the 1024-class against
+0.35 ms at the 512-class, a hundredfold growth where per-batch
+device time grew 1.8x.  These results indicate the host cost scales
+with the cell, and naming its mechanism needs the profiler's
+host-op table, which this run did not export.  That is the one
+follow-up this run leaves.
+
+**A call is a dozen kernels per view batch, none dominant.**  The
+forward runs 12 distinct kernels per batch and the back 4 to 6.
+The top three kernels carry 58 to 59 percent of forward device time
+and 85 to 98 percent of back.  There is no single-kernel tuning
+target; a change would replace the body.
+
+**The counters price the intermediates.**  The whole problem's
+arrays at the 512-class total about 0.65 GB, yet single launches of
+the top kernels move 7 to 9.7 GB of DRAM traffic.  The back's top
+kernels sit at the memory ceiling (88 and 94 percent of memory
+throughput, one with an 11 percent L2 hit rate).  The forward's top
+kernels run near the arithmetic ceiling instead (83 to 85 percent
+SM throughput at 96 percent occupancy) while still moving those
+gigabytes.  Peak device allocation during one projection call was
+11.4 GB at the 512-class and 25.1 GB at the 1024-class.  These
+readings are the slab traffic the memory ledger charges the torch
+bodies, measured at the kernel level.
+
+**What this says for a hand-written kernel, stated as evidence.**  A
+kernel body would collapse each batch's dozen launches and its
+per-batch host work into one launch, which is the only remedy the
+1024-class host pacing has.  It would not materialize the slabs,
+which is what the memory-ceiling back kernels and the
+gigabytes-per-launch forward traffic both price.  The counter-case
+is the 512-class forward: near the SM ceiling with the host quiet,
+so at sizes where the host keeps up, the compiled forward leaves no
+large single-kernel factor visible beyond the byte traffic.  The
+cross-framework anchor (mg52) supplies the remaining decision
+column.
+
+### 1.43 The cross-framework anchor: mbirtorch meets or beats
+### mbirjax at every torch-body cell, and the lead grows with size
+### (2026-08-22, mg52, job 15428371)
+
+No timing comparison against mbirjax existed for the two geometries
+without hand-written kernels, so the kernel question leaned on
+indirect evidence.  This run reconstructed identical staged
+sinograms with both libraries on one H100 at the four recorded
+cells, under the floors protocol, with md5-verified inputs and
+matched model construction asserted in every arm.  The run detail
+is in mg52_framework_anchor.md.
+
+**The result, warm medians of seeded 3-iteration reconstructions:**
+
+| cell | geometry | mbirtorch | mbirjax | jax/torch |
+|---|---|---|---|---|
+| (256, 1900, 3000) | translation | 12.59 s | 16.26 s | 1.29x |
+| (512, 448, 384) | multiaxis | 11.41 s | 11.06 s | 0.97x |
+| (768, 672, 576) | multiaxis | 56.30 s | 60.06 s | 1.07x |
+| (1024, 1008, 992) | multiaxis | 310.06 s | 431.07 s | 1.39x |
+
+mbirtorch runs at parity at the smallest multiaxis cell and leads
+everywhere else, by 1.39x at the 1024-class and 1.29x at the
+translation production cell.  The mbirtorch walls also reproduce
+their recorded floors values to the first decimal, which ties the
+two harnesses together.  The volume fingerprints agree across
+frameworks at 5.7e-6 to 3.9e-5 relative on every cell.  These
+results indicate the two libraries compute the same reconstruction
+and the compiled torch bodies are not behind the reference
+implementation anywhere in this family.
+
+**Memory reads mixed, with mbirtorch leaner at the production
+sizes.**  The jax arm peaked at 58.16 GB against mbirtorch's 34.75
+at the multiaxis 1024-class, and at 41.46 against 27.22 at the
+translation cell; at the multiaxis 512-class the order reverses
+(6.04 against 11.38).
+
+**One note rides the 1024-class peak.**  The memory ledger models
+that cell at 68 GB on one device, at an H100's edge once the margin
+applies (§1.22's corrected pricing).  The measured process peak
+here is 34.75 GB for the whole 3-iteration reconstruction.  The
+ledger prices the worst recorded slab concurrency, so the
+conservative direction is expected; the factor of two at this
+decision-relevant cell is recorded for the next time the capacity
+question is asked, since a preflight priced 2x above the measured
+peak refuses runs that fit.
+
+**What this does to the kernel question.**  The anchor removes the
+catching-up motive: the other framework demonstrates no speed these
+bodies fail to reach.  What remains in favor of kernels is §1.42's
+absolute evidence, which binds both frameworks alike: per-batch
+host work near pacing at the 1024-class, back kernels at the memory
+ceiling, and single launches moving gigabytes of intermediates.
+The parallel kernel history (a 3.45x forward) shows what exploiting
+the access pattern can return where the compiled realization sits
+at those limits.  The capacity argument stands on the 2048-class
+target, where sharding is known not to divide torch-body peaks.
+The decision rule stays the recorded one: need above the
+1024-class, not elegance.
 
 ## 3. The crossover ladder (mg4)
 

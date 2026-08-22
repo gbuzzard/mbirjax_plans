@@ -35,14 +35,20 @@ speed floors).
 
 The 2026-08-21 session closed G4 (findings §1.40), implemented the
 queue Greg ruled on (J3, D6, D5, D1, D2, D9, D8 issues 3, 6, and 7,
-and J2; all committed at bf58c39), closed D4 (the divided-form
-sweep; findings §1.41), and closed J1: parallel `recon_split_sino`
-reconstructs in N parts, with the part count taken from
-`slices_per_part` or estimated from the memory ledger.  The suite
-passes at 679 and the docs build with no warnings.
+and J2), closed D4 (the divided-form sweep; findings §1.41), and
+closed J1: parallel `recon_split_sino` reconstructs in N parts, with
+the part count taken from `slices_per_part` or estimated from the
+memory ledger.  Greg committed all of it in 42574f8; the tip is
+4bb3be5 at version 0.0.2.  The suite passes at 679 and the docs
+build with no warnings.
 
 What remains open:
 
+- **H8's two decision measurements are done** (mg51 and mg52,
+  findings §1.42 and §1.43).  The compiled bodies already meet or
+  beat mbirjax everywhere, so the kernel decision now rests on the
+  measured absolute limits and on 2048-class capacity, and it waits
+  on Greg's ruling.
 - **D7 holds** until H8 decides the kernel path, which may supersede
   it.
 - **Follow-ups recorded in place:** the ledger term for the unmasked
@@ -116,8 +122,23 @@ cross-framework anchor against mbirjax.  The kernel path's strongest
 case is capacity rather than speed: the torch bodies' transients keep
 sharding from shrinking per-device peaks, and multiaxis 1024 models
 at 68 GB on one device.
+Both entry gates ran 2026-08-21 and -22, and the decision material
+is complete.  The counter run (mg51, findings §1.42): the device
+limits the 512-class, per-batch host work nearly paces the
+1024-class, and the top kernels move gigabytes of intermediates per
+launch, with the back direction at the memory ceiling.  The
+cross-framework anchor (mg52, findings §1.43): mbirtorch meets or
+beats mbirjax at every cell, by 1.39x at the multiaxis 1024-class
+and 1.29x at the translation production cell, with values agreeing
+at the 2e-5 level.  So there is no catching-up motive; the kernel
+case rests on the absolute inefficiencies both frameworks share and
+on 2048-class capacity.  The ruling is Greg's, under the recorded
+rule: need above the 1024-class.  Two small follow-ups are recorded
+in the findings: naming the host-side per-batch mechanism (the
+profiler's host-op table), and the ledger pricing the multiaxis
+1024-class at 2x its measured peak.
 *(torch_port/active/multigpu_plan_part_2.md; multigpu_findings.md
-§1.36.)*
+§1.36, §1.42, §1.43.)*
 
 # Closed items (2026-08-21)
 
