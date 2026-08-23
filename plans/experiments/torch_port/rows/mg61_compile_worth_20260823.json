@@ -1,0 +1,102 @@
+[
+  {
+    "devices": [
+      "cuda:0"
+    ],
+    "compile_mode": "auto",
+    "cell": [
+      1024,
+      1008,
+      992
+    ],
+    "fingerprint": [
+      84490044.1785423,
+      42128870.79425589
+    ],
+    "cold_s": 33.41413884295616,
+    "warm_s": 19.55921791307628,
+    "dynamo_entire_frame_compile_s": null,
+    "unique_graphs": 9,
+    "peak_gib": [
+      22.868710041046143
+    ]
+  },
+  {
+    "devices": [
+      "cuda:0"
+    ],
+    "compile_mode": "off",
+    "cell": [
+      1024,
+      1008,
+      992
+    ],
+    "fingerprint": [
+      84490044.17216893,
+      42128870.79301926
+    ],
+    "cold_s": 25.028267977992073,
+    "warm_s": 21.60499391099438,
+    "dynamo_entire_frame_compile_s": null,
+    "unique_graphs": 0,
+    "peak_gib": [
+      27.287975788116455
+    ]
+  },
+  {
+    "devices": [
+      "cuda:0",
+      "cuda:1",
+      "cuda:2",
+      "cuda:3"
+    ],
+    "compile_mode": "auto",
+    "cell": [
+      1024,
+      1008,
+      992
+    ],
+    "fingerprint": [
+      84490044.1242143,
+      42128870.805419594
+    ],
+    "cold_s": 31.463949020020664,
+    "warm_s": 7.815911635989323,
+    "dynamo_entire_frame_compile_s": null,
+    "unique_graphs": 36,
+    "peak_gib": [
+      6.303376197814941,
+      6.2088494300842285,
+      6.2088494300842285,
+      6.205183506011963
+    ]
+  },
+  {
+    "devices": [
+      "cuda:0",
+      "cuda:1",
+      "cuda:2",
+      "cuda:3"
+    ],
+    "compile_mode": "off",
+    "cell": [
+      1024,
+      1008,
+      992
+    ],
+    "fingerprint": [
+      84490044.12231664,
+      42128870.80285868
+    ],
+    "cold_s": 10.57985550200101,
+    "warm_s": 8.21405454701744,
+    "dynamo_entire_frame_compile_s": null,
+    "unique_graphs": 0,
+    "peak_gib": [
+      6.901504993438721,
+      6.805513381958008,
+      6.805513381958008,
+      6.801847457885742
+    ]
+  }
+]

@@ -3201,6 +3201,103 @@ cache live in one place and `clear_cache()` clears both.  Before
 this the Triton half sat at its own default, outside anything the
 library named.
 
+### 1.50 What torch compiles during a parallel reconstruction,
+### why making its shapes dynamic does not help, and the trade
+### the compile itself is (2026-08-23, mg59 job 15449621 and
+### mg61 job 15449694)
+
+§1.48 left dynamo tracing as the largest per-process cost that a
+compile cache cannot remove: 4.42 s at one device and 8.00 s at
+four, with the graph count multiplying by the device count.  Two
+experiments followed.
+
+**Six frames compile, and none of them is a projection.**  mg59
+enumerated them from torch's own cache entries: the qGGMRF
+gradient and Hessian, the update apply, the update direction, the
+prior line terms, and two line-search terms.  All six are reached
+through the VCD subset updater, and all are small array
+arithmetic.  The projection bodies never appear, because parallel
+beam runs hand-written kernels; the run confirmed all eight bound
+entries were the Triton wrappers.
+
+**The extra variants are pixel-count guards, and removing them
+does not remove seconds.**  At one device each of four frames
+compiled twice, the second time because a tensor's leading
+dimension changed with the subset size (192,810 against 48,203).
+Marking that dimension dynamic cut the graphs from 9 to 7 at one
+device and from 36 to 22 at four, with the reconstruction values
+unchanged (differences of 1e-10 against the run's own 1e-7
+device-count yardstick).  The tracing time did not follow: 5.52 s
+for 7 graphs against 4.15 s for 9 at one device, and 7.49 s
+against 7.74 s at four.  A dynamic graph costs more to trace than
+a static one, so the count was never the driver.  **The candidate
+is therefore declined.**
+
+**What the four-fold at four devices really is.**  Two mechanisms
+together, both named in torch's own guard messages: the
+per-device compiled instances the projector layer creates, and
+dynamo's own device-index guard.  The second acts alone as well.
+The update-direction frame has ONE compiled instance and still
+produced eight variants at four devices, guarded on the tensor's
+device index.  A remedy aimed only at the per-device instances
+would therefore not remove the multiplication.  A third guard
+appears at four devices only: the qGGMRF halo is None at a true
+volume edge and a tensor at an interior shard boundary.
+
+**The compile is a trade, and mg61 priced it at the DEFAULT
+workload.**  Compiling those six frames is worth measuring
+against not compiling them at all, because on this geometry
+nothing else goes through the compiler.  At the library's default
+of 15 iterations, warm medians and first-in-process walls:
+
+| devices | setting | first | warm |
+|---|---|---|---|
+| 1 | compiled | 131.62 s | 115.43 s |
+| 1 | off | 149.83 s | 146.35 s |
+| 4 | compiled | 63.40 s | 50.37 s |
+| 4 | off | 54.70 s | 52.25 s |
+
+The values are identical to 2e-13 through 1e-10.  **At one device
+compiling wins outright**, by 30.92 s on a warm reconstruction and
+by 18.21 s on the very first one in the process, so it repays its
+own cost within a single reconstruction.  At four devices it buys
+1.88 s per warm reconstruction against a first-reconstruction
+penalty of 8.70 s, so it repays after about five reconstructions
+in one process.
+
+**The first reading of this trade was taken at the wrong
+workload, and it inverted the one-device answer.**  mg61 first
+ran at 3 iterations, the mg series' measuring protocol, where
+compiling bought 2.04 s at one device and 0.39 s at four against
+the same one-time cost.  That charged the full per-process cost
+against a small fraction of the recurring benefit.  The unit that
+matters is not the iteration but the SUBSET UPDATE, which is what
+calls these frames: the default partition sequence spends its
+first three iterations on the 4-, 16- and 64-subset partitions
+and every later one on the 128-subset partition, so 3 iterations
+make 84 subset updates and 15 make 1,620, a factor of 19 for a
+factor of 5 in iterations.  Per subset update the two runs agree
+(about 24 ms and 19 ms at one device), which is what makes the
+short run's conclusion an artifact of its length rather than a
+disagreement.
+
+**The recommendation is therefore to leave the default alone.**
+Compiling earns its cost at the workload users actually run.  The
+one case where turning it off helps is a single reconstruction on
+four devices, worth 8.70 s of a 63.40 s wall; a second
+reconstruction in the same process erases most of that and a
+fifth erases all of it.  The four-device penalty also
+cross-checks §1.48: 63.40 minus 50.37 is 13.03 s of
+first-reconstruction cost with compilation against 2.45 s
+without, a difference of 10.6 s beside that section's
+independently measured 9.90 s.
+
+**What this does NOT license.**  The setting is global, and on
+the geometries whose projection bodies are torch code rather than
+kernels the compile is worth far more than this; the recorded
+chain-level wins there run to a factor of 22.  Nothing here
+argues for changing what those geometries do.
+
 ## 3. The crossover ladder (mg4)
 
 This section locates where each device count starts paying, which is
