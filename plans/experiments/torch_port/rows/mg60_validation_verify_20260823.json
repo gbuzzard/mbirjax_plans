@@ -1,0 +1,172 @@
+{
+  "cell": [
+    1024,
+    1008,
+    992
+  ],
+  "torch": "2.13.0+cu130",
+  "device": "NVIDIA H100 80GB HBM3",
+  "triton_cache_dir": "/home/buzzard/.mbirtorch/triton_cache",
+  "inductor_cache_dir": "/home/buzzard/.mbirtorch/torch_cache",
+  "torch_threads": 14,
+  "array_gib": 3.814453125,
+  "old_sinogram_s": [
+    0.5025542930234224,
+    0.5054583960445598,
+    0.5055108199594542
+  ],
+  "old_sinogram_median_s": 0.5054583960445598,
+  "old_weights_s": [
+    1.3042157619493082,
+    1.3090886400314048,
+    1.3120952269528061
+  ],
+  "old_weights_median_s": 1.3090886400314048,
+  "new_sinogram_s": [
+    0.08577124599833041,
+    0.061179695068858564,
+    0.06101788498926908
+  ],
+  "new_sinogram_median_s": 0.061179695068858564,
+  "new_weights_s": [
+    0.06337931903544813,
+    0.07054314995184541,
+    0.0607103769434616
+  ],
+  "new_weights_median_s": 0.06337931903544813,
+  "initialize_recon_s": [
+    1.0685867179417983,
+    0.8358092260314152,
+    0.8553352969465777
+  ],
+  "initialize_recon_median_s": 0.8553352969465777,
+  "agreement": [
+    {
+      "case": "clean",
+      "old": [
+        true,
+        false,
+        false
+      ],
+      "new": [
+        true,
+        false,
+        false
+      ],
+      "same": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "case": "nan",
+      "old": [
+        false,
+        false,
+        false
+      ],
+      "new": [
+        false,
+        false,
+        false
+      ],
+      "same": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "case": "posinf",
+      "old": [
+        false,
+        false,
+        false
+      ],
+      "new": [
+        false,
+        false,
+        false
+      ],
+      "same": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "case": "neginf",
+      "old": [
+        false,
+        true,
+        false
+      ],
+      "new": [
+        false,
+        true,
+        false
+      ],
+      "same": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "case": "negative",
+      "old": [
+        true,
+        true,
+        false
+      ],
+      "new": [
+        true,
+        true,
+        false
+      ],
+      "same": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "case": "all_zero",
+      "old": [
+        true,
+        false,
+        true
+      ],
+      "new": [
+        true,
+        false,
+        true
+      ],
+      "same": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "case": "part_zero",
+      "old": [
+        true,
+        false,
+        false
+      ],
+      "new": [
+        true,
+        false,
+        false
+      ],
+      "same": [
+        true,
+        true,
+        true
+      ]
+    }
+  ],
+  "all_cases_agree": true
+}

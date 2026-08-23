@@ -3077,6 +3077,130 @@ test now states the split behavior (two devices from the
 512-class, four from the 1024-class) instead of the torch-body
 era's shared 512-class floor.
 
+### 1.48 What a first reconstruction costs: the compile caches
+### carry most of it, dynamo tracing is what a cache cannot
+### remove, and two host-side setup steps are pure overhead
+### (2026-08-23, mg57 job 15449106 and mg58 job 15449170)
+
+Every measurement in this series reports a warm median and
+discards the cold pass, so what a user waits through on a first
+reconstruction had never been attributed.  mg57 measured it at
+the parallel (1024, 1008, 992) cell on H100s, with the sinogram
+staged by a separate process so no measured arm compiled anything
+to build its own input, and with both compile caches (torch's
+inductor cache and Triton's JIT cache) owned by the harness so a
+cold arm could not silently reuse an earlier job's compiles.  The
+run detail is in mg57_cold_start.md.
+
+**The same reconstruction, three ways:**
+
+| | one device | four devices |
+|---|---|---|
+| first run, both caches empty | 49.48 s | 41.11 s |
+| new process, caches full | 26.02 s | 19.51 s |
+| in-process warm | 21.17 s | 9.60 s |
+
+The warm readings reproduce the recorded floors-refresh medians
+(21.30 s and 9.53 s), which ties this instrument to the earlier
+ones.  Read the columns as three costs: the caches remove 23.46 s
+at one device and 21.60 s at four; a fresh process still pays
+4.84 s and 9.90 s beyond warm; the rest is the reconstruction.
+**At four devices the fresh-process cost exceeds the
+reconstruction it precedes.**
+
+**Dynamo tracing is what a compile cache cannot remove, and it
+multiplies by device count.**  From dynamo's own accounting: the
+outermost compile phase reads 16.07 s at one device on the first
+run and 4.42 s in every later process; at four devices, 25.20 s
+and 8.00 s.  The unique graph count is 9 at one device and 36 at
+four, exactly four times, which is the per-device compiled
+instance design.  The library already pins the inductor cache and
+enables the FX-graph cache, and its comment states the residue
+correctly; what the measurement adds is the size of that residue
+at four devices, where 8.00 s of tracing precedes a 9.60 s
+reconstruction.  The Triton side is small by comparison: 10
+compiling launches costing 1.19 s at one device, 57 costing
+4.82 s at four.
+
+**Two host-side setup steps are overhead rather than
+arithmetic.**  The setup phase `initialize_recon` costs 2.6 to
+2.7 s warm and does not change with device count, which is the
+signature of host work.  mg58 attributed it directly at the same
+cell.  The input validation runs `np.isfinite` over the whole
+sinogram and the whole weights array on the host, 0.502 s and
+0.504 s for 3.81 GiB each; the same check on the device, where
+the sinogram is sent anyway, measures 0.0076 s, or 66 times
+cheaper.  The pixel partitions cost 0.414 s and build all eleven
+granularity levels, while a three-iteration run visits three of
+them (4, 16 and 64); building only the visited levels measures
+0.125 s.  The remaining setup steps are the regularization
+parameters at 0.320 s and the volume's return to the host at
+about 0.95 s.
+
+**One caveat rides the partition reading.**  The generator's
+random-call sequence is deliberate and its docstring forbids
+reordering, because seeded runs must reproduce exactly.  Skipping
+unvisited levels would change which draws happen, so that saving
+is not free: it costs reproducibility against every recorded
+seeded result unless the draws are preserved and only the sort
+and the transfer are skipped.
+
+**One hygiene gap the run exposed.**  The library pins the
+inductor cache to `~/.mbirtorch/torch_cache` but leaves Triton's
+JIT cache at its default, so the two halves of the compile cache
+live in different places and `mbirtorch.clear_cache()`, which
+removes the `~/.mbirtorch` tree, clears only one of them.  The
+cluster's own cache directory held 145 MB in 939 entries at the
+time of this run, none of it under the library's control.
+
+### 1.49 The input checks now read a minimum and a maximum, and
+### the setup phase falls from 2.61 s to 0.855 s (2026-08-23,
+### mg60, job 15449436)
+
+§1.48 found the reconstruction's setup phase spending most of its
+time on host-side input validation.  The old formulation asked
+each question with its own full pass: `np.isfinite` over the
+sinogram, and over the weights an `isfinite`, a negative test and
+an all-zero test, each allocating a boolean array as long as the
+input.  Every one of those questions is answered by the array's
+minimum and maximum together, because a NaN propagates into both,
+an infinity appears in the extreme on its side, and the sign and
+all-zero questions are the pair's to answer directly.  The
+library now reads that pair through torch on the array's own
+device, so a host array is read across the process's threads
+rather than on one, and an array already on a device is not
+pulled back to be checked.
+
+**Measured at the 1024-class parallel cell, 3.81 GiB per array,
+medians of three:** the sinogram check falls from 0.505 s to
+0.061 s and the weights checks from 1.309 s to 0.063 s, so the
+validation falls from 1.814 s to 0.124 s.  The whole
+`initialize_recon` phase falls from the 2.61 s of §1.48 to
+0.855 s, and that remainder now attributes exactly: the pixel
+partitions at 0.414 s, the regularization parameters at 0.320 s,
+and the checks at 0.124 s.  The saving is about 1.76 s per
+reconstruction, which is 8 percent of the one-device warm wall
+and 18 percent of the four-device one.
+
+The old and new formulations were compared on the same arrays and
+agree on every case tested: clean, NaN, positive and negative
+infinity, negative values, all-zero, and partly-zero.  The seven
+error paths raise the same exceptions with the same messages, and
+the suite is unchanged at 696 passed.
+
+**The weights reading corrects §1.48 in passing.**  That section
+attributed 1.0 s to two host scans and left about 0.9 s of the
+phase unexplained.  The weights path was making three passes, not
+one, at 1.309 s in total; the unexplained residue was its other
+two.
+
+**One hygiene change rides with it.**  The library now pins
+Triton's JIT cache beside the inductor cache it already pinned,
+at `~/.mbirtorch/triton_cache`, so both halves of the compile
+cache live in one place and `clear_cache()` clears both.  Before
+this the Triton half sat at its own default, outside anything the
+library named.
+
 ## 3. The crossover ladder (mg4)
 
 This section locates where each device count starts paying, which is

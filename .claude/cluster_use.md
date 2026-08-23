@@ -296,7 +296,8 @@ sinteractive -N1 -n20 --gpus-per-node=1 --account=bouman \
 
 - **Never write large artifacts under `~`.**  A job that fills home dies mid-write with
   `sacct` `FAILED 1:0` and **no traceback, no shell echo**, leaving a truncated file.
-  Quota accounting can also lag ~one retry after freeing space.
+  Quota accounting can also lag ~one retry after freeing space. Use symnlinks into depot 
+  or scratch for local access to large files.  
 - Diagnose with `myquota`.  If a job fails with exit 1 and an empty-looking log, check
   `myquota` **before** debugging the code.  A home path that must hold big data can be a
   symlink into scratch.

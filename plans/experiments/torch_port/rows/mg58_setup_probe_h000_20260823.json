@@ -1,0 +1,51 @@
+{
+  "cell": [
+    1024,
+    1008,
+    992
+  ],
+  "torch": "2.13.0+cu130",
+  "device": "NVIDIA H100 80GB HBM3",
+  "array_gib": 3.814453125,
+  "host_isfinite_sinogram_s": [
+    0.5023073200136423,
+    0.5020942420233041,
+    0.5093532740138471
+  ],
+  "host_isfinite_sinogram_median_s": 0.5023073200136423,
+  "host_isfinite_weights_s": [
+    0.5039347839774564,
+    0.5039837440708652,
+    0.5115015950286761
+  ],
+  "host_isfinite_weights_median_s": 0.5039837440708652,
+  "host_to_device_transfer_s": 0.5135073160054162,
+  "device_isfinite_s": [
+    0.03784656000789255,
+    0.007603314938023686,
+    0.007538689998909831
+  ],
+  "device_isfinite_median_s": 0.007603314938023686,
+  "auto_set_regularization_params_s": 0.31979911599773914,
+  "granularity": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32,
+    64,
+    128,
+    128,
+    128,
+    128
+  ],
+  "levels_visited_by_three_iterations": [
+    4,
+    16,
+    64
+  ],
+  "gen_set_of_pixel_partitions_all_levels_s": 0.41357298102229834,
+  "num_partitions_built": 11,
+  "gen_set_of_pixel_partitions_visited_only_s": 0.1245425189845264
+}
